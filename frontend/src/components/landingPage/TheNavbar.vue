@@ -27,12 +27,12 @@
 
       <!-- CTA -->
       <div class="flex items-center gap-3">
-        <RouterLink to="/signin">
+        <RouterLink to="/login">
           <Button variant="ghost" class="text-tacir-blue hover:text-tacir-darkblue font-medium text-sm">
             Se connecter
           </Button>
         </RouterLink>
-        <RouterLink to="/signup">
+        <RouterLink to="/register">
           <Button class="bg-tacir-blue hover:bg-tacir-darkblue text-white text-sm font-semibold rounded-lg inline-flex items-center gap-1.5 px-4 py-2 transition-colors">
             Créer un compte
             <ArrowRight class="w-4 h-4" />
