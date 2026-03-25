@@ -37,14 +37,14 @@ class UserUpdateSerializer(serializers.ModelSerializer):
     """Serializer pour la modification d'un utilisateur par un admin."""
     class Meta:
         model = User
-        fields = ['nom', 'prenom', 'email', 'role', 'is_active', 'entreprise', 'fonction']
+        fields = ['nom', 'prenom', 'email', 'role', 'is_active', 'fonction']
 
 
 class UserProfileSerializer(serializers.ModelSerializer):
     """Serializer pour le profil de l'utilisateur connecté."""
     class Meta:
         model = User
-        fields = ['id', 'email', 'nom', 'prenom', 'role', 'full_name', 'entreprise', 'fonction']
+        fields = ['id', 'email', 'nom', 'prenom', 'role', 'full_name', 'fonction']
         read_only_fields = ['id', 'email', 'role', 'full_name']
 
 
@@ -52,7 +52,7 @@ class ProfileUpdateSerializer(serializers.ModelSerializer):
     """Serializer pour la modification du profil par l'utilisateur lui-même."""
     class Meta:
         model = User
-        fields = ['nom', 'prenom', 'entreprise', 'fonction']
+        fields = ['nom', 'prenom', 'fonction']
 
 
 class ChangePasswordSerializer(serializers.Serializer):

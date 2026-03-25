@@ -38,7 +38,7 @@
 
           <div class="flex-1">
             <h2 class="text-xl font-bold text-tacir-darkblue tracking-tight">{{ name }}</h2>
-            <p class="text-tacir-darkgray font-semibold uppercase text-[10px] tracking-wider mt-0.5">{{ role }} · {{ company }}</p>
+            <p class="text-tacir-darkgray font-semibold uppercase text-[10px] tracking-wider mt-0.5">{{ role }} · Numeryx</p>
           </div>
 
           <Button 
@@ -121,13 +121,6 @@
                     <div class="relative group">
                       <Mail class="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-tacir-darkgray group-focus-within:text-tacir-blue transition-colors" />
                       <Input v-model="email" :disabled="!editingInfo" class="pl-9 rounded-lg bg-tacir-lightgray/30 border-transparent focus:border-tacir-blue/30 focus:ring-4 focus:ring-tacir-blue/5 h-10 text-xs font-semibold text-tacir-darkblue disabled:opacity-60" />
-                    </div>
-                  </div>
-                  <div class="space-y-1.5">
-                    <Label class="text-[9px] font-bold text-tacir-darkblue ml-1 uppercase tracking-tight opacity-70">Entreprise</Label>
-                    <div class="relative group">
-                      <Building2 class="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-tacir-darkgray group-focus-within:text-tacir-blue transition-colors" />
-                      <Input v-model="company" :disabled="!editingInfo" class="pl-9 rounded-lg bg-tacir-lightgray/30 border-transparent focus:border-tacir-blue/30 focus:ring-4 focus:ring-tacir-blue/5 h-10 text-xs font-semibold text-tacir-darkblue disabled:opacity-60" />
                     </div>
                   </div>
                   <div class="space-y-1.5">
@@ -238,7 +231,6 @@ const { logout, user, updateProfile, changePassword } = useAuth()
 // ── Profile Data ──
 const name    = ref('')
 const email   = ref('')
-const company = ref('')
 const role    = ref('')
 const fonction = ref('')
 const editingInfo = ref(false)
@@ -250,7 +242,6 @@ onMounted(() => {
     name.value = user.value.full_name || ''
     email.value = user.value.email || ''
     role.value = user.value.role || ''
-    company.value = user.value.entreprise || 'Numeryx'
     fonction.value = user.value.fonction || ''
   }
 })
@@ -269,7 +260,6 @@ async function handleSaveInfo() {
   const result = await updateProfile({
     prenom,
     nom,
-    entreprise: company.value,
     fonction: fonction.value
   })
 

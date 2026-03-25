@@ -32,7 +32,6 @@ class User(AbstractBaseUser, PermissionsMixin):
     nom = models.CharField(max_length=100)
     prenom = models.CharField(max_length=100)
     role = models.CharField(max_length=20, choices=Role.choices, default=Role.COMMERCIAL)
-    entreprise = models.CharField(max_length=100, default='Numeryx')
     fonction = models.CharField(max_length=100, blank=True)
     equipe_id = models.UUIDField(null=True, blank=True)
     is_active = models.BooleanField(default=True)
