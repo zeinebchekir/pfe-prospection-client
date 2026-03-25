@@ -11,8 +11,8 @@
       </div>
 
       <!-- Logo -->
-      <div class="relative flex items-center gap-2.5">
-        <img src="@/assets/logo.png" alt="crmPfe Logo" class="h-35 w-auto object-contain" />
+      <div class="relative">
+        <img src="@/assets/logo-blanc.png" alt="Qualifix Logo" class="h-30 w-auto object-contain" />
       </div>
 
       <!-- Main message -->
