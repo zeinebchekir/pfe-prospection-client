@@ -12,7 +12,9 @@
 
       <!-- Logo -->
       <div class="relative">
-        <img src="@/assets/logo-blanc.png" alt="Qualifix Logo" class="h-30 w-auto object-contain" />
+        <RouterLink to="/">
+          <img src="@/assets/logo-blanc.png" alt="Qualifix Logo" class="h-30 w-auto object-contain" />
+        </RouterLink>
       </div>
 
       <!-- Main message -->
@@ -52,7 +54,9 @@
 
         <!-- Mobile logo -->
         <div class="lg:hidden flex items-center gap-2 mb-8">
-          <img src="@/assets/logo.png" alt="crmPfe Logo" class="h-35 w-auto object-contain" />
+          <RouterLink to="/">
+            <img src="@/assets/logo.png" alt="crmPfe Logo" class="h-35 w-auto object-contain" />
+          </RouterLink>
         </div>
 
         <!-- Header -->
