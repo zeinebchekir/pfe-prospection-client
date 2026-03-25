@@ -101,9 +101,9 @@
                 <TableRow v-for="user in paginatedUsers" :key="user.id" class="hover:bg-tacir-lightgray/10 transition-colors border-border group h-14">
                   <TableCell class="py-2 px-6">
                     <div class="flex items-center gap-3">
-                      <Avatar class="h-8 w-8 border border-border shadow-sm">
-                        <AvatarFallback class="bg-tacir-blue text-white font-bold text-[10px]">
-                          {{ user.nom[0] }}{{ user.prenom[0] }}
+                      <Avatar class="h-8 w-8 rounded-full gradient-brand flex items-center justify-center">
+                        <AvatarFallback class="bg-transparent text-white font-bold text-sm">
+                          {{ user.full_name[0] }}
                         </AvatarFallback>
                       </Avatar>
                       <div class="flex flex-col">
@@ -532,6 +532,9 @@ onMounted(fetchUsers)
 </script>
 
 <style scoped>
+.gradient-brand {
+  background: linear-gradient(135deg, #303e8c, #04adbf);
+}
 .custom-scrollbar::-webkit-scrollbar {
   width: 4px;
 }
