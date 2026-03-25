@@ -14,17 +14,28 @@
       </p>
 
       <div class="flex items-center justify-center gap-4 flex-wrap">
-        <RouterLink to="/signin">
-          <Button class="bg-tacir-blue hover:bg-tacir-darkblue text-white h-12 px-8 text-base font-semibold rounded-lg inline-flex items-center gap-2 transition-colors">
-            Accéder à la plateforme
-            <ArrowRight class="w-4 h-4" />
-          </Button>
-        </RouterLink>
-        <RouterLink to="/signup">
-          <Button variant="outline" class="border-tacir-blue text-tacir-blue hover:bg-tacir-blue hover:text-white h-12 px-8 text-base font-semibold rounded-lg transition-colors">
-            Créer un compte
-          </Button>
-        </RouterLink>
+        <template v-if="!isAuthenticated">
+          <RouterLink to="/login">
+            <Button class="bg-tacir-blue hover:bg-tacir-darkblue text-white h-12 px-8 text-base font-semibold rounded-lg inline-flex items-center gap-2 transition-colors">
+              Accéder à la plateforme
+              <ArrowRight class="w-4 h-4" />
+            </Button>
+          </RouterLink>
+          <RouterLink to="/register">
+            <Button variant="outline" class="border-tacir-blue text-tacir-blue hover:bg-tacir-blue hover:text-white h-12 px-8 text-base font-semibold rounded-lg transition-colors">
+              Créer un compte
+            </Button>
+          </RouterLink>
+        </template>
+        <template v-else>
+          <RouterLink :to="dashboardUrl">
+            <Button class="bg-tacir-blue hover:bg-tacir-darkblue text-white h-12 px-8 text-base font-semibold rounded-lg inline-flex items-center gap-2 transition-colors">
+              <LayoutDashboard class="w-5 h-5" />
+              Aller au Dashboard
+              <ArrowRight class="w-4 h-4" />
+            </Button>
+          </RouterLink>
+        </template>
       </div>
 
     </div>
@@ -32,8 +43,20 @@
 </template>
 
 <script setup>
+import { computed } from 'vue'
 import { RouterLink } from 'vue-router'
+import { useAuth } from '@/composables/useAuth'
 import { Button } from '@/components/ui/button'
 import { Badge }  from '@/components/ui/badge'
-import { ArrowRight, Globe } from 'lucide-vue-next'
+import { ArrowRight, Globe, LayoutDashboard } from 'lucide-vue-next'
+
+const { isAuthenticated, user } = useAuth()
+
+const dashboardUrl = computed(() => {
+  const role = user.value?.role
+  if (role === 'ADMIN') return '/admin'
+  if (role === 'CEO') return '/manager'
+  if (role === 'COMMERCIAL') return '/commercial'
+  return '/dashboard'
+})
 </script>
