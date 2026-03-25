@@ -60,10 +60,15 @@ export function useAuth() {
       user.value = data.user
       return { success: true }
     } catch (err) {
+      const responseData = err.response?.data
+      if (responseData?.code === 'ACCOUNT_INACTIVE') {
+        error.value = responseData.message
+        return { success: false, message: responseData.message }
+      }
       const message =
-        err.response?.data?.errors?.message ||
-        err.response?.data?.message ||
-        'Login failed. Please check your credentials.'
+        responseData?.errors?.message ||
+        responseData?.message ||
+        'Email ou mot de passe invalide.'
       error.value = message
       return { success: false, message }
     } finally {

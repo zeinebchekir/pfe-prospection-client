@@ -83,14 +83,32 @@ class LoginView(APIView):
         user = authenticate(request, email=email, password=password)
 
         if user is None:
+            # Check if user exists but is inactive
+            user_exists = User.objects.filter(email=email).first()
+            if user_exists and not user_exists.is_active:
+                return Response(
+                    {
+                        "status": "error", 
+                        "message": "Votre accès est bloqué. Veuillez contacter l'administrateur.",
+                        "code": "ACCOUNT_INACTIVE"
+                    },
+                    status=status.HTTP_403_FORBIDDEN,
+                )
+            
             return Response(
                 {"status": "error", "message": "Email ou mot de passe invalide."},
                 status=status.HTTP_401_UNAUTHORIZED,
             )
 
+        # This block is now redundant because authenticate() only returns active users by default,
+        # and we handled the inactive case above.
         if not user.is_active:
             return Response(
-                {"status": "error", "message": "Ce compte a été désactivé."},
+                {
+                    "status": "error", 
+                    "message": "Votre accès est bloqué. Veuillez contacter l'administrateur.",
+                    "code": "ACCOUNT_INACTIVE"
+                },
                 status=status.HTTP_403_FORBIDDEN,
             )
 
