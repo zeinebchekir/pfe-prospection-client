@@ -53,6 +53,7 @@ x-airflow-common:
   build:
     context: .
     dockerfile: dockerfile.airflow    # ← son propre Dockerfile
+
   env_file:
     - ${ENV_FILE_PATH:-.env}
   environment:
@@ -306,6 +307,21 @@ services:
       _AIRFLOW_WWW_USER_PASSWORD: ${_AIRFLOW_WWW_USER_PASSWORD:-airflow}
       _PIP_ADDITIONAL_REQUIREMENTS: 'requests sqlalchemy psycopg2-binary pydantic-settings openpyxl pandas '
     user: "0:0"
+  
+  fastapi:
+    build:
+      context: .
+      dockerfile: dockerfile.apis
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./ETL_pipeline:/app              # ← ton code
+      - ./exports:/opt/airflow/exports   # ← fichiers xlsx
+    environment:
+      DATABASE_URL: postgresql://airflow:airflow@postgres/airflow
+    depends_on:
+      - postgres
+    restart: always
 
   airflow-cli:
     <<: *airflow-common

@@ -3,17 +3,16 @@ from sqlalchemy.orm import Session
 from datetime import datetime
 from db.database import get_db
 from db.models import SyncState
-from api.schemas.sync import SyncStatusResponse
 
 router = APIRouter()
 
-@router.get("/status", response_model=list[SyncStatusResponse])
+@router.get("/status")
 def get_all_sync_status(db: Session = Depends(get_db)):
     """Retourne la date de dernière sync pour toutes les sources."""
     return db.query(SyncState).all()
 
 
-@router.get("/status/{source}", response_model=SyncStatusResponse)
+@router.get("/status/{source}")
 def get_sync_status(source: str, db: Session = Depends(get_db)):
     """Retourne la date de dernière sync pour une source précise."""
     obj = db.query(SyncState).filter_by(source=source).first()

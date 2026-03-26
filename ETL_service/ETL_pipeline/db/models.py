@@ -1,4 +1,4 @@
-from sqlalchemy import Column, String, DateTime, func
+from sqlalchemy import Column, String, DateTime, func, Integer
 from sqlalchemy.dialects.postgresql import JSONB
 from db.database import Base
 
@@ -63,3 +63,13 @@ class Entreprise(Base):
 
     def __repr__(self):
         return f"<Entreprise(siret={self.siret}, nom={self.nom})>"
+
+
+
+class SyncState(Base):
+    __tablename__ = "sync_state"
+
+    source = Column(String, nullable=False, primary_key=True)
+    last_sync = Column(DateTime(timezone=True), server_default=func.now())
+    nbEnregistrements = Column(Integer, nullable=False)
+    
