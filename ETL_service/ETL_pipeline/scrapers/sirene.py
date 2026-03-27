@@ -1,9 +1,9 @@
 import time
 from datetime import datetime
-from scrapers.sources.base_scraper import BaseScraper
-from scrapers.sources.dataGouv import DataGouvService
+from .base_scraper import BaseScraper
+from .dataGouv import DataGouvService
 from extractors.dataGouv.datagouv_extractor import extract_data_from_datagouv
-from extractors.excel_extractors import export_to_excel
+
 class SireneService(BaseScraper):
 
     def __init__(self, token: str):
@@ -23,9 +23,9 @@ class SireneService(BaseScraper):
     #  SCRAPING — récupère les SIREN modifiés depuis date_sync           #
     # ------------------------------------------------------------------ #
 
-    def source_scraping(self) -> list[dict]:
+    def source_scraping(self,date_sync) -> list[dict]:
 
-        date_sync = self._lire_derniere_sync()
+       
         date_str = date_sync.strftime("%Y-%m-%dT%H:%M:%S")
 
         print(f"[{self.nom_source}] 🗓️  Sync depuis : {date_str}")
@@ -102,11 +102,6 @@ class SireneService(BaseScraper):
         
         return clean_data
 
-    # ------------------------------------------------------------------ #
-    #  DATE SYNC                                                          #
-    # ------------------------------------------------------------------ #
+  
 
-    def _lire_derniere_sync(self) -> datetime:
-        # Date statique pour les tests
-        return datetime(2026, 3, 20, 13, 55, 0)
       
