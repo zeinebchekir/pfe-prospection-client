@@ -322,6 +322,9 @@ services:
       - ./exports:/opt/airflow/exports   # ← fichiers xlsx
     environment:
       DATABASE_URL: postgresql://airflow:airflow@postgres/airflow
+      AIRFLOW_URL: http://airflow-apiserver:8080   # ← nom du service Docker
+      AIRFLOW_USER: airflow
+      AIRFLOW_PASSWORD: airflow
     depends_on:
       - postgres
     restart: always

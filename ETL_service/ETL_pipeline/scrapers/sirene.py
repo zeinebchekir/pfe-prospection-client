@@ -25,13 +25,13 @@ class SireneService(BaseScraper):
 
     def source_scraping(self,date_sync) -> list[dict]:
 
-       
-        date_str = date_sync.strftime("%Y-%m-%dT%H:%M:%S")
+        
+        # date_str = date_sync.strftime("%Y-%m-%dT%H:%M:%S")
 
-        print(f"[{self.nom_source}] 🗓️  Sync depuis : {date_str}")
+        print(f"[{self.nom_source}] 🗓️  Sync depuis : {date_sync}")
 
         # Filtre Sirene natif par date de modification
-        filtre = f"dateDernierTraitementUniteLegale:[{date_str} TO *]"
+        filtre = f"dateDernierTraitementUniteLegale:[{date_sync} TO *]"
 
         
         results= self._paginer(filtre)
@@ -55,7 +55,7 @@ class SireneService(BaseScraper):
                 f"denominationUniteLegale,etatAdministratifUniteLegale"
             )
 
-            data = self.fetch_data(url)
+            data = self.fetch_data(url,skip_encoding=True)
 
             if data is None:
                 print(f"[{self.nom_source}] ⚠️  Erreur, arrêt pagination.")

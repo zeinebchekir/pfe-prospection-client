@@ -3,7 +3,7 @@ from extractors.dataGouv.datagouv_extractor import extract_data_from_datagouv
 import time
 from datetime import datetime
 from datetime import date
-
+import math
 class DataGouvService(BaseScraper):
     def __init__(self):
         # On initialise avec le nom de la source
@@ -12,7 +12,7 @@ class DataGouvService(BaseScraper):
         # L'URL officielle de l'API de recherche
         self.base_url = "https://recherche-entreprises.api.gouv.fr/search"
         self.per_page = 25
-        self.delai = 1
+        self.delai = 10.0
     def _construire_filtres(self) -> list[dict]:
         """
         Retourne une liste de params — un par requête indépendante.
@@ -51,30 +51,40 @@ class DataGouvService(BaseScraper):
             }]
     
     def _paginer(self, params: dict) -> list[dict]:
-        """
-        Parcourt les pages pour n'importe quels params donnés.
-        S'arrête si : page vide, total atteint, max_pages, ou erreur.
-        """
-        resultats = []
-        page = 1
-        total_pages=0
-        
-        params_page = {**params, "page": page, "per_page": self.per_page}
+        resultats   = []
+        page        = 1
+        max_retries = 3
 
-        data = self.fetch_data(self.base_url, params=params_page)
+        while True:
+            params_page = {**params, "page": page, "per_page": self.per_page}
+            data        = None
 
-        if data is None:
-            print(f"[{self.nom_source}] ⚠️  Erreur page {page}, arrêt.")
-            return []
-        total = data.get("total_results", 0)
-        total_pages=total/self.per_page 
-        while page <= total_pages:
+            # Retry par page — gère le rate limit sur chaque page
+            for tentative in range(max_retries):
+                data = self.fetch_data(self.base_url, params=params_page)
+                if data is not None:
+                    break
+                print(f"[{self.nom_source}] ⚠️  Retry page {page} ({tentative+1}/{max_retries})")
+                time.sleep(10 * (tentative + 1))
+
+            if data is None:
+                print(f"[{self.nom_source}] ⚠️  Échec page {page} — arrêt pagination")
+                break
+
+            # Premier appel — on récupère le total
+            if page == 1:
+                total = data.get("total_results", 0)
+                if total == 0:
+                    print(f"[{self.nom_source}] ℹ️  Aucun résultat trouvé")
+                    break
+                total_pages = math.ceil(total / self.per_page)
+                print(f"[{self.nom_source}] 📊 {total} résultats — {total_pages} pages")
+
             items = data.get("results", [])
             if not items:
                 break
 
             resultats += items
-
             print(f"[{self.nom_source}] 📄 page {page} — {len(resultats)}/{total}")
 
             if len(resultats) >= total:
@@ -84,20 +94,19 @@ class DataGouvService(BaseScraper):
             time.sleep(self.delai)
 
         return resultats
-
-    def source_scraping(self) -> list[dict]:
+    def source_scraping(self,filtre:list[dict]) -> list[dict]:
         """
         C'est ici que tu décides QUI cibler.
         Chaque stratégie = un appel à _paginer() avec des params différents.
         """
         tous_les_resultats = []
 
-        for params in self._construire_filtres():
+        for params in filtre:
             resultats = self._paginer(params)
             tous_les_resultats += resultats
             time.sleep(self.delai)
 
-
+        
         print(f"[{self.nom_source}] 📊 Total : {len(tous_les_resultats)} entreprises")
         return tous_les_resultats
 
@@ -113,25 +122,44 @@ class DataGouvService(BaseScraper):
         return clean_data   
 
     
+    
     def get_data_from_siren(self, items: list[dict]) -> list[dict]:
-        clean_data = []  # ← initialisé avant la boucle
+        clean_data = []  
+        success_sirens = [] # 🟢 Liste pour les SIREN trouvés
+        failed_sirens = []  # 🔴 Liste pour les SIREN en échec / introuvables
 
-        for i, item in enumerate(items[:10]):
+        for i, item in enumerate(items):
             siren = item.get("siren")
             if not siren:
                 continue
 
+            # On interroge l'API pour ce SIREN spécifique
             data = self.fetch_data(
                 self.base_url,
                 params={"q": siren, "per_page": 1}
             )
 
-            if data:
-                resultats = data.get("results", [])
-                clean_data+=resultats
+            # On vérifie si data existe ET si la clé "results" contient quelque chose
+            if data and data.get("results"):
+                resultats = data.get("results")
+                clean_data += resultats
+                success_sirens.append(siren) # ✅ Succès !
+            else:
+                failed_sirens.append(siren)  # ❌ Échec (API vide ou erreur)
+
+            # Log de progression tous les 50 éléments
             if (i + 1) % 50 == 0:
                 print(f"[{self.nom_source}] ⚙️  {i+1}/{len(items)} enrichis")
 
             time.sleep(self.delai)
         
-        return clean_data  # ← toujours défini
+        # --- 📊 AFFICHAGE DU BILAN FINAL ---
+        print("\n" + "=" * 50)
+        print(f"[{self.nom_source}] 📊 BILAN DE L'ENRICHISSEMENT")
+        print(f"✅ {len(success_sirens)} Succès : {', '.join(success_sirens)}")
+        
+        if failed_sirens:
+            print(f"❌ {len(failed_sirens)} Échecs : {', '.join(failed_sirens)}")
+        print("=" * 50 + "\n")
+
+        return clean_data # ← toujours défini
