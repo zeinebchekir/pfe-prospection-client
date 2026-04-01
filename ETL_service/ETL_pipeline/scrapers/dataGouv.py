@@ -12,44 +12,8 @@ class DataGouvService(BaseScraper):
         # L'URL officielle de l'API de recherche
         self.base_url = "https://recherche-entreprises.api.gouv.fr/search"
         self.per_page = 25
-        self.delai = 10.0
-    def _construire_filtres(self) -> list[dict]:
-        """
-        Retourne une liste de params — un par requête indépendante.
-        Modifie uniquement cette méthode selon ton besoin.
-        """
-
-        # ── Option A : aucun filtre, tout récupérer ──────────────────────
-        # return [{"etat_administratif": "A"}]
-        # ⚠️  Des millions de résultats — max_pages obligatoire
-
-        # ── Option B : par secteur NAF ────────────────────────────────────
-        # codes_naf = ["62.01Z", "71.12B", "43.21A"]
-        # return [
-        #     {"activite_principale": code, "etat_administratif": "A"}
-        #     for code in codes_naf
-        # ]
-
-        # ── Option C : par mot-clé (situation actuelle) ───────────────────
-        # secteurs = ["informatique", "travaux", "conseil"]
-        # return [
-        #     {"q": secteur, "etat_administratif": "A"}
-        #     for secteur in secteurs
-        # ]
-
-        # ── Option D : combinaison région + activité ──────────────────────
-        # return [
-        #     {"q": "informatique", "region": "11", "etat_administratif": "A"},
-        #     {"q": "travaux",      "region": "93", "etat_administratif": "A"},
-        # ]
-
-        # ── Par défaut : aucun filtre ─────────────────────────────────────
-        
-        return [{
-            "etat_administratif": "A",
-            "activite_principale": ["62.01Z","62.02A","62.02B","63.11Z"]
-            }]
-    
+        self.delai = 2.0
+   
     def _paginer(self, params: dict) -> list[dict]:
         resultats   = []
         page        = 1
@@ -66,7 +30,7 @@ class DataGouvService(BaseScraper):
                     break
                 print(f"[{self.nom_source}] ⚠️  Retry page {page} ({tentative+1}/{max_retries})")
                 time.sleep(10 * (tentative + 1))
-
+            
             if data is None:
                 print(f"[{self.nom_source}] ⚠️  Échec page {page} — arrêt pagination")
                 break
@@ -81,10 +45,16 @@ class DataGouvService(BaseScraper):
                 print(f"[{self.nom_source}] 📊 {total} résultats — {total_pages} pages")
 
             items = data.get("results", [])
+           
+            print(items[0].get("siren"))
+            print(items[-1].get("siren"))
+
             if not items:
                 break
 
             resultats += items
+            print(resultats[0].get("siren"))
+            print(resultats[-1].get("siren"))
             print(f"[{self.nom_source}] 📄 page {page} — {len(resultats)}/{total}")
 
             if len(resultats) >= total:
@@ -92,7 +62,7 @@ class DataGouvService(BaseScraper):
 
             page += 1
             time.sleep(self.delai)
-
+        print("final",resultats[0].get("siren"),resultats[-1].get("siren"))    
         return resultats
     def source_scraping(self,filtre:list[dict]) -> list[dict]:
         """

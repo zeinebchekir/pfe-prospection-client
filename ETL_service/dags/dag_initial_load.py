@@ -88,10 +88,11 @@ def scrape_datagouv( **context):
     # Construit le filtre selon la situation
     if not filtre:
         # Filtre par défaut — scraping régulier
-        filtres = [{
-            "etat_administratif" : "A",
-            "activite_principale": ["62.01Z", "62.02A", "62.02B", "63.11Z"]
-        }]
+        filtres = [
+        {"etat_administratif": "A",
+         "activite_principale": code}
+        for code in ["62.01Z", "62.02A", "62.02B", "63.11Z"]
+    ]
     else:
         # Filtre de recherche — SIREN ou nom passé par l'API
         filtres = [{"q": filtre}]
@@ -217,8 +218,12 @@ with DAG(
 
     t_scrape_b = PythonOperator(task_id="scrape_boamp",     python_callable=scrape_boamp,    op_kwargs={"is_incremental": False})
     t_scrape_d = PythonOperator(task_id="scrape_datagouv",  python_callable=scrape_datagouv)
+    # sauvegarde dans raw 
     t_ext_b    = PythonOperator(task_id="extract_boamp",    python_callable=extract_boamp)
+    #enrechissement depuis datagouv
     t_ext_d    = PythonOperator(task_id="extract_datagouv", python_callable=extract_datagouv)
+    #normalisation
+    #sauvegarde base de donnée 
     t_export_b = PythonOperator(task_id="export_boamp",     python_callable=export_boamp)
     t_export_d = PythonOperator(task_id="export_datagouv",  python_callable=export_datagouv)
     t_rapport  = PythonOperator(task_id="rapport_final",    python_callable=rapport_final,   op_kwargs={"sources": ["boamp", "datagouv"]})
