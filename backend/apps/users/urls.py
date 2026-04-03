@@ -4,7 +4,7 @@ from .views import (
     UserListCreateView, UserDetailView, ToggleUserActiveView,
     PasswordResetRequestView, PasswordResetConfirmView, ChangePasswordView
 )
-
+app_name = 'users'
 urlpatterns = [
     # Auth
     path('register/', RegisterView.as_view(), name='register'),
