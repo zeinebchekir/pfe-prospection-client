@@ -62,6 +62,50 @@ def clean_siren(value) -> str | None:
 # PHONE NORMALIZATION
 # ─────────────────────────────────────────────
 
+def clean_phone(value: str | None) -> str | None:
+    """
+    Normalizes a French phone number to E.164 format (+33XXXXXXXXX).
+
+    Accepted inputs:
+      - 0612345678        → +33612345678
+      - 06 12 34 56 78   → +33612345678
+      - +33 6 12 34 56 78 → +33612345678
+      - 0033612345678    → +33612345678
+
+    Returns None if the number is missing, too short, or clearly invalid.
+    """
+    if not value or not isinstance(value, str):
+        return None
+
+    # Strip all non-digit characters except leading +
+    digits = re.sub(r"[^\d+]", "", value.strip())
+    digits = re.sub(r"\s", "", digits)
+
+    # Remove all separators and work with digits only
+    raw = re.sub(r"\D", "", digits)
+
+    # Already in international format: +33XXXXXXXXX → strip the +
+    if value.strip().startswith("+33"):
+        if len(raw) == 11 and raw.startswith("33"):
+            return f"+{raw}"
+        return None
+
+    # 0033XXXXXXXXX
+    if raw.startswith("0033"):
+        raw = raw[4:]        # drop 0033
+        if len(raw) == 9:
+            return f"+33{raw}"
+        return None
+
+    # French local format: 0XXXXXXXXX (10 digits)
+    if raw.startswith("0") and len(raw) == 10:
+        return f"+33{raw[1:]}"  # replace leading 0 with +33
+
+    # Already a 9-digit national number without leading 0
+    if len(raw) == 9 and raw[0] in "67891":
+        return f"+33{raw}"
+
+    return None
 
 
 # ─────────────────────────────────────────────

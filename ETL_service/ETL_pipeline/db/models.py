@@ -1,75 +1,150 @@
-from sqlalchemy import Column, String, DateTime, func, Integer
+"""
+models.py — SQLAlchemy ORM models for the ETL pipeline.
+
+Two tables:
+  - raw_leads   : extracted data (pre-cleaning), one row per scraped record
+  - clean_leads : fully cleaned / normalised data ready for CRM use
+
+Both tables carry a `source` column ('dataGouv' or 'BOAMP') so that each
+dataset can be queried independently without any JOIN.
+
+DataGouv rows  → company fields populated, lead fields (besoin, date_limite…) NULL
+BOAMP rows     → company + lead fields populated, DataGouv-only fields (ca, taille…) NULL
+"""
+
+from sqlalchemy import (
+    Column, String, Text, Float, Integer,
+    DateTime, Date, func, ForeignKey,
+)
 from sqlalchemy.dialects.postgresql import JSONB
 from db.database import Base
 
 
-class Entreprise(Base):
-    __tablename__ = "entreprises"
+# ──────────────────────────────────────────────────────────────
+#  TABLE 1 — raw_leads  (staging, pre-cleaning)
+# ──────────────────────────────────────────────────────────────
 
-    # --- Identifiants ---
-    siret = Column(String, primary_key=True, index=True)
-    
-    siren = Column(String, index=True)
-    nom = Column(String, nullable=False)
+class RawLead(Base):
+    """
+    Stores every record exactly as returned by the extractor, before
+    any cleaning.  Serves as an audit trail and allows re-processing.
 
-    # --- Coordonnées ---
-    adresse = Column(String)
-    code_postal = Column(String)
-    ville = Column(String)
-    pays = Column(String)
-    telephone = Column(String)
-    email = Column(String)
-    site_web = Column(String)
+    BOAMP specifics
+    ───────────────
+    The BOAMP API returns a `donnees` field whose schema varies by
+    `perimetre` (MAPA / FNSimple / DIRECTIVE-24 / DIRECTIVE-25 / AUTRE).
+    This blob is preserved verbatim in `donnees_boamp` JSONB so it can
+    be re-parsed or audited without hitting the API again.
 
-    # --- Informations légales ---
-    forme_juridique = Column(String)
-    code_naf = Column(String)
-    activite_principale = Column(String)
-    capital_social = Column(String)
-    date_creation = Column(String)
-    tranche_effectif = Column(String)
+    `raw_data` stores the full flat dict returned by:
+      - extract_data_from_datagouv()   for DataGouv records
+      - get_global_information()       for BOAMP records
+    """
+    __tablename__ = "raw_leads"
 
-    # --- Données JSONB ---
+    id             = Column(Integer, primary_key=True, autoincrement=True)
 
-    # Liste des dirigeants
-    # Chaque élément : {
-    #   "nom": str,
-    #   "prenom": str,
-    #   "poste": str,
-    #   "email": str,
-    #   "numTel": str,
-    #   "profilLinkedin": str
-    # }
-    dirigeants = Column(JSONB, default=list)
+    # Which pipeline produced this row
+    source         = Column(String(20), nullable=False, index=True)   # 'dataGouv' | 'BOAMP'
 
-    # Liste des appels d'offres
-    # Chaque élément : {
-    #   "besoin": str,
-    #   "dateLimiteReponse": str,
-    #   "titulaire": str,
-    #   "nature": str,
-    #   "dateDerniereModification": str,
-    #   "lienOffre": str
-    # }
-    appels_offres = Column(JSONB, default=dict)
+    # Full flattened extracted dict (all sources)
+    raw_data       = Column(JSONB, nullable=False)
 
-    # --- Traçabilité des sources ---
-    # Exemple : {"nom": "pappers", "telephone": "linkedin", "appels_offres": "boamp"}
-    sources = Column(JSONB, default=dict)
+    # BOAMP only — the original variable-schema `donnees` blob
+    # NULL for DataGouv rows
+    donnees_boamp  = Column(JSONB, nullable=True)
 
-    # --- Métadonnées ---
-    created_at = Column(DateTime(timezone=True), server_default=func.now())
-    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+    # Airflow run traceability
+    dag_run_id     = Column(String, nullable=True)
+
+    loaded_at      = Column(DateTime(timezone=True), server_default=func.now())
 
     def __repr__(self):
-        return f"<Entreprise(siret={self.siret}, nom={self.nom})>"
+        return f"<RawLead(id={self.id}, source={self.source})>"
 
 
+# ──────────────────────────────────────────────────────────────
+#  TABLE 2 — clean_leads  (production, post-cleaning)
+# ──────────────────────────────────────────────────────────────
+
+class CleanLead(Base):
+    """
+    Stores every cleaned/normalised record produced by DataGouvCleaner
+    or BoampCleaner.  This is the table queried by downstream CRM tools.
+
+    Column groups
+    ─────────────
+    shared       : source, siren, nom, ville, code_postal, pays, sources JSONB
+    DataGouv     : secteur_activite (NAF label), forme_juridique, taille_entrep,
+                   categorie_entreprise, nb_locaux, ca, date_creation,
+                   date_derniere_modif
+    BOAMP        : siret, telephone, adresse_email, besoin, date_limite,
+                   titulaire, nature, lien_offre, status_lead, info_complementaire
+    """
+    __tablename__ = "clean_leads"
+
+    id             = Column(Integer, primary_key=True, autoincrement=True)
+
+    # Link back to the raw staging row (nullable — bulk loads may skip it)
+    raw_lead_id    = Column(Integer, ForeignKey("raw_leads.id"), nullable=True, index=True)
+
+    # Which pipeline produced this row
+    source         = Column(String(20), nullable=False, index=True)   # 'dataGouv' | 'BOAMP'
+
+    # ── Shared identity ──────────────────────────────────────
+    siren          = Column(String(9),  nullable=True, index=True)   # DataGouv always; BOAMP: siret[:9]
+    siret          = Column(String(14), nullable=True, index=True)   # BOAMP when available
+    nom            = Column(String,     nullable=True)
+
+    # ── Address ──────────────────────────────────────────────
+    ville          = Column(String,  nullable=True)
+    code_postal    = Column(Integer, nullable=True)
+    pays           = Column(String,  nullable=True, default="France")
+
+    # ── Company info (DataGouv-rich, BOAMP-partial) ───────────
+    secteur_activite     = Column(String,  nullable=True)   # DataGouv: NAF label; BOAMP: code or label
+    forme_juridique      = Column(String,  nullable=True)   # both sources
+    taille_entrep        = Column(String,  nullable=True)   # DataGouv only (INSEE effectif label)
+    categorie_entreprise = Column(String,  nullable=True)   # DataGouv only
+    nb_locaux            = Column(Integer, nullable=True)   # DataGouv only
+    ca                   = Column(Float,   nullable=True)   # DataGouv only (chiffre d'affaires)
+    date_creation        = Column(Date,    nullable=True)   # DataGouv only
+    date_derniere_modif  = Column(Date,    nullable=True)   # DataGouv only
+
+    # ── Contact (BOAMP-rich) ──────────────────────────────────
+    telephone      = Column(String, nullable=True)   # BOAMP only
+    adresse_email  = Column(String, nullable=True)   # BOAMP only
+
+    # ── Lead / Tender (BOAMP only) ────────────────────────────
+    besoin                = Column(Text,   nullable=True)
+    date_limite           = Column(Date,   nullable=True)
+    titulaire             = Column(String, nullable=True)
+    nature                = Column(String, nullable=True)
+    lien_offre            = Column(String, nullable=True)
+    status_lead           = Column(String, nullable=True, default="NOUVEAU")
+    info_complementaire   = Column(Text,   nullable=True)
+
+    # ── Source provenance (field-level, already produced by extractors) ──
+    sources        = Column(JSONB, nullable=True)
+
+    # ── Airflow traceability ─────────────────────────────────
+    dag_run_id     = Column(String, nullable=True)
+
+    # ── Timestamps ───────────────────────────────────────────
+    created_at     = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at     = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
+    def __repr__(self):
+        return f"<CleanLead(id={self.id}, source={self.source}, siren={self.siren}, nom={self.nom})>"
+
+
+# ──────────────────────────────────────────────────────────────
+#  TABLE 3 — sync_state  (unchanged)
+# ──────────────────────────────────────────────────────────────
 
 class SyncState(Base):
     __tablename__ = "sync_state"
 
-    source = Column(String, nullable=False, primary_key=True)
-    last_sync = Column(DateTime(timezone=True), server_default=func.now())
+    source            = Column(String, nullable=False, primary_key=True)
+    last_sync         = Column(DateTime(timezone=True), server_default=func.now())
     nbEnregistrements = Column(Integer, nullable=False)
-    

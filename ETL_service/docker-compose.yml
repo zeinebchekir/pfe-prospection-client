@@ -294,14 +294,24 @@ services:
         echo "Files in shared volumes:"
         echo
         ls -la /opt/airflow/{logs,dags,plugins,config}
+        echo
+        echo "Creating Airflow user 'ali' with Admin role..."
+        /entrypoint airflow users create \
+          --username ali \
+          --password ali \
+          --firstname Ali \
+          --lastname Admin \
+          --role Admin \
+          --email ali@example.com || echo "User 'ali' already exists, skipping."
+        echo "Done."
 
     # yamllint enable rule:line-length
     environment:
       <<: *airflow-common-env
       _AIRFLOW_DB_MIGRATE: 'true'
       _AIRFLOW_WWW_USER_CREATE: 'true'
-      _AIRFLOW_WWW_USER_USERNAME: ${_AIRFLOW_WWW_USER_USERNAME:-airflow}
-      _AIRFLOW_WWW_USER_PASSWORD: ${_AIRFLOW_WWW_USER_PASSWORD:-airflow}
+      _AIRFLOW_WWW_USER_USERNAME: ${_AIRFLOW_WWW_USER_USERNAME:-ali}
+      _AIRFLOW_WWW_USER_PASSWORD: ${_AIRFLOW_WWW_USER_PASSWORD:-ali}
       _PIP_ADDITIONAL_REQUIREMENTS: 'requests sqlalchemy psycopg2-binary pydantic-settings openpyxl pandas '
     user: "0:0"
   
@@ -360,5 +370,22 @@ services:
       airflow-init:
         condition: service_completed_successfully
 
+  pgadmin:
+    image: dpage/pgadmin4:latest
+    container_name: etl_pgadmin
+    environment:
+      PGADMIN_DEFAULT_EMAIL: admin@admin.com
+      PGADMIN_DEFAULT_PASSWORD: admin
+      PGADMIN_CONFIG_SERVER_MODE: "False"   # single-user desktop mode
+    ports:
+      - "5050:80"
+    volumes:
+      - pgadmin-data:/var/lib/pgadmin
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: always
+
 volumes:
   postgres-db-volume:
+  pgadmin-data:
