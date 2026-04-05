@@ -3,61 +3,79 @@ from airflow.operators.python import PythonOperator
 from datetime import datetime
 import sys, json, os
 
+# ── Fix: path must match the actual folder name on disk ──
 sys.path.insert(0, "/opt/airflow/ETL_pipeline")
+sys.path.insert(0, "/opt/airflow/ETL_pipeline/cleaners")
 
 from scrapers.boamp import BoampService
 from scrapers.dataGouv import DataGouvService
 from scrapers.sirene import SireneService
 from extractors.Boamp.data_extraction import get_global_information
 from extractors.dataGouv.datagouv_extractor import extract_data_from_datagouv
-from exports.excel_exporter import export_to_excel
-from db.database import SessionLocal
+from db.database import SessionLocal, create_tables
 from db import sync_crud
+from db import crud
+
+from cleaners.boamp_cleaner import BoampCleaner
+from cleaners.dataGouv_cleaner import DataGouvCleaner
 
 # ──────────────────────────────────────────────
-#  Chemins fixes
+#  Chemins temporaires (supprimés après load)
 # ──────────────────────────────────────────────
 RAW_BOAMP_PATH    = "/tmp/raw_boamp.json"
 RAW_DATAGOUV_PATH = "/tmp/raw_datagouv.json"
-EXPORT_DIR        = "/opt/airflow/exports"
+
 
 def _write(path, data):
     with open(path, "w", encoding="utf-8") as f:
-        json.dump(data, f, ensure_ascii=False)
+        json.dump(data, f, ensure_ascii=False, default=str)
+
 
 def _read(path):
     with open(path, "r", encoding="utf-8") as f:
         return json.load(f)
 
+
 def _delete(path):
     if os.path.exists(path):
         os.remove(path)
 
-def _get_last_sync(source: str) -> str:
-    """Retourne la date de dernière sync formatée en string."""
+
+def _get_last_sync(source: str):
     db = SessionLocal()
     try:
         return sync_crud.get_last_sync_date(db, source)
     finally:
         db.close()
 
-def _update_sync(source: str, date: str,total_clean: int):
-    """Met à jour la date de sync en base."""
+
+def _update_sync(source: str, date: str, total_clean: int):
     with SessionLocal() as db:
-        sync_crud.update_sync_state(db, source, date,total_clean)
+        sync_crud.update_sync_state(db, source, date, total_clean)
+
+
+# ──────────────────────────────────────────────
+#  DB INIT
+# ──────────────────────────────────────────────
+
+def init_db(**context):
+    """Creates all tables (idempotent — CREATE TABLE IF NOT EXISTS)."""
+    create_tables()
+    print("[INIT DB] Tables created (or already exist).")
+
 
 # ──────────────────────────────────────────────
 #  SCRAPING
 # ──────────────────────────────────────────────
 
 def scrape_boamp(is_incremental: bool = False, **context):
-    aujourdhui     = datetime.now().strftime("%Y-%m-%dT%H:%M:%S")
-    codes          = ["186", "14", "453", "463", "454", "163"]
-    codes_fmt      = ",".join([f'"{c}"' for c in codes])
+    aujourdhui = datetime.now().strftime("%Y-%m-%dT%H:%M:%S")
+    codes      = ["186", "14", "453", "463", "454", "163"]
+    codes_fmt  = ",".join([f'"{c}"' for c in codes])
 
     if is_incremental:
         last_sync = _get_last_sync("BOAMP")
-        filtre    = (
+        filtre = (
             f'descripteur_code IN ({codes_fmt})'
             f' AND datelimitereponse >= "{aujourdhui}"'
             f' AND dateparution >= "{last_sync}"'
@@ -73,47 +91,35 @@ def scrape_boamp(is_incremental: bool = False, **context):
     raw = BoampService().source_scraping(filtre=filtre)
     _write(RAW_BOAMP_PATH, raw)
 
-    context["ti"].xcom_push(key="total_raw",        value=len(raw))
-    context["ti"].xcom_push(key="watermark_start",  value=aujourdhui)
-    print(f"[SCRAPE BOAMP] {len(raw)} avis")
+    context["ti"].xcom_push(key="total_raw",       value=len(raw))
+    context["ti"].xcom_push(key="watermark_start", value=aujourdhui)
+    print(f"[SCRAPE BOAMP] {len(raw)} avis bruts")
 
 
-def scrape_datagouv( **context):
+def scrape_datagouv(**context):
     aujourdhui = datetime.now().strftime("%Y-%m-%dT%H:%M:%S")
-    
-    # Lit le filtre depuis conf si pas passé directement
-    conf   = context.get("dag_run").conf or {}
-    filtre = conf.get("query", None)
+    conf       = context.get("dag_run").conf or {}
+    filtre     = conf.get("query", None)
 
-    # Construit le filtre selon la situation
-    if not filtre:
-        # Filtre par défaut — scraping régulier
-        filtres = [
-        {"etat_administratif": "A",
-         "activite_principale": code}
-        for code in ["62.01Z", "62.02A", "62.02B", "63.11Z"]
-    ]
-    else:
-        # Filtre de recherche — SIREN ou nom passé par l'API
-        filtres = [{"q": filtre}]
+    filtres = [{"q": filtre}] if filtre else [{"etat_administratif": "A"}]
 
     raw = DataGouvService().source_scraping(filtre=filtres)
     _write(RAW_DATAGOUV_PATH, raw)
 
     context["ti"].xcom_push(key="total_raw",       value=len(raw))
-    if not filtre:
-        context["ti"].xcom_push(key="watermark_start", value=aujourdhui)
-    print(f"[SCRAPE DATAGOUV] {len(raw)} entreprises")
+    context["ti"].xcom_push(key="watermark_start", value=aujourdhui)
+    print(f"[SCRAPE DATAGOUV] {len(raw)} entreprises brutes")
 
 
 def scrape_sirene(**context):
     aujourdhui = datetime.now().strftime("%Y-%m-%dT%H:%M:%S")
     last_sync  = _get_last_sync("datagouv")
-    #last_sync="2026-03-29T13:00:00"
+
     token = os.environ.get("INSEE_TOKEN", "")
     if not token:
         raise ValueError("INSEE_TOKEN manquant dans les variables d'environnement")
-    raw  = SireneService(token=token).source_scraping(last_sync)
+
+    raw = SireneService(token=token).source_scraping(last_sync)
     _write(RAW_DATAGOUV_PATH, raw)
 
     context["ti"].xcom_push(key="total_raw",       value=len(raw))
@@ -128,35 +134,108 @@ def scrape_sirene(**context):
 def extract_boamp(**context):
     raw   = _read(RAW_BOAMP_PATH)
     clean = get_global_information(raw)
-    _write(RAW_BOAMP_PATH, clean)   # écrase avec les données propres
-    context["ti"].xcom_push(key="total_clean", value=len(clean))
-    print(f"[EXTRACT BOAMP] {len(clean)} entreprises extraites")
+    _write(RAW_BOAMP_PATH, clean)
+    context["ti"].xcom_push(key="total_extracted", value=len(clean))
+    print(f"[EXTRACT BOAMP] {len(clean)} enregistrements extraits")
 
 
 def extract_datagouv(**context):
     raw   = _read(RAW_DATAGOUV_PATH)
     clean = extract_data_from_datagouv(raw)
     _write(RAW_DATAGOUV_PATH, clean)
-    context["ti"].xcom_push(key="total_clean", value=len(clean))
-    print(f"[EXTRACT DATAGOUV] {len(clean)} entreprises extraites")
+    context["ti"].xcom_push(key="total_extracted", value=len(clean))
+    print(f"[EXTRACT DATAGOUV] {len(clean)} enregistrements extraits")
 
 
 # ──────────────────────────────────────────────
-#  EXPORT
+#  LOAD RAW  (extracted → raw_leads table)
 # ──────────────────────────────────────────────
 
-def export_boamp(**context):
-    clean = _read(RAW_BOAMP_PATH)
-    path  = export_to_excel(clean, f"{EXPORT_DIR}/prospects_BOAMP.xlsx")
-    context["ti"].xcom_push(key="fichier", value=path)
-    print(f"[EXPORT BOAMP] {path}")
+def load_raw_boamp(**context):
+    run_id  = context.get("run_id", "")
+    records = _read(RAW_BOAMP_PATH)
+    db = SessionLocal()
+    try:
+        inserted = crud.insert_raw_leads(db, records, source="BOAMP", dag_run_id=run_id)
+    finally:
+        db.close()
+    context["ti"].xcom_push(key="total_raw_loaded", value=inserted)
+    print(f"[LOAD RAW BOAMP] {inserted} lignes → raw_leads")
 
 
-def export_datagouv(**context):
-    clean = _read(RAW_DATAGOUV_PATH)
-    path  = export_to_excel(clean, f"{EXPORT_DIR}/prospects_DATAGOUV.xlsx")
-    context["ti"].xcom_push(key="fichier", value=path)
-    print(f"[EXPORT DATAGOUV] {path}")
+def load_raw_datagouv(**context):
+    run_id  = context.get("run_id", "")
+    records = _read(RAW_DATAGOUV_PATH)
+    db = SessionLocal()
+    try:
+        inserted = crud.insert_raw_leads(db, records, source="dataGouv", dag_run_id=run_id)
+    finally:
+        db.close()
+    context["ti"].xcom_push(key="total_raw_loaded", value=inserted)
+    print(f"[LOAD RAW DATAGOUV] {inserted} lignes → raw_leads")
+
+
+# ──────────────────────────────────────────────
+#  CLEANING
+# ──────────────────────────────────────────────
+
+def _ensure_records_shape(data: list) -> list:
+    if not data:
+        return []
+    first = data[0]
+    if isinstance(first, dict) and "entreprise" in first:
+        return data
+    return [{"entreprise": item, "lead": None} for item in data]
+
+
+def clean_boamp(**context):
+    raw_data = _read(RAW_BOAMP_PATH)
+    records  = _ensure_records_shape(raw_data)
+    cleaned, report = BoampCleaner().clean(records)
+    _write(RAW_BOAMP_PATH, cleaned)
+    context["ti"].xcom_push(key="total_clean", value=report.total_cleaned)
+    print(f"[CLEAN BOAMP] {report.summary()}")
+    for issue in report.issues:
+        print(f"  ⚠ index {issue['index']}: {issue['reason']}")
+
+
+def clean_datagouv(**context):
+    raw_data = _read(RAW_DATAGOUV_PATH)
+    records  = _ensure_records_shape(raw_data)
+    cleaned, report = DataGouvCleaner().clean(records)
+    _write(RAW_DATAGOUV_PATH, cleaned)
+    context["ti"].xcom_push(key="total_clean", value=report.total_cleaned)
+    print(f"[CLEAN DATAGOUV] {report.summary()}")
+    for issue in report.issues:
+        print(f"  ⚠ index {issue['index']}: {issue['reason']}")
+
+
+# ──────────────────────────────────────────────
+#  LOAD CLEAN  (cleaned → clean_leads table)
+# ──────────────────────────────────────────────
+
+def load_clean_boamp(**context):
+    run_id  = context.get("run_id", "")
+    records = _read(RAW_BOAMP_PATH)
+    db = SessionLocal()
+    try:
+        inserted = crud.insert_clean_leads(db, records, source="BOAMP", dag_run_id=run_id)
+    finally:
+        db.close()
+    context["ti"].xcom_push(key="total_clean_loaded", value=inserted)
+    print(f"[LOAD CLEAN BOAMP] {inserted} lignes → clean_leads")
+
+
+def load_clean_datagouv(**context):
+    run_id  = context.get("run_id", "")
+    records = _read(RAW_DATAGOUV_PATH)
+    db = SessionLocal()
+    try:
+        inserted = crud.insert_clean_leads(db, records, source="dataGouv", dag_run_id=run_id)
+    finally:
+        db.close()
+    context["ti"].xcom_push(key="total_clean_loaded", value=inserted)
+    print(f"[LOAD CLEAN DATAGOUV] {inserted} lignes → clean_leads")
 
 
 # ──────────────────────────────────────────────
@@ -166,7 +245,7 @@ def export_datagouv(**context):
 def cleanup(**context):
     _delete(RAW_BOAMP_PATH)
     _delete(RAW_DATAGOUV_PATH)
-    print("[CLEANUP] fichiers temporaires supprimés")
+    print("[CLEANUP] Fichiers temporaires supprimés")
 
 
 # ──────────────────────────────────────────────
@@ -175,137 +254,187 @@ def cleanup(**context):
 
 def rapport_final(sources: list, **context):
     ti = context["ti"]
-    print("=" * 50)
+    print("=" * 55)
     print(f"[RAPPORT] Run : {context['run_id']}")
 
     for s in sources:
-        # Gère les deux formats : string simple ou dict avec task_ids explicites
         if isinstance(s, dict):
-            source      = s["source"]
-            task_scrape = s["task_scrape"]
-            task_ext    = s["task_ext"]
-            task_exp    = s["task_exp"]
+            source          = s["source"]
+            task_scrape     = s["task_scrape"]
+            task_extract    = s.get("task_extract")
+            task_load_raw   = s.get("task_load_raw")
+            task_clean      = s.get("task_clean")
+            task_load_clean = s.get("task_load_clean")
         else:
-            source      = s
-            task_scrape = f"scrape_{s.lower()}"
-            task_ext    = f"extract_{s.lower()}"
-            task_exp    = f"export_{s.lower()}"
+            source          = s
+            task_scrape     = f"scrape_{s.lower()}"
+            task_extract    = f"extract_{s.lower()}"
+            task_load_raw   = f"load_raw_{s.lower()}"
+            task_clean      = f"clean_{s.lower()}"
+            task_load_clean = f"load_clean_{s.lower()}"
 
-        total_raw   = ti.xcom_pull(task_ids=task_scrape, key="total_raw")
-        total_clean = ti.xcom_pull(task_ids=task_ext,    key="total_clean")
-        fichier     = ti.xcom_pull(task_ids=task_exp,    key="fichier")
-        watermark   = ti.xcom_pull(task_ids=task_scrape, key="watermark_start")
+        total_raw        = ti.xcom_pull(task_ids=task_scrape,     key="total_raw")       if task_scrape else None
+        total_extracted  = ti.xcom_pull(task_ids=task_extract,    key="total_extracted") if task_extract else None
+        total_raw_loaded = ti.xcom_pull(task_ids=task_load_raw,   key="total_raw_loaded") if task_load_raw else None
+        total_clean      = ti.xcom_pull(task_ids=task_clean,      key="total_clean")     if task_clean else None
+        total_cl_loaded  = ti.xcom_pull(task_ids=task_load_clean, key="total_clean_loaded") if task_load_clean else None
+        watermark        = ti.xcom_pull(task_ids=task_scrape,     key="watermark_start") if task_scrape else None
 
-        print(f"  {source} — bruts: {total_raw} | extraits: {total_clean} | fichier: {fichier}")
+        print(
+            f"  [{source}]"
+            f"  scraped={total_raw}"
+            f"  extracted={total_extracted}"
+            f"  raw_leads={total_raw_loaded}"
+            f"  cleaned={total_clean}"
+            f"  clean_leads={total_cl_loaded}"
+        )
 
         if watermark:
-            _update_sync(source, watermark, total_clean if total_clean else 0)
+            _update_sync(source, watermark, total_clean or 0)
 
-    print("=" * 50)
+    print("=" * 55)
 
 
-# ──────────────────────────────────────────────
-#  DAG 1 — Chargement initial
-# ──────────────────────────────────────────────
+# ══════════════════════════════════════════════
+#  DAG 1 — Chargement initial (ETL complet)
+#
+#  init_db
+#    ├── scrape_boamp → extract_boamp → load_raw_boamp
+#    │                              → clean_boamp → load_clean_boamp ──┐
+#    │                                                                   ├── rapport_final → cleanup
+#    └── scrape_datagouv → extract_datagouv → load_raw_datagouv        │
+#                                           → clean_datagouv → load_clean_datagouv ──┘
+# ══════════════════════════════════════════════
 
 with DAG(
     dag_id="initial_load",
     start_date=datetime(2026, 1, 1),
     schedule=None,
     catchup=False,
-    tags=["initial", "scraping"],
+    tags=["initial", "etl"],
 ) as dag1:
 
-    t_scrape_b = PythonOperator(task_id="scrape_boamp",     python_callable=scrape_boamp,    op_kwargs={"is_incremental": False})
-    t_scrape_d = PythonOperator(task_id="scrape_datagouv",  python_callable=scrape_datagouv)
-    # sauvegarde dans raw 
-    t_ext_b    = PythonOperator(task_id="extract_boamp",    python_callable=extract_boamp)
-    #enrechissement depuis datagouv
-    t_ext_d    = PythonOperator(task_id="extract_datagouv", python_callable=extract_datagouv)
-    #normalisation
-    #sauvegarde base de donnée 
-    t_export_b = PythonOperator(task_id="export_boamp",     python_callable=export_boamp)
-    t_export_d = PythonOperator(task_id="export_datagouv",  python_callable=export_datagouv)
-    t_rapport  = PythonOperator(task_id="rapport_final",    python_callable=rapport_final,   op_kwargs={"sources": ["boamp", "datagouv"]})
-    t_cleanup  = PythonOperator(task_id="cleanup",          python_callable=cleanup)
+    t_init = PythonOperator(task_id="init_db", python_callable=init_db)
 
-    t_scrape_b >> t_ext_b >> t_export_b
-    t_scrape_d >> t_ext_d >> t_export_d
-    [t_export_b, t_export_d
-    ] >> t_rapport >> t_cleanup
+    # ── BOAMP branch ─────────────────────────────────────────
+    t_scrape_b     = PythonOperator(task_id="scrape_boamp",       python_callable=scrape_boamp,     op_kwargs={"is_incremental": False})
+    t_ext_b        = PythonOperator(task_id="extract_boamp",      python_callable=extract_boamp)
+    t_load_raw_b   = PythonOperator(task_id="load_raw_boamp",     python_callable=load_raw_boamp)
+    t_clean_b      = PythonOperator(task_id="clean_boamp",        python_callable=clean_boamp)
+    t_load_clean_b = PythonOperator(task_id="load_clean_boamp",   python_callable=load_clean_boamp)
+
+    # ── DataGouv branch ──────────────────────────────────────
+    t_scrape_d     = PythonOperator(task_id="scrape_datagouv",    python_callable=scrape_datagouv)
+    t_ext_d        = PythonOperator(task_id="extract_datagouv",   python_callable=extract_datagouv)
+    t_load_raw_d   = PythonOperator(task_id="load_raw_datagouv",  python_callable=load_raw_datagouv)
+    t_clean_d      = PythonOperator(task_id="clean_datagouv",     python_callable=clean_datagouv)
+    t_load_clean_d = PythonOperator(task_id="load_clean_datagouv",python_callable=load_clean_datagouv)
+
+    # ── Finalisation ─────────────────────────────────────────
+    t_rapport = PythonOperator(
+        task_id="rapport_final",
+        python_callable=rapport_final,
+        op_kwargs={"sources": ["boamp", "datagouv"]},
+    )
+    t_cleanup = PythonOperator(task_id="cleanup", python_callable=cleanup)
+
+    # ── Wiring ───────────────────────────────────────────────
+    t_init >> t_scrape_b >> t_ext_b >> t_load_raw_b >> t_clean_b >> t_load_clean_b
+    t_init >> t_scrape_d >> t_ext_d >> t_load_raw_d >> t_clean_d >> t_load_clean_d
+    [t_load_clean_b, t_load_clean_d] >> t_rapport >> t_cleanup
 
 
-# ──────────────────────────────────────────────
+# ══════════════════════════════════════════════
 #  DAG 2 — Sync delta DataGouv / Sirene
-# ──────────────────────────────────────────────
+# ══════════════════════════════════════════════
 
 with DAG(
-    dag_id="sync_datagouv",           # ← nom corrigé
-    start_date=datetime(2026, 3, 27),  # ← date ajoutée
+    dag_id="sync_datagouv",
+    start_date=datetime(2026, 3, 27),
     schedule="0 */6 * * *",
     catchup=False,
-    tags=["delta", "scraping"],
+    tags=["delta", "etl"],
 ) as dag2:
 
-    t_scrape = PythonOperator(task_id="scrape_sirene",    python_callable=scrape_sirene)
-    t_ext    = PythonOperator(task_id="extract_datagouv", python_callable=extract_datagouv)
-    t_export = PythonOperator(task_id="export_datagouv",  python_callable=export_datagouv)
-    t_rapport= PythonOperator(task_id="rapport_final",    python_callable=rapport_final,  op_kwargs={
-            "sources": [
-                {
-                    "source"     : "datagouv",
-                    "task_scrape": "scrape_sirene",    # ← vrai nom task
-                    "task_ext"   : "extract_datagouv",
-                    "task_exp"   : "export_datagouv",
-                }
-            ]
-        })
-    t_cleanup= PythonOperator(task_id="cleanup",          python_callable=cleanup)
+    t_scrape  = PythonOperator(task_id="scrape_sirene",     python_callable=scrape_sirene)
+    t_ext     = PythonOperator(task_id="extract_datagouv",  python_callable=extract_datagouv)
+    t_load_r  = PythonOperator(task_id="load_raw_datagouv", python_callable=load_raw_datagouv)
+    t_clean   = PythonOperator(task_id="clean_datagouv",    python_callable=clean_datagouv)
+    t_load_c  = PythonOperator(task_id="load_clean_datagouv", python_callable=load_clean_datagouv)
+    t_rapport = PythonOperator(task_id="rapport_final",     python_callable=rapport_final, op_kwargs={
+        "sources": [{
+            "source"         : "datagouv",
+            "task_scrape"    : "scrape_sirene",
+            "task_extract"   : "extract_datagouv",
+            "task_load_raw"  : "load_raw_datagouv",
+            "task_clean"     : "clean_datagouv",
+            "task_load_clean": "load_clean_datagouv",
+        }]
+    })
+    t_cleanup = PythonOperator(task_id="cleanup", python_callable=cleanup)
 
-    t_scrape >> t_ext >> t_export >> t_rapport >> t_cleanup
+    t_scrape >> t_ext >> t_load_r >> t_clean >> t_load_c >> t_rapport >> t_cleanup
 
 
-# ──────────────────────────────────────────────
+# ══════════════════════════════════════════════
 #  DAG 3 — Sync delta BOAMP
-# ──────────────────────────────────────────────
+# ══════════════════════════════════════════════
 
 with DAG(
-    dag_id="sync_boamp",              # ← nom corrigé
-    start_date=datetime(2026, 3, 27),  # ← date ajoutée
+    dag_id="sync_boamp",
+    start_date=datetime(2026, 3, 27),
     schedule="0 6 * * *",
     catchup=False,
-    tags=["delta", "scraping"],
+    tags=["delta", "etl"],
 ) as dag3:
 
-    t_scrape = PythonOperator(task_id="scrape_boamp",  python_callable=scrape_boamp, op_kwargs={"is_incremental": True})
-    t_ext    = PythonOperator(task_id="extract_boamp", python_callable=extract_boamp)
-    t_export = PythonOperator(task_id="export_boamp",  python_callable=export_boamp)
-    t_rapport= PythonOperator(task_id="rapport_final", python_callable=rapport_final, op_kwargs={"sources": ["boamp"]})
-    t_cleanup= PythonOperator(task_id="cleanup",       python_callable=cleanup)
+    t_scrape  = PythonOperator(task_id="scrape_boamp",        python_callable=scrape_boamp, op_kwargs={"is_incremental": True})
+    t_ext     = PythonOperator(task_id="extract_boamp",       python_callable=extract_boamp)
+    t_load_r  = PythonOperator(task_id="load_raw_boamp",      python_callable=load_raw_boamp)
+    t_clean   = PythonOperator(task_id="clean_boamp",         python_callable=clean_boamp)
+    t_load_c  = PythonOperator(task_id="load_clean_boamp",    python_callable=load_clean_boamp)
+    t_rapport = PythonOperator(task_id="rapport_final",       python_callable=rapport_final, op_kwargs={
+        "sources": [{
+            "source"         : "boamp",
+            "task_scrape"    : "scrape_boamp",
+            "task_extract"   : "extract_boamp",
+            "task_load_raw"  : "load_raw_boamp",
+            "task_clean"     : "clean_boamp",
+            "task_load_clean": "load_clean_boamp",
+        }]
+    })
+    t_cleanup = PythonOperator(task_id="cleanup", python_callable=cleanup)
 
-    t_scrape >> t_ext >> t_export >> t_rapport >> t_cleanup
+    t_scrape >> t_ext >> t_load_r >> t_clean >> t_load_c >> t_rapport >> t_cleanup
 
+
+# ══════════════════════════════════════════════
+#  DAG 4 — Recherche nouveau lead (DataGouv)
+# ══════════════════════════════════════════════
 
 with DAG(
     dag_id="search_new_lead",
     start_date=datetime(2026, 3, 27),
     schedule=None,
     catchup=False,
-    tags=["delta", "scraping"],
+    tags=["delta", "etl"],
 ) as dag4:
-    t_scrape = PythonOperator(task_id="scrape_datagouv",    python_callable=scrape_datagouv)
-    t_ext    = PythonOperator(task_id="extract_datagouv", python_callable=extract_datagouv)
-    t_export = PythonOperator(task_id="export_datagouv",  python_callable=export_datagouv)
-    t_rapport= PythonOperator(task_id="rapport_final",    python_callable=rapport_final,  op_kwargs={
-        "sources": [
-            {
-                "source"     : "datagouv",
-                "task_scrape": "scrape_datagouv",    # ← vrai nom task
-                "task_ext"   : "extract_datagouv",
-                "task_exp"   : "export_datagouv",
-            }
-        ]
-        })
-    t_cleanup= PythonOperator(task_id="cleanup",          python_callable=cleanup)
 
-    t_scrape >> t_ext >> t_export >> t_rapport >> t_cleanup
+    t_scrape  = PythonOperator(task_id="scrape_datagouv",      python_callable=scrape_datagouv)
+    t_ext     = PythonOperator(task_id="extract_datagouv",     python_callable=extract_datagouv)
+    t_load_r  = PythonOperator(task_id="load_raw_datagouv",    python_callable=load_raw_datagouv)
+    t_clean   = PythonOperator(task_id="clean_datagouv",       python_callable=clean_datagouv)
+    t_load_c  = PythonOperator(task_id="load_clean_datagouv",  python_callable=load_clean_datagouv)
+    t_rapport = PythonOperator(task_id="rapport_final",        python_callable=rapport_final, op_kwargs={
+        "sources": [{
+            "source"         : "datagouv",
+            "task_scrape"    : "scrape_datagouv",
+            "task_extract"   : "extract_datagouv",
+            "task_load_raw"  : "load_raw_datagouv",
+            "task_clean"     : "clean_datagouv",
+            "task_load_clean": "load_clean_datagouv",
+        }]
+    })
+    t_cleanup = PythonOperator(task_id="cleanup", python_callable=cleanup)
+
+    t_scrape >> t_ext >> t_load_r >> t_clean >> t_load_c >> t_rapport >> t_cleanup
