@@ -111,13 +111,6 @@ def get_global_information(resultats):
             "adresse_email":ext_email,
             "pays":"France",
             "sourceEntreprise":"BOAMP",
-            "num_tel":ext_num_tel,
-            "besoin":objet,
-            "date_limite":ext_date_limite,
-            "titulaire":nom_titulaire,
-            "nature":nature,
-            "lienOffre":url_avis,
-            "info_complementaire":ext_info_complementaire,
             "dateMAJ":datemiseajour,
             "sources":{
                 "nom":"BOAMP" if client else None,
@@ -136,7 +129,16 @@ def get_global_information(resultats):
                 "lienOffre":"BOAMP" if url_avis else None,
                 "info_complementaire":"BOAMP" if ext_info_complementaire else None,
                 "dateMAJ":"BOAMP" if datemiseajour else None,
-            }
+            },
+            
+                "num_tel":ext_num_tel,
+                "besoin":objet,
+                "date_limite":ext_date_limite,
+                "titulaire":nom_titulaire,
+                "nature":nature,
+                "lienOffre":url_avis,
+                "info_complementaire":ext_info_complementaire,
+            
             }
         # 4. ON STOCKE TOUTE LA LIGNE DANS LA LISTE
       

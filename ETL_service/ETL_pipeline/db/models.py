@@ -59,6 +59,8 @@ class RawLead(Base):
 
     loaded_at      = Column(DateTime(timezone=True), server_default=func.now())
 
+    updated_on_source_at = Column(Date, nullable=True)
+
     def __repr__(self):
         return f"<RawLead(id={self.id}, source={self.source})>"
 
@@ -67,7 +69,7 @@ class RawLead(Base):
 #  TABLE 2 — clean_leads  (production, post-cleaning)
 # ──────────────────────────────────────────────────────────────
 
-class CleanLead(Base):
+class Entreprise(Base):
     """
     Stores every cleaned/normalised record produced by DataGouvCleaner
     or BoampCleaner.  This is the table queried by downstream CRM tools.
@@ -81,16 +83,12 @@ class CleanLead(Base):
     BOAMP        : siret, telephone, adresse_email, besoin, date_limite,
                    titulaire, nature, lien_offre, status_lead, info_complementaire
     """
-    __tablename__ = "clean_leads"
+    __tablename__ = "entreprise"
 
-    id             = Column(Integer, primary_key=True, autoincrement=True)
+    identifiant    = Column(Integer, primary_key=True, autoincrement=True)
 
     # Link back to the raw staging row (nullable — bulk loads may skip it)
     raw_lead_id    = Column(Integer, ForeignKey("raw_leads.id"), nullable=True, index=True)
-
-    # Which pipeline produced this row
-    source         = Column(String(20), nullable=False, index=True)   # 'dataGouv' | 'BOAMP'
-
     # ── Shared identity ──────────────────────────────────────
     siren          = Column(String(9),  nullable=True, index=True)   # DataGouv always; BOAMP: siret[:9]
     siret          = Column(String(14), nullable=True, index=True)   # BOAMP when available
@@ -108,32 +106,23 @@ class CleanLead(Base):
     categorie_entreprise = Column(String,  nullable=True)   # DataGouv only
     nb_locaux            = Column(Integer, nullable=True)   # DataGouv only
     ca                   = Column(Float,   nullable=True)   # DataGouv only (chiffre d'affaires)
-    date_creation        = Column(Date,    nullable=True)   # DataGouv only
-    date_derniere_modif  = Column(Date,    nullable=True)   # DataGouv only
-
+    date_creation_entreprise = Column(Date,    nullable=True)   # DataGouv only
+    date_derniere_modif_site  = Column(Date,    nullable=True)   # DataGouv only
+    date_scraping        = Column(Date,    nullable=True)   # DataGouv only
     # ── Contact (BOAMP-rich) ──────────────────────────────────
     telephone      = Column(String, nullable=True)   # BOAMP only
     adresse_email  = Column(String, nullable=True)   # BOAMP only
-
+    info_boamp  = Column(JSONB, nullable=True)
+    dirigeants = Column(JSONB, nullable=True)
     # ── Lead / Tender (BOAMP only) ────────────────────────────
-    besoin                = Column(Text,   nullable=True)
-    date_limite           = Column(Date,   nullable=True)
-    titulaire             = Column(String, nullable=True)
-    nature                = Column(String, nullable=True)
-    lien_offre            = Column(String, nullable=True)
-    status_lead           = Column(String, nullable=True, default="NOUVEAU")
-    info_complementaire   = Column(Text,   nullable=True)
-
     # ── Source provenance (field-level, already produced by extractors) ──
     sources        = Column(JSONB, nullable=True)
-
     # ── Airflow traceability ─────────────────────────────────
     dag_run_id     = Column(String, nullable=True)
-
+    date_derniere_modif_site = Column(Date, nullable=True)
     # ── Timestamps ───────────────────────────────────────────
     created_at     = Column(DateTime(timezone=True), server_default=func.now())
     updated_at     = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
-
     def __repr__(self):
         return f"<CleanLead(id={self.id}, source={self.source}, siren={self.siren}, nom={self.nom})>"
 

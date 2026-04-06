@@ -87,10 +87,12 @@ def scrape_boamp(is_incremental: bool = False, **context):
             f' AND datelimitereponse >= "{aujourdhui}"'
         )
         print("[SCRAPE BOAMP INITIAL]")
-
+    
     raw = BoampService().source_scraping(filtre=filtre)
+    for item in raw:
+        item["date_scraping"] = aujourdhui
     _write(RAW_BOAMP_PATH, raw)
-
+    
     context["ti"].xcom_push(key="total_raw",       value=len(raw))
     context["ti"].xcom_push(key="watermark_start", value=aujourdhui)
     print(f"[SCRAPE BOAMP] {len(raw)} avis bruts")
@@ -104,6 +106,8 @@ def scrape_datagouv(**context):
     filtres = [{"q": filtre}] if filtre else [{"etat_administratif": "A"}]
 
     raw = DataGouvService().source_scraping(filtre=filtres)
+    for item in raw:
+        item["date_scraping"] = aujourdhui
     _write(RAW_DATAGOUV_PATH, raw)
 
     context["ti"].xcom_push(key="total_raw",       value=len(raw))
@@ -120,6 +124,8 @@ def scrape_sirene(**context):
         raise ValueError("INSEE_TOKEN manquant dans les variables d'environnement")
 
     raw = SireneService(token=token).source_scraping(last_sync)
+    for item in raw:
+        item["date_scraping"] = aujourdhui
     _write(RAW_DATAGOUV_PATH, raw)
 
     context["ti"].xcom_push(key="total_raw",       value=len(raw))
@@ -153,7 +159,10 @@ def extract_datagouv(**context):
 
 def load_raw_boamp(**context):
     run_id  = context.get("run_id", "")
+    watermark = ti.xcom_pull(task_ids=task_scrape,     key="watermark_start") if task_scrape else None
     records = _read(RAW_BOAMP_PATH)
+    for item in records:
+        item["date_scraping"] = watermark
     db = SessionLocal()
     try:
         inserted = crud.insert_raw_leads(db, records, source="BOAMP", dag_run_id=run_id)
@@ -165,7 +174,10 @@ def load_raw_boamp(**context):
 
 def load_raw_datagouv(**context):
     run_id  = context.get("run_id", "")
+    watermark = ti.xcom_pull(task_ids=task_scrape,     key="watermark_start") if task_scrape else None
     records = _read(RAW_DATAGOUV_PATH)
+    for item in records:
+        item["date_scraping"] = watermark
     db = SessionLocal()
     try:
         inserted = crud.insert_raw_leads(db, records, source="dataGouv", dag_run_id=run_id)
@@ -217,9 +229,16 @@ def clean_datagouv(**context):
 def load_clean_boamp(**context):
     run_id  = context.get("run_id", "")
     records = _read(RAW_BOAMP_PATH)
+    watermark = ti.xcom_pull(task_ids=task_scrape,     key="watermark_start") if task_scrape else None
+    for item in records:
+        item["date_scraping"] = watermark
     db = SessionLocal()
     try:
         inserted = crud.insert_clean_leads(db, records, source="BOAMP", dag_run_id=run_id)
+        if inserted == 0:
+            raise ValueError("[LOAD CLEAN BOAMP] 0 lignes insérées — vérifier _map_data")
+    except Exception as e:
+        raise   # ← relance l'exception → Airflow marque la task FAILED
     finally:
         db.close()
     context["ti"].xcom_push(key="total_clean_loaded", value=inserted)
@@ -228,10 +247,18 @@ def load_clean_boamp(**context):
 
 def load_clean_datagouv(**context):
     run_id  = context.get("run_id", "")
+    watermark = ti.xcom_pull(task_ids=task_scrape,     key="watermark_start") if task_scrape else None
+    
     records = _read(RAW_DATAGOUV_PATH)
+    for item in records:
+        item["date_scraping"] = watermark
     db = SessionLocal()
     try:
         inserted = crud.insert_clean_leads(db, records, source="dataGouv", dag_run_id=run_id)
+        if inserted == 0:
+            raise ValueError("[LOAD CLEAN DATAGOUV] 0 lignes insérées — vérifier _map_data")
+    except Exception as e:
+        raise   # ← relance l'exception → Airflow marque la task FAILED
     finally:
         db.close()
     context["ti"].xcom_push(key="total_clean_loaded", value=inserted)

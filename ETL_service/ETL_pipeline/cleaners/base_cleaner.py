@@ -56,15 +56,16 @@ class BaseCleaner(ABC):
         """
         report = CleaningReport(source=self.source_name, total_input=len(results))
         cleaned = []
-
+        print("results",results)
         for i, row in enumerate(results):
             entreprise = row.get("entreprise")
-            lead = row.get("lead")
-
             clean_ent = None
             if entreprise is not None:
                 try:
                     clean_ent = self.clean_entreprise(dict(entreprise))
+                    if clean_ent.get("sourceEntreprise") =="BOAMP":
+                        clean_ent = self.clean_lead(dict(clean_ent))
+                        print("cleanleaddddddd",clean_ent)
                 except Exception as e:
                     report.add_issue(i, f"Entreprise cleaning crashed: {e}")
 
@@ -72,16 +73,10 @@ class BaseCleaner(ABC):
                 report.add_issue(i, "Entreprise rejected (no usable identity)")
                 continue
 
-            clean_lead = None
-            if lead is not None:
-                try:
-                    clean_lead = self.clean_lead(dict(lead))
-                except Exception as e:
-                    report.add_issue(i, f"Lead cleaning crashed: {e}")
 
-            cleaned.append({"entreprise": clean_ent, "lead": clean_lead})
+            cleaned.append({"entreprise": clean_ent})
             report.total_cleaned += 1
-
+        
         return cleaned, report
 
     @abstractmethod

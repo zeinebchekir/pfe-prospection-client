@@ -26,7 +26,7 @@ from datetime import date as date_type
 from sqlalchemy.orm import Session
 from sqlalchemy.exc import SQLAlchemyError
 
-from db.models import RawLead, CleanLead
+from db.models import RawLead, Entreprise
 
 logger = logging.getLogger(__name__)
 
@@ -99,16 +99,18 @@ def insert_raw_leads(
     try:
         rows = []
         for rec in records:
+            updated_on_source_at = None
             # For BOAMP: preserve the raw `donnees` blob separately
-            donnees_boamp = None
             if is_boamp:
-                donnees_boamp = rec.get("donnees") or rec.get("donnees_boamp")
-
+                updated_on_source_at = _to_date(rec.get("dateMAJ"))
+            else:
+                updated_on_source_at = _to_date(rec.get("dateDerniereModification"))    
             rows.append(RawLead(
                 source        = source,
                 raw_data      = rec,
-                donnees_boamp = donnees_boamp,
                 dag_run_id    = dag_run_id,
+                updated_on_source_at = rec.get("date_scraping"),
+
             ))
 
         db.bulk_save_objects(rows)
@@ -130,7 +132,7 @@ def insert_raw_leads(
 #  CLEAN INSERT
 # ──────────────────────────────────────────────────────────────
 
-def _map_datagouv(rec: dict, dag_run_id: str | None) -> CleanLead:
+def _map_data(rec: dict, source: str,dag_run_id: str | None) -> Entreprise:
     """
     Map a cleaned DataGouv entreprise dict → CleanLead ORM object.
 
@@ -142,10 +144,11 @@ def _map_datagouv(rec: dict, dag_run_id: str | None) -> CleanLead:
     # Handle nested structure from BaseCleaner: {"entreprise": {...}, "lead": None}
     entreprise = rec.get("entreprise", rec)
 
-    return CleanLead(
-        source               = "dataGouv",
+    return Entreprise(
+        identifiant          = entreprise.get("siret") if source=="datagouv" else entreprise.get("idAvis"),
+        source               = source,
         siren                = entreprise.get("siren"),
-        siret                = None,
+        siret                = entreprise.get("siret"),
         nom                  = entreprise.get("nom"),
         ville                = entreprise.get("ville"),
         code_postal          = _to_int(entreprise.get("code_postal")),
@@ -156,78 +159,73 @@ def _map_datagouv(rec: dict, dag_run_id: str | None) -> CleanLead:
         categorie_entreprise = entreprise.get("categorie_entreprise"),
         nb_locaux            = _to_int(entreprise.get("nb_locaux")),
         ca                   = _to_float(entreprise.get("ca")),
-        date_creation        = _to_date(entreprise.get("dateCreation")),
-        date_derniere_modif  = _to_date(entreprise.get("dateDerniereModification")),
+        date_creation_entreprise = _to_date(entreprise.get("dateCreation")),
         # Lead fields: NULL for DataGouv
-        telephone            = None,
-        adresse_email        = None,
-        besoin               = None,
-        date_limite          = None,
-        titulaire            = None,
-        nature               = None,
-        lien_offre           = None,
-        status_lead          = None,
-        info_complementaire  = None,
+        info_boamp           = entreprise.get("data_from_boamp"),
         sources              = entreprise.get("sources"),
         dag_run_id           = dag_run_id,
+        date_derniere_modif_site = _to_date(entreprise.get("dateDerniereModification")) if source == "dataGouv" else entreprise.get("dateMAJ"),
+        date_scraping        = _to_date(entreprise.get("date_scraping")),
+        
     )
 
 
-def _map_boamp(rec: dict, dag_run_id: str | None) -> CleanLead:
-    """
-    Map a cleaned BOAMP record dict → CleanLead ORM object.
+# def _map_data(rec: dict, dag_run_id: str | None,source: str) -> CleanLead:
+#     """
+#     Map a cleaned BOAMP record dict → CleanLead ORM object.
 
-    BOAMP records come out of BaseCleaner as:
-      {"entreprise": {...}, "lead": {...}}
+#     BOAMP records come out of BaseCleaner as:
+#       {"entreprise": {...}, "lead": {...}}
 
-    Entreprise keys (from BoampCleaner.clean_entreprise + data_extraction):
-      siret, nom, secteur_activite, forme_juridique, ville, code_postal,
-      adresse_email, pays, telephone, sourceEntreprise
+#     Entreprise keys (from BoampCleaner.clean_entreprise + data_extraction):
+#       siret, nom, secteur_activite, forme_juridique, ville, code_postal,
+#       adresse_email, pays, telephone, sourceEntreprise
 
-    Lead keys (from BoampCleaner.clean_lead):
-      besoin, date_limite, titulaire, nature, lienOffre, status_lead,
-      info_complementaire
-    """
-    entreprise = rec.get("entreprise", rec)
-    lead       = rec.get("lead") or {}
+#     Lead keys (from BoampCleaner.clean_lead):
+#       besoin, date_limite, titulaire, nature, lienOffre, status_lead,
+#       info_complementaire
+#     """
+#     entreprise = rec.get("entreprise", rec)
 
-    # Derive SIREN from SIRET when available
-    raw_siret = entreprise.get("siret")
-    siren = None
-    if raw_siret and len(str(raw_siret)) >= 9:
-        siren = str(raw_siret)[:9]
+#     # Derive SIREN from SIRET when available
+#     raw_siret = entreprise.get("siret")
+#     siren = None
+#     if raw_siret and len(str(raw_siret)) >= 9:
+#         siren = str(raw_siret)[:9]
 
-    return CleanLead(
-        source               = "BOAMP",
-        siren                = siren,
-        siret                = raw_siret,
-        nom                  = entreprise.get("nom"),
-        ville                = entreprise.get("ville"),
-        code_postal          = _to_int(entreprise.get("code_postal")),
-        pays                 = entreprise.get("pays", "France"),
-        secteur_activite     = entreprise.get("secteur_activite"),
-        forme_juridique      = entreprise.get("forme_juridique"),
-        # DataGouv-only fields: NULL
-        taille_entrep        = None,
-        categorie_entreprise = None,
-        nb_locaux            = None,
-        ca                   = None,
-        date_creation        = None,
-        date_derniere_modif  = None,
-        # Contact
-        telephone            = entreprise.get("telephone"),
-        adresse_email        = entreprise.get("adresse_email"),
-        # Lead / tender
-        besoin               = lead.get("besoin"),
-        date_limite          = _to_date(lead.get("date_limite")),
-        titulaire            = lead.get("titulaire"),
-        nature               = lead.get("nature"),
-        lien_offre           = lead.get("lienOffre"),
-        status_lead          = lead.get("status_lead", "NOUVEAU"),
-        info_complementaire  = lead.get("info_complementaire"),
-        sources              = entreprise.get("sources"),
-        dag_run_id           = dag_run_id,
-    )
+#     return CleanLead(
+#         source               = "BOAMP",
+#         siren                = siren,
+#         siret                = raw_siret,
+#         nom                  = entreprise.get("nom"),
+#         ville                = entreprise.get("ville"),
+#         code_postal          = _to_int(entreprise.get("code_postal")),
+#         pays                 = entreprise.get("pays", "France"),
+#         secteur_activite     = entreprise.get("secteur_activite"),
+#         forme_juridique      = entreprise.get("forme_juridique"),
+#         # DataGouv-only fields: NULL
+#         taille_entrep        = None,
+#         categorie_entreprise = None,
+#         nb_locaux            = None,
+#         ca                   = None,
+#         date_creation        = None,
+#         date_derniere_modif  = None,
+#         data_from_boamp      = entreprise.get("data_from_boamp") if source == "BOAMP" else None,
+#         # Contact
+#         telephone            = entreprise.get("num_tel"),
+#         adresse_email        = entreprise.get("adresse_email"),
+#         # Lead / tender
+#         besoin               = entreprise.get("besoin"),
+#         date_limite          = _to_date(entreprise.get("date_limite")),
+#         titulaire            = entreprise.get("titulaire"),
+#         nature               = entreprise.get("nature"),
+#         lien_offre           = entreprise.get("lienOffre"),
+#         status_lead          = entreprise.get("status_lead", "NOUVEAU"),
+#         info_complementaire  = entreprise.get("info_complementaire"),
+#         sources              = entreprise.get("sources"),
+#         dag_run_id           = dag_run_id,
+#         updated_on_source_at=entreprise.get("dateMAJ"),
+#     )
 
 
 def insert_clean_leads(
@@ -235,6 +233,7 @@ def insert_clean_leads(
     records: list[dict],
     source: str,
     dag_run_id: str | None = None,
+
 ) -> int:
     """
     Bulk-insert cleaned records into `clean_leads`.
@@ -254,14 +253,15 @@ def insert_clean_leads(
         return 0
 
     inserted = 0
-    is_boamp = source.upper() == "BOAMP"
-    mapper   = _map_boamp if is_boamp else _map_datagouv
+    mapper   = _map_data
 
     try:
         rows = []
         for rec in records:
             try:
-                rows.append(mapper(rec, dag_run_id))
+                entreprise = rec.get("entreprise", rec)
+                source_rec = entreprise.get("sourceEntreprise", source)
+                rows.append(_map_data(entreprise, source_rec, dag_run_id))
             except Exception as e:
                 logger.warning(f"[CLEAN INSERT] {source}: skipping record — {e}")
 
@@ -312,7 +312,7 @@ def query_clean_leads(
     ville: str | None = None,
     status_lead: str | None = None,
     limit: int = 100,
-) -> list[CleanLead]:
+) -> list[Entreprise]:
     """
     Query clean_leads with optional filters.
 
@@ -337,13 +337,13 @@ def query_clean_leads(
     # Lookup a specific company by SIREN
     query_clean_leads(db, siren='123456789')
     """
-    q = db.query(CleanLead)
+    q = db.query(Entreprise)
     if source:
-        q = q.filter(CleanLead.source == source)
+        q = q.filter(Entreprise.source == source)
     if siren:
-        q = q.filter(CleanLead.siren == siren)
+        q = q.filter(Entreprise.siren == siren)
     if ville:
-        q = q.filter(CleanLead.ville.ilike(f"%{ville}%"))
+        q = q.filter(Entreprise.ville.ilike(f"%{ville}%"))
     if status_lead:
-        q = q.filter(CleanLead.status_lead == status_lead)
-    return q.order_by(CleanLead.created_at.desc()).limit(limit).all()
+        q = q.filter(Entreprise.status_lead == status_lead)
+    return q.order_by(Entreprise.created_at.desc()).limit(limit).all()

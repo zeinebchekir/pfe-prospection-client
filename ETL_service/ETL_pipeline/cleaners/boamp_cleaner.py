@@ -73,7 +73,7 @@ class BoampCleaner(BaseCleaner):
         e["sourceEntreprise"] = "BOAMP"
 
         # ── 10. Téléphone ──
-        e["telephone"] = clean_phone(e.get("telephone"))
+        e["num_tel"] = clean_phone(e.get("num_tel"))
 
         return e
 
@@ -81,29 +81,19 @@ class BoampCleaner(BaseCleaner):
         """
         Cleans a BOAMP lead dict.
         """
-        # ── 1. Besoin (required) ──
-        besoin = normalize_text(guard(lead.get("besoin")))
-        if not besoin:
-            return None
-        lead["besoin"] = besoin
-
-        # ── 2. Date limite ──
-        lead["date_limite"] = clean_date(guard(lead.get("date_limite")))
-
-        # ── 3. Titulaire ──
-        lead["titulaire"] = guard(normalize_text(lead.get("titulaire")))
-
-        # ── 4. Nature ──
-        lead["nature"] = guard(lead.get("nature"))
-
-        # ── 5. Lien offre ──
-        lead["lienOffre"] = clean_url(guard(lead.get("lienOffre")))
-
         # ── 6. Status ──
         if not lead.get("status_lead"):
             lead["status_lead"] = "NOUVEAU"
 
+        lead["data_from_boamp"]={
+            "num_tel":lead.get("num_tel"),
+            "besoin":normalize_text(guard(lead.get("besoin"))),
+            "date_limite":clean_date(guard(lead.get("date_limite"))),
+            "titulaire":guard(normalize_text(lead.get("titulaire"))),
+            "nature":guard(lead.get("nature")),
+            "lienOffre":clean_url(guard(lead.get("lienOffre"))),
+            "info_complementaire":guard(lead.get("info_complementaire")) or "",
+        }
         # ── 7. Info complémentaire ──
-        lead["info_complementaire"] = guard(lead.get("info_complementaire")) or ""
-
+        print("lead cleaneeeeeeeeeeeeeeeeeeeeeeeeed",lead)
         return lead

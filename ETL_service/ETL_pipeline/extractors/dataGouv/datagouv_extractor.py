@@ -39,7 +39,7 @@ def extract_data_from_datagouv(results):
             
         # --- 7. NOMBRE DE LOCAUX (Établissements) ---
         nb_locaux_ouverts = r.get("nombre_etablissements_ouverts",None)
-
+        
         # --- SÉCURISATION DU CODE POSTAL ---
         # Ton modèle Django attend un IntegerField, on s'assure que c'est bien un nombre
         try:
@@ -62,6 +62,8 @@ def extract_data_from_datagouv(results):
             "code_postal":cp_propre,
             "dateCreation":date_creation,
             "dateDerniereModification":date_maj,
+            "data_from_boamp":None,
+            "sourceEntreprise":"dataGouv",
             "sources":{
                 "siren":"dataGouv" if siren else None,
                 "nom":"dataGouv" if nom else None,
@@ -78,6 +80,7 @@ def extract_data_from_datagouv(results):
                 "dateDerniereModification":date_maj,
                 
             }
+
             }
            
         clean_data.append(nouvelle_entreprise)
