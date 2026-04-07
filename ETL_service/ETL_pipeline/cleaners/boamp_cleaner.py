@@ -18,6 +18,7 @@ from .utils import (
     clean_date,
     clean_url,
     guard,
+    clean_siren
 )
 
 try:
@@ -44,7 +45,8 @@ class BoampCleaner(BaseCleaner):
 
         # ── 2. SIRET ──
         e["siret"] = clean_siret(e.get("siret"))
-        
+        e["siren"] = clean_siren(e.get("siret"))
+
         # ── 3. Email ──
         e["adresse_email"] = clean_email(e.get("adresse_email"))
 

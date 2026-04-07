@@ -17,7 +17,7 @@ class BoampService(BaseScraper):
         filtrebomap = f'descripteur_code IN ({codes_formatte}) AND datelimitereponse >= "{aujourdhui}"'
         return filtrebomap  
     
-    def source_scraping(self, filtre, limite=20):
+    def source_scraping(self, filtre, limite=70):
         """
         Récupère les prospects bruts depuis l'API en utilisant la session parente.
         """

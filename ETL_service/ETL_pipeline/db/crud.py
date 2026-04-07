@@ -22,12 +22,11 @@ The raw BOAMP record contains a `donnees` key whose schema varies by
 """
 
 import logging
-from datetime import date as date_type
+from datetime import date as date_type, datetime
 from sqlalchemy.orm import Session
 from sqlalchemy.exc import SQLAlchemyError
 
 from db.models import RawLead, Entreprise
-
 logger = logging.getLogger(__name__)
 
 
@@ -35,18 +34,16 @@ logger = logging.getLogger(__name__)
 #  HELPERS
 # ──────────────────────────────────────────────────────────────
 
-def _to_date(value) -> date_type | None:
-    """Convert a string 'YYYY-MM-DD' or None to a Python date."""
-    if value is None:
+
+def _to_date(val):
+    if val is None:
         return None
-    if isinstance(value, date_type):
-        return value
+    if isinstance(val, date_type):   # ← utilise l'alias partout
+        return val
     try:
-        from datetime import datetime
-        return datetime.strptime(str(value)[:10], "%Y-%m-%dT%H:%M:%S").date()
+        return datetime.fromisoformat(str(val)).date()
     except (ValueError, TypeError):
         return None
-
 
 def _to_int(value) -> int | None:
     if value is None:
@@ -75,6 +72,7 @@ def insert_raw_leads(
     records: list[dict],
     source: str,
     dag_run_id: str | None = None,
+    date_scraping: date_type | None = None,
 ) -> int:
     """
     Bulk-insert extracted records (pre-cleaning) into `raw_leads`.
@@ -109,7 +107,8 @@ def insert_raw_leads(
                 source        = source,
                 raw_data      = rec,
                 dag_run_id    = dag_run_id,
-                updated_on_source_at = rec.get("date_scraping"),
+                updated_on_source_at = updated_on_source_at,
+                date_scraping        = _to_date(date_scraping),
 
             ))
 
@@ -132,7 +131,7 @@ def insert_raw_leads(
 #  CLEAN INSERT
 # ──────────────────────────────────────────────────────────────
 
-def _map_data(rec: dict, source: str,dag_run_id: str | None) -> Entreprise:
+def _map_data(rec: dict, source: str,date_scraping: date_type | None,dag_run_id: str | None) -> Entreprise:
     """
     Map a cleaned DataGouv entreprise dict → CleanLead ORM object.
 
@@ -143,9 +142,9 @@ def _map_data(rec: dict, source: str,dag_run_id: str | None) -> Entreprise:
     """
     # Handle nested structure from BaseCleaner: {"entreprise": {...}, "lead": None}
     entreprise = rec.get("entreprise", rec)
-
+    boamp_data = entreprise.get("data_from_boamp") or {}
     return Entreprise(
-        identifiant          = entreprise.get("siret") if source=="datagouv" else entreprise.get("idAvis"),
+        identifiant          = entreprise.get("siren") if source=="dataGouv" else entreprise.get("idAvis"),
         siren                = entreprise.get("siren"),
         siret                = entreprise.get("siret"),
         nom                  = entreprise.get("nom"),
@@ -160,73 +159,17 @@ def _map_data(rec: dict, source: str,dag_run_id: str | None) -> Entreprise:
         ca                   = _to_float(entreprise.get("ca")),
         date_creation_entreprise = _to_date(entreprise.get("dateCreation")),
         telephone=entreprise.get("num_tel"),
-        adresse_email=entreprise.get("data_from_boamp").get("adresse_email"),
+        adresse_email=boamp_data.get("adresse_email") if boamp_data else None,
         # Lead fields: NULL for DataGouv
-        info_boamp           = entreprise.get("data_from_boamp") if  source=="BOAMP" else None,
+        info_boamp           = boamp_data if source == "BOAMP" else None,
+        dirigeants           = entreprise.get("dirigeants"),
         sources              = entreprise.get("sources"),
         dag_run_id           = dag_run_id,
         date_derniere_modif_site = _to_date(entreprise.get("dateDerniereModification")) if source == "dataGouv" else entreprise.get("dateMAJ"),
-        date_scraping        = _to_date(entreprise.get("date_scraping")),
+        date_scraping        = _to_date(date_scraping),
         
     )
 
-
-# def _map_data(rec: dict, dag_run_id: str | None,source: str) -> CleanLead:
-#     """
-#     Map a cleaned BOAMP record dict → CleanLead ORM object.
-
-#     BOAMP records come out of BaseCleaner as:
-#       {"entreprise": {...}, "lead": {...}}
-
-#     Entreprise keys (from BoampCleaner.clean_entreprise + data_extraction):
-#       siret, nom, secteur_activite, forme_juridique, ville, code_postal,
-#       adresse_email, pays, telephone, sourceEntreprise
-
-#     Lead keys (from BoampCleaner.clean_lead):
-#       besoin, date_limite, titulaire, nature, lienOffre, status_lead,
-#       info_complementaire
-#     """
-#     entreprise = rec.get("entreprise", rec)
-
-#     # Derive SIREN from SIRET when available
-#     raw_siret = entreprise.get("siret")
-#     siren = None
-#     if raw_siret and len(str(raw_siret)) >= 9:
-#         siren = str(raw_siret)[:9]
-
-#     return CleanLead(
-#         source               = "BOAMP",
-#         siren                = siren,
-#         siret                = raw_siret,
-#         nom                  = entreprise.get("nom"),
-#         ville                = entreprise.get("ville"),
-#         code_postal          = _to_int(entreprise.get("code_postal")),
-#         pays                 = entreprise.get("pays", "France"),
-#         secteur_activite     = entreprise.get("secteur_activite"),
-#         forme_juridique      = entreprise.get("forme_juridique"),
-#         # DataGouv-only fields: NULL
-#         taille_entrep        = None,
-#         categorie_entreprise = None,
-#         nb_locaux            = None,
-#         ca                   = None,
-#         date_creation        = None,
-#         date_derniere_modif  = None,
-#         data_from_boamp      = entreprise.get("data_from_boamp") if source == "BOAMP" else None,
-#         # Contact
-#         telephone            = entreprise.get("num_tel"),
-#         adresse_email        = entreprise.get("adresse_email"),
-#         # Lead / tender
-#         besoin               = entreprise.get("besoin"),
-#         date_limite          = _to_date(entreprise.get("date_limite")),
-#         titulaire            = entreprise.get("titulaire"),
-#         nature               = entreprise.get("nature"),
-#         lien_offre           = entreprise.get("lienOffre"),
-#         status_lead          = entreprise.get("status_lead", "NOUVEAU"),
-#         info_complementaire  = entreprise.get("info_complementaire"),
-#         sources              = entreprise.get("sources"),
-#         dag_run_id           = dag_run_id,
-#         updated_on_source_at=entreprise.get("dateMAJ"),
-#     )
 
 
 def insert_clean_leads(
@@ -234,7 +177,7 @@ def insert_clean_leads(
     records: list[dict],
     source: str,
     dag_run_id: str | None = None,
-
+    date_scraping: date_type | None = None,
 ) -> int:
     """
     Bulk-insert cleaned records into `clean_leads`.
@@ -254,15 +197,14 @@ def insert_clean_leads(
         return 0
 
     inserted = 0
-    mapper   = _map_data
 
     try:
         rows = []
         for rec in records:
             try:
-                entreprise = rec.get("entreprise", rec)
-                source_rec = entreprise.get("sourceEntreprise", source)
-                rows.append(_map_data(entreprise, source_rec, dag_run_id))
+                rows.append(_map_data(rec=rec, source=source,
+                                  date_scraping=date_scraping,
+                                  dag_run_id=dag_run_id))
             except Exception as e:
                 logger.warning(f"[CLEAN INSERT] {source}: skipping record — {e}")
 
@@ -289,6 +231,7 @@ def query_raw_leads(
     db: Session,
     source: str | None = None,
     limit: int = 100,
+    
 ) -> list[RawLead]:
     """
     Query raw_leads with optional source filter.

@@ -46,7 +46,14 @@ def extract_data_from_datagouv(results):
             cp_propre = int(code_postal) if code_postal else None
         except ValueError:
             cp_propre = None
-
+        #extract dirigeants 
+        liste_brute_dirigeants = r.get("dirigeants") or []
+    
+    # Filtrer les personnes physiques
+        dirigeants_filtres = [
+            d for d in liste_brute_dirigeants 
+            if d.get("type_dirigeant") == "personne physique"
+        ]
         # === CRÉATION DE L'INSTANCE DJANGO ===
         nouvelle_entreprise ={ 
             "siren":siren,
@@ -64,6 +71,7 @@ def extract_data_from_datagouv(results):
             "dateDerniereModification":date_maj,
             "data_from_boamp":None,
             "sourceEntreprise":"dataGouv",
+            "dirigeants":dirigeants_filtres,
             "sources":{
                 "siren":"dataGouv" if siren else None,
                 "nom":"dataGouv" if nom else None,

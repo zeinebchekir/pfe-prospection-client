@@ -52,14 +52,13 @@ class RawLead(Base):
 
     # BOAMP only — the original variable-schema `donnees` blob
     # NULL for DataGouv rows
-    donnees_boamp  = Column(JSONB, nullable=True)
 
     # Airflow run traceability
     dag_run_id     = Column(String, nullable=True)
 
     loaded_at      = Column(DateTime(timezone=True), server_default=func.now())
-
-    updated_on_source_at = Column(Date, nullable=True)
+    date_scraping  = Column(DateTime, nullable=True)
+    updated_on_source_at = Column(DateTime, nullable=True)
 
     def __repr__(self):
         return f"<RawLead(id={self.id}, source={self.source})>"
@@ -85,7 +84,7 @@ class Entreprise(Base):
     """
     __tablename__ = "entreprise"
 
-    identifiant    = Column(Integer, primary_key=True, autoincrement=True)
+    identifiant    = Column(String(25), primary_key=True)
 
     # Link back to the raw staging row (nullable — bulk loads may skip it)
     raw_lead_id    = Column(Integer, ForeignKey("raw_leads.id"), nullable=True, index=True)
@@ -107,8 +106,8 @@ class Entreprise(Base):
     nb_locaux            = Column(Integer, nullable=True)   # DataGouv only
     ca                   = Column(Float,   nullable=True)   # DataGouv only (chiffre d'affaires)
     date_creation_entreprise = Column(Date,    nullable=True)   # DataGouv only
-    date_derniere_modif_site  = Column(Date,    nullable=True)   # DataGouv only
-    date_scraping        = Column(Date,    nullable=True)   # DataGouv only
+    date_derniere_modif_site  = Column(DateTime,    nullable=True)   # DataGouv only
+    date_scraping        = Column(DateTime,    nullable=True)   # DataGouv only
     # ── Contact (BOAMP-rich) ──────────────────────────────────
     telephone      = Column(String, nullable=True)   # BOAMP only
     adresse_email  = Column(String, nullable=True)   # BOAMP only
@@ -119,7 +118,6 @@ class Entreprise(Base):
     sources        = Column(JSONB, nullable=True)
     # ── Airflow traceability ─────────────────────────────────
     dag_run_id     = Column(String, nullable=True)
-    date_derniere_modif_site = Column(Date, nullable=True)
     # ── Timestamps ───────────────────────────────────────────
     created_at     = Column(DateTime(timezone=True), server_default=func.now())
     updated_at     = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())

@@ -160,13 +160,18 @@ def extract_datagouv(**context):
 def load_raw_boamp(**context):
     ti = context["ti"]
     run_id  = context.get("run_id", "")
-    watermark = ti.xcom_pull(task_ids="task_scrape",     key="watermark_start") 
+    watermark = ti.xcom_pull(task_ids="scrape_boamp",     key="watermark_start") 
     records = _read(RAW_BOAMP_PATH)
     for item in records:
         item["date_scraping"] = watermark
     db = SessionLocal()
+    print("waterrrrrrmaaaaaaak",watermark)
     try:
-        inserted = crud.insert_raw_leads(db, records, source="BOAMP", dag_run_id=run_id)
+        inserted = crud.insert_raw_leads(db, records, source="BOAMP", dag_run_id=run_id,date_scraping=watermark)
+        if inserted == 0:
+            raise ValueError("[LOAD CLEAN BOAMP] 0 lignes insérées — vérifier _map_data")
+    except Exception as e:
+        raise   
     finally:
         db.close()
     context["ti"].xcom_push(key="total_raw_loaded", value=inserted)
@@ -176,13 +181,18 @@ def load_raw_boamp(**context):
 def load_raw_datagouv(**context):
     ti = context["ti"]
     run_id  = context.get("run_id", "")
-    watermark = ti.xcom_pull(task_ids="task_scrape",     key="watermark_start") 
+    watermark = ti.xcom_pull(task_ids="scrape_datagouv",     key="watermark_start") 
     records = _read(RAW_DATAGOUV_PATH)
     for item in records:
         item["date_scraping"] = watermark
     db = SessionLocal()
+    print("waterrrrrrmaaaaaaak",watermark)
     try:
-        inserted = crud.insert_raw_leads(db, records, source="dataGouv", dag_run_id=run_id)
+        inserted = crud.insert_raw_leads(db, records, source="dataGouv", dag_run_id=run_id, date_scraping=watermark)
+        if inserted == 0:
+            raise ValueError("[LOAD CLEAN BOAMP] 0 lignes insérées — vérifier _map_data")
+    except Exception as e:
+        raise 
     finally:
         db.close()
     context["ti"].xcom_push(key="total_raw_loaded", value=inserted)
@@ -236,8 +246,9 @@ def load_clean_boamp(**context):
     for item in records:
         item["date_scraping"] = watermark
     db = SessionLocal()
+    print("waterrrrrrmaaaaaaak",watermark)
     try:
-        inserted = crud.insert_clean_leads(db, records, source="BOAMP", dag_run_id=run_id)
+        inserted = crud.insert_clean_leads(db, records, source="BOAMP", dag_run_id=run_id, date_scraping=watermark)
         if inserted == 0:
             raise ValueError("[LOAD CLEAN BOAMP] 0 lignes insérées — vérifier _map_data")
     except Exception as e:
@@ -257,8 +268,10 @@ def load_clean_datagouv(**context):
     for item in records:
         item["date_scraping"] = watermark
     db = SessionLocal()
+    print("waterrrrrrmaaaaaaak",watermark)
+
     try:
-        inserted = crud.insert_clean_leads(db, records, source="dataGouv", dag_run_id=run_id)
+        inserted = crud.insert_clean_leads(db, records, source="dataGouv", dag_run_id=run_id,date_scraping=watermark)
         if inserted == 0:
             raise ValueError("[LOAD CLEAN DATAGOUV] 0 lignes insérées — vérifier _map_data")
     except Exception as e:
