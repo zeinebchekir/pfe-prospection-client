@@ -43,7 +43,7 @@ def _to_date(value) -> date_type | None:
         return value
     try:
         from datetime import datetime
-        return datetime.strptime(str(value)[:10], "%Y-%m-%d").date()
+        return datetime.strptime(str(value)[:10], "%Y-%m-%dT%H:%M:%S").date()
     except (ValueError, TypeError):
         return None
 
@@ -146,7 +146,6 @@ def _map_data(rec: dict, source: str,dag_run_id: str | None) -> Entreprise:
 
     return Entreprise(
         identifiant          = entreprise.get("siret") if source=="datagouv" else entreprise.get("idAvis"),
-        source               = source,
         siren                = entreprise.get("siren"),
         siret                = entreprise.get("siret"),
         nom                  = entreprise.get("nom"),
@@ -160,8 +159,10 @@ def _map_data(rec: dict, source: str,dag_run_id: str | None) -> Entreprise:
         nb_locaux            = _to_int(entreprise.get("nb_locaux")),
         ca                   = _to_float(entreprise.get("ca")),
         date_creation_entreprise = _to_date(entreprise.get("dateCreation")),
+        telephone=entreprise.get("num_tel"),
+        adresse_email=entreprise.get("data_from_boamp").get("adresse_email"),
         # Lead fields: NULL for DataGouv
-        info_boamp           = entreprise.get("data_from_boamp"),
+        info_boamp           = entreprise.get("data_from_boamp") if  source=="BOAMP" else None,
         sources              = entreprise.get("sources"),
         dag_run_id           = dag_run_id,
         date_derniere_modif_site = _to_date(entreprise.get("dateDerniereModification")) if source == "dataGouv" else entreprise.get("dateMAJ"),

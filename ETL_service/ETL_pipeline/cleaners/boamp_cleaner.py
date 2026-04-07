@@ -44,7 +44,7 @@ class BoampCleaner(BaseCleaner):
 
         # ── 2. SIRET ──
         e["siret"] = clean_siret(e.get("siret"))
-
+        
         # ── 3. Email ──
         e["adresse_email"] = clean_email(e.get("adresse_email"))
 
@@ -69,13 +69,10 @@ class BoampCleaner(BaseCleaner):
         # ── 8. Pays ──
         e["pays"] = "France"
 
-        # ── 9. Source ──
-        e["sourceEntreprise"] = "BOAMP"
-
         # ── 10. Téléphone ──
         e["num_tel"] = clean_phone(e.get("num_tel"))
-
         return e
+
 
     def clean_lead(self, lead: dict) -> dict | None:
         """
@@ -93,7 +90,7 @@ class BoampCleaner(BaseCleaner):
             "nature":guard(lead.get("nature")),
             "lienOffre":clean_url(guard(lead.get("lienOffre"))),
             "info_complementaire":guard(lead.get("info_complementaire")) or "",
+            "adresse_email":clean_email(lead.get("adresse_email")),
         }
         # ── 7. Info complémentaire ──
-        print("lead cleaneeeeeeeeeeeeeeeeeeeeeeeeed",lead)
         return lead

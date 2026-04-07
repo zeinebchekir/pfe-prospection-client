@@ -158,8 +158,9 @@ def extract_datagouv(**context):
 # ──────────────────────────────────────────────
 
 def load_raw_boamp(**context):
+    ti = context["ti"]
     run_id  = context.get("run_id", "")
-    watermark = ti.xcom_pull(task_ids=task_scrape,     key="watermark_start") if task_scrape else None
+    watermark = ti.xcom_pull(task_ids="task_scrape",     key="watermark_start") 
     records = _read(RAW_BOAMP_PATH)
     for item in records:
         item["date_scraping"] = watermark
@@ -173,8 +174,9 @@ def load_raw_boamp(**context):
 
 
 def load_raw_datagouv(**context):
+    ti = context["ti"]
     run_id  = context.get("run_id", "")
-    watermark = ti.xcom_pull(task_ids=task_scrape,     key="watermark_start") if task_scrape else None
+    watermark = ti.xcom_pull(task_ids="task_scrape",     key="watermark_start") 
     records = _read(RAW_DATAGOUV_PATH)
     for item in records:
         item["date_scraping"] = watermark
@@ -227,9 +229,10 @@ def clean_datagouv(**context):
 # ──────────────────────────────────────────────
 
 def load_clean_boamp(**context):
+    ti = context["ti"]
     run_id  = context.get("run_id", "")
     records = _read(RAW_BOAMP_PATH)
-    watermark = ti.xcom_pull(task_ids=task_scrape,     key="watermark_start") if task_scrape else None
+    watermark = ti.xcom_pull(task_ids="scrape_boamp",     key="watermark_start")
     for item in records:
         item["date_scraping"] = watermark
     db = SessionLocal()
@@ -246,8 +249,9 @@ def load_clean_boamp(**context):
 
 
 def load_clean_datagouv(**context):
+    ti = context["ti"]
     run_id  = context.get("run_id", "")
-    watermark = ti.xcom_pull(task_ids=task_scrape,     key="watermark_start") if task_scrape else None
+    watermark = ti.xcom_pull(task_ids="scrape_datagouv",     key="watermark_start") 
     
     records = _read(RAW_DATAGOUV_PATH)
     for item in records:
