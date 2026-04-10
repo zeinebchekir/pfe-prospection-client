@@ -148,19 +148,9 @@ def extract_boamp(**context):
 
 def enrich_boamp(**context):
     records = _read(RAW_BOAMP_PATH)
-    db = SessionLocal()
-    try:
-        enriched = enrich_boamp_data(records, db=db)
-    finally:
-        db.close()
+    enriched = enrich_boamp_data(records)
     _write(RAW_BOAMP_PATH, enriched)
-    new_count      = sum(1 for r in enriched if r.get("_db_status") == "new")
-    existing_count = sum(1 for r in enriched if r.get("_db_status") == "existing")
-    print(
-        f"[ENRICH BOAMP] {len(enriched)} enregistrements traités — "
-        f"{new_count} nouveaux enrichis via DataGouv, "
-        f"{existing_count} déjà en base (API ignorée)"
-    )
+    print(f"[ENRICH BOAMP] {len(enriched)} enregistrements enrichis avec DataGouv")
 
 
 def extract_datagouv(**context):
