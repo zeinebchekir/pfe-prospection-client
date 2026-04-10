@@ -80,7 +80,7 @@ const routes = [
   {
     path: "/admin/crm",
     component: () => import("@/pages/DashboardPage.vue"),
-    meta: { requiresAuth: true, roles: ["admin"] },
+    meta: { requiresAuth: true, roles: ["ADMIN"] },
   },
 
   // ───────────── MANAGER SUB ROUTES ─────────────
@@ -88,17 +88,17 @@ const routes = [
   {
     path: "/manager/team",
     component: () => import("@/pages/DashboardPage.vue"),
-    meta: { requiresAuth: true, roles: ["manager"] },
+    meta: { requiresAuth: true, roles: ["CEO"] },
   },
   {
     path: "/manager/sync",
     component: () => import("@/pages/DashboardPage.vue"),
-    meta: { requiresAuth: true, roles: ["manager"] },
+    meta: { requiresAuth: true, roles: ["CEO"] },
   },
   {
     path: "/manager/reports",
     component: () => import("@/pages/DashboardPage.vue"),
-    meta: { requiresAuth: true, roles: ["manager"] },
+    meta: { requiresAuth: true, roles: ["CEO"] },
   },
 
   // ───────────── COMMERCIAL SUB ROUTES ─────────────
@@ -106,17 +106,32 @@ const routes = [
   {
     path: "/commercial/prospects",
     component: () => import("@/pages/DashboardPage.vue"),
-    meta: { requiresAuth: true, roles: ["commercial"] },
+    meta: { requiresAuth: true, roles: ["COMMERCIAL"] },
   },
   {
     path: "/commercial/qualify",
     component: () => import("@/pages/DashboardPage.vue"),
-    meta: { requiresAuth: true, roles: ["commercial"] },
+    meta: { requiresAuth: true, roles: ["COMMERCIAL"] },
   },
   {
     path: "/commercial/sync",
     component: () => import("@/pages/DashboardPage.vue"),
-    meta: { requiresAuth: true, roles: ["commercial"] },
+    meta: { requiresAuth: true, roles: ["COMMERCIAL"] },
+  },
+
+  // ───────────── LEADS MODULE ─────────────
+
+  {
+    path: "/commercial/leads",
+    name: "LeadsPage",
+    component: () => import("@/pages/commercial/LeadsPage.vue"),
+    meta: { requiresAuth: true, roles: ["COMMERCIAL"] },
+  },
+  {
+    path: "/commercial/leads/:id",
+    name: "LeadDetail",
+    component: () => import("@/pages/commercial/LeadDetailPage.vue"),
+    meta: { requiresAuth: true, roles: ["COMMERCIAL"] },
   },
 
   {
