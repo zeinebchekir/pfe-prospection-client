@@ -19,7 +19,7 @@ class DataGouvService(BaseScraper):
         page        = 1
         max_retries = 3
 
-        while True and page <= 40: 
+        while True and page <= 5: 
             params_page = {**params, "page": page, "per_page": self.per_page}
             data        = None
 

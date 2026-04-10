@@ -1,3 +1,5 @@
+from extractors.dataGouv.linkedin_enricher import get_linkedin_url
+
 def extract_data_from_datagouv(results):
     clean_data = []
     """
@@ -54,6 +56,13 @@ def extract_data_from_datagouv(results):
             d for d in liste_brute_dirigeants 
             if d.get("type_dirigeant") == "personne physique"
         ]
+        
+        # Enrichissement LinkedIn
+        for d in dirigeants_filtres:
+            nom_dir = d.get("nom")
+            prenom_dir = d.get("prenoms")
+            link = get_linkedin_url(nom_dir, prenom_dir, nom)
+            d["linkedin_url"] = link
         # === CRÉATION DE L'INSTANCE DJANGO ===
         nouvelle_entreprise ={ 
             "siren":siren,

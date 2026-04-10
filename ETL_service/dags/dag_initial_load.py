@@ -12,6 +12,7 @@ from scrapers.dataGouv import DataGouvService
 from scrapers.sirene import SireneService
 from extractors.Boamp.data_extraction import get_global_information
 from extractors.dataGouv.datagouv_extractor import extract_data_from_datagouv
+from extractors.dataGouv.boamp_enricher import enrich_boamp_data
 from db.database import SessionLocal, create_tables
 from db import sync_crud
 from db import crud
@@ -143,6 +144,13 @@ def extract_boamp(**context):
     _write(RAW_BOAMP_PATH, clean)
     context["ti"].xcom_push(key="total_extracted", value=len(clean))
     print(f"[EXTRACT BOAMP] {len(clean)} enregistrements extraits")
+
+
+def enrich_boamp(**context):
+    records = _read(RAW_BOAMP_PATH)
+    enriched = enrich_boamp_data(records)
+    _write(RAW_BOAMP_PATH, enriched)
+    print(f"[ENRICH BOAMP] {len(enriched)} enregistrements enrichis avec DataGouv")
 
 
 def extract_datagouv(**context):
@@ -363,6 +371,7 @@ with DAG(
     # ── BOAMP branch ─────────────────────────────────────────
     t_scrape_b     = PythonOperator(task_id="scrape_boamp",       python_callable=scrape_boamp,     op_kwargs={"is_incremental": False})
     t_ext_b        = PythonOperator(task_id="extract_boamp",      python_callable=extract_boamp)
+    t_enrich_b     = PythonOperator(task_id="enrich_boamp",       python_callable=enrich_boamp)
     t_load_raw_b   = PythonOperator(task_id="load_raw_boamp",     python_callable=load_raw_boamp)
     t_clean_b      = PythonOperator(task_id="clean_boamp",        python_callable=clean_boamp)
     t_load_clean_b = PythonOperator(task_id="load_clean_boamp",   python_callable=load_clean_boamp)
@@ -383,8 +392,18 @@ with DAG(
     t_cleanup = PythonOperator(task_id="cleanup", python_callable=cleanup)
 
     # ── Wiring ───────────────────────────────────────────────
-    t_init >> t_scrape_b >> t_ext_b >> t_load_raw_b >> t_clean_b >> t_load_clean_b
-    t_init >> t_scrape_d >> t_ext_d >> t_load_raw_d >> t_clean_d >> t_load_clean_d
+    # 1. Scraping et Extraction en parallèle
+    t_init >> t_scrape_b >> t_ext_b
+    t_init >> t_scrape_d >> t_ext_d
+
+    # 2. Synchronisation pour éviter le Rate Limit API DataGouv
+    # L'enrichissement BOAMP ne commence que quand DataGouv a libéré l'API
+    [t_ext_b, t_ext_d] >> t_enrich_b
+
+    # 3. Traitements suivants
+    t_enrich_b >> t_load_raw_b >> t_clean_b >> t_load_clean_b
+    t_ext_d >> t_load_raw_d >> t_clean_d >> t_load_clean_d
+    
     [t_load_clean_b, t_load_clean_d] >> t_rapport >> t_cleanup
 
 
@@ -434,6 +453,7 @@ with DAG(
 
     t_scrape  = PythonOperator(task_id="scrape_boamp",        python_callable=scrape_boamp, op_kwargs={"is_incremental": True})
     t_ext     = PythonOperator(task_id="extract_boamp",       python_callable=extract_boamp)
+    t_enrich  = PythonOperator(task_id="enrich_boamp",        python_callable=enrich_boamp)
     t_load_r  = PythonOperator(task_id="load_raw_boamp",      python_callable=load_raw_boamp)
     t_clean   = PythonOperator(task_id="clean_boamp",         python_callable=clean_boamp)
     t_load_c  = PythonOperator(task_id="load_clean_boamp",    python_callable=load_clean_boamp)
@@ -449,7 +469,7 @@ with DAG(
     })
     t_cleanup = PythonOperator(task_id="cleanup", python_callable=cleanup)
 
-    t_scrape >> t_ext >> t_load_r >> t_clean >> t_load_c >> t_rapport >> t_cleanup
+    t_scrape >> t_ext >> t_enrich >> t_load_r >> t_clean >> t_load_c >> t_rapport >> t_cleanup
 
 
 # ══════════════════════════════════════════════

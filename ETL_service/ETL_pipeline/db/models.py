@@ -122,7 +122,7 @@ class Entreprise(Base):
     created_at     = Column(DateTime(timezone=True), server_default=func.now())
     updated_at     = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
     def __repr__(self):
-        return f"<CleanLead(id={self.id}, source={self.source}, siren={self.siren}, nom={self.nom})>"
+        return f"<Entreprise(identifiant={self.identifiant}, siren={self.siren}, nom={self.nom})>"
 
 
 # ──────────────────────────────────────────────────────────────

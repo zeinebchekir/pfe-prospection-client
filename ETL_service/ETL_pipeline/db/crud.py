@@ -25,6 +25,7 @@ import logging
 from datetime import date as date_type, datetime
 from sqlalchemy.orm import Session
 from sqlalchemy.exc import SQLAlchemyError
+from sqlalchemy.dialects.postgresql import insert as pg_insert
 
 from db.models import RawLead, Entreprise
 logger = logging.getLogger(__name__)
@@ -202,23 +203,39 @@ def insert_clean_leads(
         rows = []
         for rec in records:
             try:
-                rows.append(_map_data(rec=rec, source=source,
-                                  date_scraping=date_scraping,
-                                  dag_run_id=dag_run_id))
+                orm_obj = _map_data(rec=rec, source=source,
+                                   date_scraping=date_scraping,
+                                   dag_run_id=dag_run_id)
+                rows.append({
+                    c.key: getattr(orm_obj, c.key)
+                    for c in orm_obj.__mapper__.column_attrs
+                })
             except Exception as e:
-                logger.warning(f"[CLEAN INSERT] {source}: skipping record — {e}")
+                logger.warning(f"[CLEAN INSERT] {source}: skipping record mapping — {e}")
 
-        db.bulk_save_objects(rows)
+        if not rows:
+            logger.warning(f"[CLEAN INSERT] {source}: all records failed mapping.")
+            return 0
+
+        # Upsert: skip rows whose identifiant already exists (ON CONFLICT DO NOTHING)
+        stmt = (
+            pg_insert(Entreprise)
+            .values(rows)
+            .on_conflict_do_nothing(index_elements=["identifiant"])
+        )
+        result = db.execute(stmt)
         db.commit()
-        inserted = len(rows)
-        logger.info(f"[CLEAN INSERT] {source}: {inserted} rows inserted into clean_leads.")
+        inserted = result.rowcount if result.rowcount >= 0 else len(rows)
+        logger.info(f"[CLEAN INSERT] {source}: {inserted} rows inserted into entreprise.")
 
     except SQLAlchemyError as e:
         db.rollback()
         logger.error(f"[CLEAN INSERT] {source}: DB error — {e}")
+        raise
     except Exception as e:
         db.rollback()
         logger.error(f"[CLEAN INSERT] {source}: unexpected error — {e}")
+        raise
 
     return inserted
 
