@@ -181,7 +181,16 @@ def insert_clean_leads(
     date_scraping: date_type | None = None,
 ) -> int:
     """
-    Bulk-insert cleaned records into `clean_leads`.
+    Upsert cleaned records into the `entreprise` table.
+
+    Behaviour by source
+    ───────────────────
+    BOAMP   : full UPSERT — updates all enrichable columns when the identifiant
+              already exists.  This allows subsequent BOAMP sync runs to refresh
+              company data (dirigeants, CA, taille, etc.) for known entreprises.
+    dataGouv: INSERT … ON CONFLICT DO NOTHING — DataGouv is the authoritative
+              initial load; existing rows are not overwritten to preserve any
+              manual edits made through the CRM.
 
     Args:
         db         : SQLAlchemy session
@@ -189,9 +198,10 @@ def insert_clean_leads(
                      each in shape {"entreprise": {...}, "lead": {...}|None}
         source     : 'dataGouv' or 'BOAMP'
         dag_run_id : Airflow run_id for traceability
+        date_scraping : scraping date watermark
 
     Returns:
-        Number of rows successfully inserted.
+        Number of rows affected (inserted + updated).
     """
     if not records:
         logger.warning(f"[CLEAN INSERT] {source}: empty records list, nothing to insert.")
@@ -217,16 +227,31 @@ def insert_clean_leads(
             logger.warning(f"[CLEAN INSERT] {source}: all records failed mapping.")
             return 0
 
-        # Upsert: skip rows whose identifiant already exists (ON CONFLICT DO NOTHING)
-        stmt = (
-            pg_insert(Entreprise)
-            .values(rows)
-            .on_conflict_do_nothing(index_elements=["identifiant"])
-        )
+        insert_stmt = pg_insert(Entreprise).values(rows)
+
+        if source.upper() == "BOAMP":
+            # Full UPSERT for BOAMP: update enrichable fields on conflict
+            # Columns excluded from update: primary key + immutable audit fields
+            _excluded = {"identifiant", "raw_lead_id", "created_at"}
+            update_cols = {
+                col.name: insert_stmt.excluded[col.name]
+                for col in Entreprise.__table__.columns
+                if col.name not in _excluded
+            }
+            stmt = insert_stmt.on_conflict_do_update(
+                index_elements=["identifiant"],
+                set_=update_cols,
+            )
+            logger.info(f"[CLEAN INSERT] {source}: using UPSERT (update on conflict).")
+        else:
+            # DataGouv: preserve existing rows, do not overwrite CRM edits
+            stmt = insert_stmt.on_conflict_do_nothing(index_elements=["identifiant"])
+            logger.info(f"[CLEAN INSERT] {source}: using INSERT IGNORE (do nothing on conflict).")
+
         result = db.execute(stmt)
         db.commit()
         inserted = result.rowcount if result.rowcount >= 0 else len(rows)
-        logger.info(f"[CLEAN INSERT] {source}: {inserted} rows inserted into entreprise.")
+        logger.info(f"[CLEAN INSERT] {source}: {inserted} rows affected in entreprise.")
 
     except SQLAlchemyError as e:
         db.rollback()
