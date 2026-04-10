@@ -230,8 +230,7 @@ def insert_clean_leads(
         insert_stmt = pg_insert(Entreprise).values(rows)
 
         if source.upper() == "BOAMP":
-            # Full UPSERT for BOAMP: update enrichable fields on conflict
-            # Columns excluded from update: primary key + immutable audit fields
+            # Full UPSERT for BOAMP: update all enrichable columns on conflict
             _excluded = {"identifiant", "raw_lead_id", "created_at"}
             update_cols = {
                 col.name: insert_stmt.excluded[col.name]
@@ -242,11 +241,24 @@ def insert_clean_leads(
                 index_elements=["identifiant"],
                 set_=update_cols,
             )
-            logger.info(f"[CLEAN INSERT] {source}: using UPSERT (update on conflict).")
+            logger.info(f"[CLEAN INSERT] {source}: using full UPSERT (update on conflict).")
         else:
-            # DataGouv: preserve existing rows, do not overwrite CRM edits
-            stmt = insert_stmt.on_conflict_do_nothing(index_elements=["identifiant"])
-            logger.info(f"[CLEAN INSERT] {source}: using INSERT IGNORE (do nothing on conflict).")
+            # DataGouv UPSERT: refresh API-sourced fields only.
+            # Fields intentionally excluded:
+            #   - identifiant, raw_lead_id, created_at : immutable
+            #   - statut       : CRM workflow field — managed by sales team
+            #   - adresse_email, telephone : may have been corrected manually in CRM
+            _protected = {"identifiant", "raw_lead_id", "created_at", "statut", "adresse_email", "telephone"}
+            update_cols = {
+                col.name: insert_stmt.excluded[col.name]
+                for col in Entreprise.__table__.columns
+                if col.name not in _protected
+            }
+            stmt = insert_stmt.on_conflict_do_update(
+                index_elements=["identifiant"],
+                set_=update_cols,
+            )
+            logger.info(f"[CLEAN INSERT] {source}: using selective UPSERT (preserves statut, email, telephone).")
 
         result = db.execute(stmt)
         db.commit()
