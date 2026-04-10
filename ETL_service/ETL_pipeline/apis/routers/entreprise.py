@@ -1,7 +1,8 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from db.database import get_db
-# from db.models import Entreprise
+from db.models import Entreprise
+from sqlalchemy import func
 import os
 from pydantic import BaseModel
 import requests
@@ -12,19 +13,26 @@ AIRFLOW_URL      = os.environ.get("AIRFLOW_URL", "http://airflow-apiserver:8080"
 AIRFLOW_USER     = os.environ.get("AIRFLOW_USER", "airflow")
 AIRFLOW_PASSWORD = os.environ.get("AIRFLOW_PASSWORD", "airflow")
 
-# @router.get("/")
-# def list_entreprises(skip: int = 0, limit: int = 100, db: Session = Depends(get_db)):
-#     """Liste les entreprises extraites avec pagination."""
-#     return db.query(Entreprise).offset(skip).limit(limit).all()
+@router.get("/")
+def list_entreprises(skip: int = 0, limit: int = 100, db: Session = Depends(get_db)):
+    """Liste les entreprises extraites avec pagination (Idéal pour Vue.js DataTable)."""
+    total = db.query(func.count(Entreprise.identifiant)).scalar()
+    data = db.query(Entreprise).offset(skip).limit(limit).all()
+    
+    return {
+        "total": total,
+        "skip": skip,
+        "limit": limit,
+        "data": data
+    }
 
-
-# @router.get("/{siret}")
-# def get_entreprise(siret: str, db: Session = Depends(get_db)):
-#     """Retourne le détail d'une entreprise par son SIRET."""
-#     obj = db.query(Entreprise).filter_by(siret=siret).first()
-#     if not obj:
-#         raise HTTPException(status_code=404, detail="Entreprise introuvable")
-#     return obj
+@router.get("/{identifiant}")
+def get_entreprise(identifiant: str, db: Session = Depends(get_db)):
+    """Retourne le détail d'une entreprise par son identifiant unique."""
+    obj = db.query(Entreprise).filter_by(identifiant=identifiant).first()
+    if not obj:
+        raise HTTPException(status_code=404, detail="Entreprise introuvable")
+    return obj
 
 class SearchRequest(BaseModel):
     query  : str              # SIREN ou nom entreprise
