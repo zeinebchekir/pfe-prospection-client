@@ -246,9 +246,8 @@ def insert_clean_leads(
             # DataGouv UPSERT: refresh API-sourced fields only.
             # Fields intentionally excluded:
             #   - identifiant, raw_lead_id, created_at : immutable
-            #   - statut       : CRM workflow field — managed by sales team
-            #   - adresse_email, telephone : may have been corrected manually in CRM
-            _protected = {"identifiant", "raw_lead_id", "created_at", "statut", "adresse_email", "telephone"}
+            #   - statut : CRM workflow field — managed exclusively by sales team
+            _protected = {"identifiant", "raw_lead_id", "created_at", "statut"}
             update_cols = {
                 col.name: insert_stmt.excluded[col.name]
                 for col in Entreprise.__table__.columns
@@ -258,7 +257,7 @@ def insert_clean_leads(
                 index_elements=["identifiant"],
                 set_=update_cols,
             )
-            logger.info(f"[CLEAN INSERT] {source}: using selective UPSERT (preserves statut, email, telephone).")
+            logger.info(f"[CLEAN INSERT] {source}: using selective UPSERT (preserves statut only).")
 
         result = db.execute(stmt)
         db.commit()
