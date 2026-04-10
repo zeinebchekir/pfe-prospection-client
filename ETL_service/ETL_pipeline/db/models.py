@@ -95,7 +95,7 @@ class Entreprise(Base):
 
     # ── Address ──────────────────────────────────────────────
     ville          = Column(String,  nullable=True)
-    code_postal    = Column(Integer, nullable=True)
+    code_postal    = Column(String,  nullable=True)
     pays           = Column(String,  nullable=True, default="France")
 
     # ── Company info (DataGouv-rich, BOAMP-partial) ───────────
@@ -113,6 +113,7 @@ class Entreprise(Base):
     adresse_email  = Column(String, nullable=True)   # BOAMP only
     info_boamp  = Column(JSONB, nullable=True)
     dirigeants = Column(JSONB, nullable=True)
+    statut         = Column(String, nullable=True, default="Nouveau")
     # ── Lead / Tender (BOAMP only) ────────────────────────────
     # ── Source provenance (field-level, already produced by extractors) ──
     sources        = Column(JSONB, nullable=True)

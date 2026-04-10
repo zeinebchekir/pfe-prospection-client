@@ -323,7 +323,7 @@ services:
       context: .
       dockerfile: dockerfile.apis
     ports:
-      - "8000:8000"
+      - "8001:8000"
     volumes:
       - ./ETL_pipeline:/app              # ← ton code
       - ./exports:/opt/airflow/exports   # ← fichiers xlsx

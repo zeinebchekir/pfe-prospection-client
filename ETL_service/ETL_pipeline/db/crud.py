@@ -150,7 +150,7 @@ def _map_data(rec: dict, source: str,date_scraping: date_type | None,dag_run_id:
         siret                = entreprise.get("siret"),
         nom                  = entreprise.get("nom"),
         ville                = entreprise.get("ville"),
-        code_postal          = _to_int(entreprise.get("code_postal")),
+        code_postal          = str(entreprise.get("code_postal")).strip() if entreprise.get("code_postal") else None,
         pays                 = entreprise.get("pays", "France"),
         secteur_activite     = entreprise.get("secteur_activite"),
         forme_juridique      = entreprise.get("forme_juridique"),

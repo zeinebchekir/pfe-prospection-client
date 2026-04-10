@@ -13,9 +13,14 @@ app = FastAPI(
 )
 
 # Configuration CORS pour autoriser le frontend Vue.js à consommer l'API
+origins = [
+    "http://localhost:5173",
+    "http://127.0.0.1:5173",
+]
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # À changer en production avec l'URL exacte du front
+    allow_origins=origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
