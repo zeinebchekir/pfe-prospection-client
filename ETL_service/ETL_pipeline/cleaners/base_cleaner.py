@@ -7,7 +7,7 @@ instead of Django ORM instances.
 
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
-
+from .utils import _calculer_taux_completude_entreprise
 
 @dataclass
 class CleaningReport:
@@ -65,15 +65,15 @@ class BaseCleaner(ABC):
                     clean_ent = self.clean_entreprise(dict(entreprise))
                     if clean_ent.get("sourceEntreprise") =="BOAMP":
                         clean_ent = self.clean_lead(dict(clean_ent))
-                        print("cleanleaddddddd",clean_ent)
                 except Exception as e:
                     report.add_issue(i, f"Entreprise cleaning crashed: {e}")
-
+            
             if clean_ent is None:
                 report.add_issue(i, "Entreprise rejected (no usable identity)")
                 continue
-
-
+            
+            clean_ent["taux_completude"] = _calculer_taux_completude_entreprise(clean_ent)
+            print("clean_ent",clean_ent.get("taux_completude"))
             cleaned.append({"entreprise": clean_ent})
             report.total_cleaned += 1
         

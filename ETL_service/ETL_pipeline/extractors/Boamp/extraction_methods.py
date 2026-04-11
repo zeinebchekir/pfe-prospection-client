@@ -74,7 +74,7 @@ def extract_fnsimple_data(json_data):
         record["nom_contact"] = comm.get("nomContact")
         record["Email"] = comm.get("adresseMailContact") or comm.get("nomContact") if "@" in str(comm.get("nomContact")) else None
         record["Telephone"] = comm.get("telContact")
-
+        
         # Extraction de la forme juridique (bloc procedure)
         proc = details.get("procedure", {})
 
@@ -84,6 +84,17 @@ def extract_fnsimple_data(json_data):
             record["DateLimite"] = proc.get("dateReceptionOffres")    
         infos_node = details.get("informComplementaire", {})
         record["info_complementaire"] = infos_node.get("autresInformComplementaire", "").strip()
+        
+        nature_marche = details.get("natureMarche") or {}
+        valeur_estimee = nature_marche.get("valeurEstimee") or {}
+
+        valeur = valeur_estimee.get("valeur", 0)
+
+        if not valeur:
+            fourchette = valeur_estimee.get("fourchette") or {}
+            valeur = fourchette.get("valeurHaute") or fourchette.get("valeurBasse")
+
+        record["valeurMarche"] = valeur
     return record
 
 
@@ -108,6 +119,7 @@ def extraire_infos_fiables(json_data):
         # --- NAVIGATION SÉCURISÉE VERS LES EXTENSIONS ---
         # Utilisation de listes vides par défaut pour éviter les crashs
         ext_content = root.get("ext:UBLExtensions", {}).get("ext:UBLExtension", {}).get("ext:ExtensionContent", {}).get("efext:EformsExtension", {})
+        valeurMarche=ext_content.get("efac:NoticeResult", {}).get("efbc:OverallMaximumFrameworkContractsAmount", {}).get("#text", "")
         organisations_wrapper = ext_content.get("efac:Organizations", {}).get("efac:Organization", [])
         # Si c'est un dictionnaire unique au lieu d'une liste, on le met dans une liste
         if isinstance(organisations_wrapper, dict):
@@ -174,6 +186,7 @@ def extraire_infos_fiables(json_data):
             "secteur": secteur,
             "contract_id": contract_id,
             "forme_juridique": code_trouve,
+            "valeurMarche": valeurMarche,
             "root": root
         }
     except json.JSONDecodeError:

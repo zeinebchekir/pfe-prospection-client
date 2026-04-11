@@ -6,7 +6,7 @@ Used by all cleaner modules. Pure Python functions — no framework dependency.
 import re
 import unicodedata
 from datetime import datetime
-
+from db.models import Entreprise
 
 # ─────────────────────────────────────────────
 # TEXT NORMALIZATION
@@ -200,3 +200,54 @@ def clean_ca(value) -> float | None:
         return float(value)
     except (ValueError, TypeError):
         return None
+
+def _calculer_taux_completude_entreprise(obj: dict) -> float:
+    """
+    Taux simple = champs renseignés / total champs attendus × 100
+    Fonctionne sur un dict (sorti du cleaner), pas un ORM Entreprise.
+    """
+    CHAMPS_DIRECTS = [
+        "siren", "siret", "nom",
+        "ville", "code_postal",
+        "num_tel", "adresse_email",
+        "secteur_activite", "forme_juridique", "ca",
+        "taille_entrep", "categorie_entreprise",
+        "dateCreation", "dirigeants", "nb_locaux"
+    ]
+
+    CHAMPS_BOAMP = [
+        "besoin", "date_limite", "lienOffre","nature", "num_tel",
+        "adresse_email", "info_complementaire","valeurMarche","lienOffre"
+    ]
+
+    total      = 0
+    renseignes = 0
+
+    # ✅ .get() sur le dict
+    for champ in CHAMPS_DIRECTS:
+        total += 1
+        if _champ_est_renseigne(obj.get(champ)):
+            renseignes += 1
+    
+    # Sous-champs BOAMP seulement si source BOAMP
+    info_boamp = obj.get("data_from_boamp") or {}
+    if info_boamp:
+        for champ in CHAMPS_BOAMP:
+            total += 1
+            if _champ_est_renseigne(info_boamp.get(champ)):
+                renseignes += 1
+
+    return round(renseignes / total * 100, 2) if total > 0 else 0.0
+
+def _champ_est_renseigne(valeur) -> bool:
+    """
+    Retourne True si la valeur est considérée comme renseignée.
+    Gère les cas : None, string vide, liste vide, dict vide, JSON vide.
+    """
+    if valeur is None:
+        return False
+    if isinstance(valeur, str) and valeur.strip() == "":
+        return False
+    if isinstance(valeur, (list, dict)) and len(valeur) == 0:
+        return False
+    return True    

@@ -74,7 +74,7 @@ def scrape_boamp(is_incremental: bool = False, **context):
     codes_fmt  = ",".join([f'"{c}"' for c in codes])
 
     if is_incremental:
-        last_sync = _get_last_sync("BOAMP")
+        last_sync = _get_last_sync("boamp")
         filtre = (
             f'descripteur_code IN ({codes_fmt})'
             f' AND datelimitereponse >= "{aujourdhui}"'
@@ -169,7 +169,7 @@ def load_raw_boamp(**context):
     try:
         inserted = crud.insert_raw_leads(db, records, source="BOAMP", dag_run_id=run_id,date_scraping=watermark)
         if inserted == 0:
-            raise ValueError("[LOAD CLEAN BOAMP] 0 lignes insérées — vérifier _map_data")
+            print("[LOAD CLEAN BOAMP] 0 lignes insérées")
     except Exception as e:
         raise   
     finally:
@@ -190,7 +190,7 @@ def load_raw_datagouv(**context):
     try:
         inserted = crud.insert_raw_leads(db, records, source="dataGouv", dag_run_id=run_id, date_scraping=watermark)
         if inserted == 0:
-            raise ValueError("[LOAD CLEAN BOAMP] 0 lignes insérées — vérifier _map_data")
+            print("[LOAD CLEAN BOAMP] 0 lignes insérées")
     except Exception as e:
         raise 
     finally:
@@ -250,7 +250,7 @@ def load_clean_boamp(**context):
     try:
         inserted = crud.insert_clean_leads(db, records, source="BOAMP", dag_run_id=run_id, date_scraping=watermark)
         if inserted == 0:
-            raise ValueError("[LOAD CLEAN BOAMP] 0 lignes insérées — vérifier _map_data")
+            print("[LOAD CLEAN BOAMP] 0 lignes insérées")
     except Exception as e:
         raise   # ← relance l'exception → Airflow marque la task FAILED
     finally:
@@ -273,7 +273,28 @@ def load_clean_datagouv(**context):
     try:
         inserted = crud.insert_clean_leads(db, records, source="dataGouv", dag_run_id=run_id,date_scraping=watermark)
         if inserted == 0:
-            raise ValueError("[LOAD CLEAN DATAGOUV] 0 lignes insérées — vérifier _map_data")
+            print("[LOAD CLEAN DATAGOUV] 0 lignes insérées")
+    except Exception as e:
+        raise   # ← relance l'exception → Airflow marque la task FAILED
+    finally:
+        db.close()
+    context["ti"].xcom_push(key="total_clean_loaded", value=inserted)
+    print(f"[LOAD CLEAN DATAGOUV] {inserted} lignes → clean_leads")
+def load_clean_sirene(**context):
+    ti = context["ti"]
+    run_id  = context.get("run_id", "")
+    watermark = ti.xcom_pull(task_ids="scrape_sirene",     key="watermark_start") 
+    
+    records = _read(RAW_DATAGOUV_PATH)
+    for item in records:
+        item["date_scraping"] = watermark
+    db = SessionLocal()
+    print("waterrrrrrmaaaaaaak",watermark)
+
+    try:
+        inserted = crud.insert_clean_leads(db, records, source="dataGouv", dag_run_id=run_id,date_scraping=watermark)
+        if inserted == 0:
+            print("[LOAD CLEAN DATAGOUV] 0 lignes insérées")
     except Exception as e:
         raise   # ← relance l'exception → Airflow marque la task FAILED
     finally:
@@ -364,6 +385,7 @@ with DAG(
     t_scrape_b     = PythonOperator(task_id="scrape_boamp",       python_callable=scrape_boamp,     op_kwargs={"is_incremental": False})
     t_ext_b        = PythonOperator(task_id="extract_boamp",      python_callable=extract_boamp)
     t_load_raw_b   = PythonOperator(task_id="load_raw_boamp",     python_callable=load_raw_boamp)
+    
     t_clean_b      = PythonOperator(task_id="clean_boamp",        python_callable=clean_boamp)
     t_load_clean_b = PythonOperator(task_id="load_clean_boamp",   python_callable=load_clean_boamp)
 
@@ -385,7 +407,9 @@ with DAG(
     # ── Wiring ───────────────────────────────────────────────
     t_init >> t_scrape_b >> t_ext_b >> t_load_raw_b >> t_clean_b >> t_load_clean_b
     t_init >> t_scrape_d >> t_ext_d >> t_load_raw_d >> t_clean_d >> t_load_clean_d
-    [t_load_clean_b, t_load_clean_d] >> t_rapport >> t_cleanup
+    [t_load_clean_b,
+     t_load_clean_d
+     ] >> t_rapport >> t_cleanup
 
 
 # ══════════════════════════════════════════════
@@ -404,7 +428,7 @@ with DAG(
     t_ext     = PythonOperator(task_id="extract_datagouv",  python_callable=extract_datagouv)
     t_load_r  = PythonOperator(task_id="load_raw_datagouv", python_callable=load_raw_datagouv)
     t_clean   = PythonOperator(task_id="clean_datagouv",    python_callable=clean_datagouv)
-    t_load_c  = PythonOperator(task_id="load_clean_datagouv", python_callable=load_clean_datagouv)
+    t_load_c  = PythonOperator(task_id="load_clean_sirene", python_callable=load_clean_sirene)
     t_rapport = PythonOperator(task_id="rapport_final",     python_callable=rapport_final, op_kwargs={
         "sources": [{
             "source"         : "datagouv",

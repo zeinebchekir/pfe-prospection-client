@@ -26,7 +26,7 @@ class SireneService(BaseScraper):
     def source_scraping(self,date_sync) -> list[dict]:
 
         
-        # date_str = date_sync.strftime("%Y-%m-%dT%H:%M:%S")
+        date_sync = date_sync.strftime("%Y-%m-%dT%H:%M:%S")
 
         print(f"[{self.nom_source}] 🗓️  Sync depuis : {date_sync}")
 

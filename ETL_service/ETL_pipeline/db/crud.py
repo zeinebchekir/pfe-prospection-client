@@ -30,6 +30,26 @@ from db.models import RawLead, Entreprise
 logger = logging.getLogger(__name__)
 
 
+from sqlalchemy.dialects.postgresql import insert as pg_insert
+from sqlalchemy import func, case as sa_case, or_
+
+# Champs "propriété" de chaque source — seuls ces champs sont touchés lors d'un update
+DATAGOUV_OWN_FIELDS = {
+    "nom", "ville", "code_postal", "pays",
+    "secteur_activite", "forme_juridique", "taille_entrep",
+    "categorie_entreprise", "nb_locaux", "ca",
+    "date_creation_entreprise", "date_derniere_modif_site",
+    "dirigeants",
+}
+
+BOAMP_OWN_FIELDS = {
+    "siret", "telephone", "nom",
+    "adresse_email", "info_boamp",
+     "secteur_activite", "forme_juridique",
+     "ville", "code_postal", "pays",
+}
+
+TRACING_FIELDS = {"sources", "dag_run_id", "date_scraping"}
 # ──────────────────────────────────────────────────────────────
 #  HELPERS
 # ──────────────────────────────────────────────────────────────
@@ -38,10 +58,32 @@ logger = logging.getLogger(__name__)
 def _to_date(val):
     if val is None:
         return None
-    if isinstance(val, date_type):   # ← utilise l'alias partout
+    if isinstance(val, datetime):
         return val
+    if isinstance(val, date_type):
+        # date pure → ajoute 00:00:00
+        return datetime(val.year, val.month, val.day, 0, 0, 0)
     try:
-        return datetime.fromisoformat(str(val)).date()
+        val_str = str(val).strip()
+        # Formats à essayer dans l'ordre
+        formats = [
+            "%Y-%m-%dT%H:%M:%S",   # 2026-04-10T14:32:19
+            "%Y-%m-%d %H:%M:%S",   # 2026-04-10 14:32:19
+            "%Y-%m-%dT%H:%M",      # 2026-04-10T14:32
+            "%Y-%m-%d",            # 2026-04-10 → 00:00:00
+            "%d/%m/%Y %H:%M:%S",   # 10/04/2026 14:32:19
+            "%d/%m/%Y %H:%M",      # 10/04/2026 14:32
+            "%d/%m/%Y",            # 10/04/2026 → 00:00:00
+        ]
+        for fmt in formats:
+            try:
+                return datetime.strptime(val_str, fmt)
+            except ValueError:
+                continue
+
+        # Dernier recours : fromisoformat
+        return datetime.fromisoformat(val_str)
+
     except (ValueError, TypeError):
         return None
 
@@ -107,8 +149,9 @@ def insert_raw_leads(
                 source        = source,
                 raw_data      = rec,
                 dag_run_id    = dag_run_id,
-                updated_on_source_at = updated_on_source_at,
                 date_scraping        = _to_date(date_scraping),
+                updated_on_source_at = updated_on_source_at,
+             
 
             ))
 
@@ -142,9 +185,10 @@ def _map_data(rec: dict, source: str,date_scraping: date_type | None,dag_run_id:
     """
     # Handle nested structure from BaseCleaner: {"entreprise": {...}, "lead": None}
     entreprise = rec.get("entreprise", rec)
+    print("tauuuuuuuuuuuuuuuuuuuuux",entreprise.get("taux_completude"))
+
     boamp_data = entreprise.get("data_from_boamp") or {}
     return Entreprise(
-        identifiant          = entreprise.get("siren") if source=="dataGouv" else entreprise.get("idAvis"),
         siren                = entreprise.get("siren"),
         siret                = entreprise.get("siret"),
         nom                  = entreprise.get("nom"),
@@ -167,9 +211,83 @@ def _map_data(rec: dict, source: str,date_scraping: date_type | None,dag_run_id:
         dag_run_id           = dag_run_id,
         date_derniere_modif_site = _to_date(entreprise.get("dateDerniereModification")) if source == "dataGouv" else entreprise.get("dateMAJ"),
         date_scraping        = _to_date(date_scraping),
+        taux_completude      = entreprise.get("taux_completude"),
         
     )
 
+
+
+
+
+def _build_set_clause(stmt, owned_fields: set) -> dict:
+    """
+    Pour chaque champ appartenant à la source :
+      - si date entrante >= date en base  → on écrase
+      - si date entrante <  date en base  → on garde la valeur en base
+      - si date en base est NULL          → on écrase toujours
+    Les champs de l'autre source ne sont JAMAIS dans le SET → préservés automatiquement.
+    """
+    set_clause = {}
+
+    for field in owned_fields:
+        incoming  = stmt.excluded[field]
+        in_base   = getattr(Entreprise, field)
+
+        if field == "date_derniere_modif_site":
+            # Toujours garder la plus récente
+            set_clause[field] = func.greatest(in_base, incoming)
+        else:
+            # Écraser seulement si date entrante >= date en base (ou base NULL)
+            set_clause[field] = sa_case(
+                (
+                    or_(
+                        in_base == None,
+                        Entreprise.date_derniere_modif_site == None,
+                        stmt.excluded.date_derniere_modif_site >= Entreprise.date_derniere_modif_site,
+                    ),
+                    incoming,
+                ),
+                else_=in_base,
+            )
+
+    # Traçabilité : toujours mise à jour quelle que soit la source
+    for field in TRACING_FIELDS:
+        set_clause[field] = stmt.excluded[field]
+
+    set_clause["updated_at"] = func.now()
+    return set_clause
+
+
+def _find_conflict_target(db: Session, obj: Entreprise) -> str | None:
+    """
+    Cherche si l'entreprise existe déjà en base par siren, siret,
+    ou (nom + code_postal) — dans cet ordre de priorité.
+    Retourne la colonne de conflict à utiliser.
+    """
+    if obj.siren:
+        exists = db.query(Entreprise.identifiant)\
+                   .filter(Entreprise.siren == obj.siren)\
+                   .first()
+        if exists:
+            return "siren"
+
+    if obj.siret:
+        exists = db.query(Entreprise.identifiant)\
+                   .filter(Entreprise.siret == obj.siret)\
+                   .first()
+        if exists:
+            return "siret"
+
+    if obj.nom and obj.code_postal:
+        exists = db.query(Entreprise.identifiant)\
+                   .filter(
+                       Entreprise.nom         == obj.nom,
+                       Entreprise.code_postal == obj.code_postal,
+                   ).first()
+        if exists:
+            return "nom_cp"
+
+    return None  # pas de doublon → INSERT pur
 
 
 def insert_clean_leads(
@@ -179,39 +297,66 @@ def insert_clean_leads(
     dag_run_id: str | None = None,
     date_scraping: date_type | None = None,
 ) -> int:
-    """
-    Bulk-insert cleaned records into `clean_leads`.
-
-    Args:
-        db         : SQLAlchemy session
-        records    : list of cleaned dicts from DataGouvCleaner or BoampCleaner
-                     each in shape {"entreprise": {...}, "lead": {...}|None}
-        source     : 'dataGouv' or 'BOAMP'
-        dag_run_id : Airflow run_id for traceability
-
-    Returns:
-        Number of rows successfully inserted.
-    """
     if not records:
-        logger.warning(f"[CLEAN INSERT] {source}: empty records list, nothing to insert.")
+        logger.warning(f"[CLEAN INSERT] {source}: empty records list.")
         return 0
 
-    inserted = 0
+    is_datagouv  = source == "dataGouv"
+    owned_fields = DATAGOUV_OWN_FIELDS if is_datagouv else BOAMP_OWN_FIELDS
+    new_inserts = updates = skipped = 0
+
+    CONFLICT_TARGETS = {
+        "siren"  : ["siren"],
+        "siret"  : ["siret"],
+        "nom_cp" : ["nom", "code_postal"],
+    }
 
     try:
-        rows = []
-        for rec in records:
-            try:
-                rows.append(_map_data(rec=rec, source=source,
-                                  date_scraping=date_scraping,
-                                  dag_run_id=dag_run_id))
-            except Exception as e:
-                logger.warning(f"[CLEAN INSERT] {source}: skipping record — {e}")
+        with db.no_autoflush:
+            for rec in records:
+                try:
+                    obj = _map_data(
+                        rec=rec, source=source,
+                        date_scraping=date_scraping,
+                        dag_run_id=dag_run_id,
+                    )
+                except Exception as e:
+                    logger.warning(f"[CLEAN INSERT] {source}: skipping map — {e}")
+                    skipped += 1
+                    continue
 
-        db.bulk_save_objects(rows)
+                conflict_key = _find_conflict_target(db, obj)
+
+                if conflict_key:
+                    row_dict = {
+                        c.name: getattr(obj, c.name)
+                        for c in Entreprise.__table__.columns
+                        if c.name not in ("identifiant", "created_at", "updated_at")
+                    }
+                    stmt = pg_insert(Entreprise).values(**row_dict)
+                    set_clause = _build_set_clause(stmt, owned_fields)
+                    stmt = stmt.on_conflict_do_update(
+                        index_elements=CONFLICT_TARGETS[conflict_key],
+                        set_=set_clause,
+                    )
+                    db.execute(stmt)
+                    updates += 1
+                else:
+                    row_dict = {
+                        c.name: getattr(obj, c.name)
+                        for c in Entreprise.__table__.columns
+                        if c.name not in ("identifiant", "created_at", "updated_at")
+                    }
+                    db.execute(Entreprise.__table__.insert().values(**row_dict))
+                    new_inserts += 1
+
         db.commit()
-        inserted = len(rows)
-        logger.info(f"[CLEAN INSERT] {source}: {inserted} rows inserted into clean_leads.")
+        logger.info(
+            f"[CLEAN INSERT] {source}: "
+            f"{new_inserts} nouvelles lignes | "
+            f"{updates} mises à jour | "
+            f"{skipped} ignorées"
+        )
 
     except SQLAlchemyError as e:
         db.rollback()
@@ -220,9 +365,7 @@ def insert_clean_leads(
         db.rollback()
         logger.error(f"[CLEAN INSERT] {source}: unexpected error — {e}")
 
-    return inserted
-
-
+    return new_inserts + updates
 # ──────────────────────────────────────────────────────────────
 #  QUERY HELPERS
 # ──────────────────────────────────────────────────────────────

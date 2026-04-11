@@ -132,4 +132,5 @@ class DataGouvService(BaseScraper):
             print(f"❌ {len(failed_sirens)} Échecs : {', '.join(failed_sirens)}")
         print("=" * 50 + "\n")
 
-        return clean_data # ← toujours défini
+        return clean_data 
+        # ← toujours défini    

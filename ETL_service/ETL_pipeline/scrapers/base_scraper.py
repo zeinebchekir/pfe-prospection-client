@@ -55,7 +55,6 @@ class BaseScraper(ABC):
 
             except RequestException as e:
                 status = e.response.status_code if (hasattr(e, 'response') and e.response is not None) else None
-
                 if status == 429:
                     attente = 10 * (tentative + 1)  # 10s, 20s, 30s, 40s
                     print(f"[{self.nom_source}] ⏳ Rate limit, attente {attente}s "
@@ -68,6 +67,7 @@ class BaseScraper(ABC):
 
             except ValueError as e:
                 print(f"[{self.nom_source}] ❌ Réponse non-JSON : {e}")
+
                 return None
 
         print(f"[{self.nom_source}] ❌ Échec après {retries} tentatives.")

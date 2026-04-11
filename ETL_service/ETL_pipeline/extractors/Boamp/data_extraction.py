@@ -25,6 +25,7 @@ def get_global_information(resultats):
     datemiseajour=None
     nature=None
     url_avis=None
+    valeurMarche=None
 
     print(f"Traitement de {len(resultats)} résultats en objets...")
 
@@ -77,6 +78,7 @@ def get_global_information(resultats):
             ext_cp = details.get("cp",None)
             ext_secteur = data_fiable.get("secteur",None)
             ext_forme_juridique = data_fiable.get("forme_juridique", None)
+            valeurMarche = data_fiable.get("valeurMarche",None)
 
         elif perimetre == "FNSimple":
             data_fn = extract_fnsimple_data(clean)
@@ -89,6 +91,7 @@ def get_global_information(resultats):
             ext_forme_juridique = data_fn.get("forme_juridique", None)
             ext_date_limite = data_fn.get("DateLimite", date_fin)
             ext_info_complementaire = data_fn.get("info_complementaire", None)
+            valeurMarche = data_fn.get("valeurMarche",None)
         elif perimetre == "MAPA":
             data_mapa = extraire_donnees_mapa(clean)
             ext_email = data_mapa.get("Email",None)
@@ -122,12 +125,12 @@ def get_global_information(resultats):
                 "adresse_email":"BOAMP" if ext_email else None,
                 "pays":"BOAMP",
                 "num_tel":"BOAMP" if ext_num_tel else None,
-                "besoin":"BOAMP" if objet else None,
-                "date_limite":"BOAMP" if ext_date_limite else None,
-                "titulaire":"BOAMP" if nom_titulaire else None,
-                "nature":"BOAMP" if nature else None,
-                "lienOffre":"BOAMP" if url_avis else None,
-                "info_complementaire":"BOAMP" if ext_info_complementaire else None,
+                "besoin":"BOAMP",
+                "date_limite":"BOAMP",
+                "titulaire":"BOAMP" ,
+                "nature":"BOAMP",
+                "lienOffre":"BOAMP" ,
+                "info_complementaire":"BOAMP" ,
                 "dateMAJ":"BOAMP" if datemiseajour else None,
             },
             
@@ -138,7 +141,7 @@ def get_global_information(resultats):
                 "nature":nature,
                 "lienOffre":url_avis,
                 "info_complementaire":ext_info_complementaire,
-            
+                "valeurMarche":valeurMarche,
             }
         # 4. ON STOCKE TOUTE LA LIGNE DANS LA LISTE
       

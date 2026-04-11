@@ -84,13 +84,13 @@ class Entreprise(Base):
     """
     __tablename__ = "entreprise"
 
-    identifiant    = Column(String(25), primary_key=True)
+    identifiant    = Column(Integer, primary_key=True, autoincrement=True)
 
     # Link back to the raw staging row (nullable — bulk loads may skip it)
     raw_lead_id    = Column(Integer, ForeignKey("raw_leads.id"), nullable=True, index=True)
     # ── Shared identity ──────────────────────────────────────
-    siren          = Column(String(9),  nullable=True, index=True)   # DataGouv always; BOAMP: siret[:9]
-    siret          = Column(String(14), nullable=True, index=True)   # BOAMP when available
+    siren          = Column(String(9),  nullable=True, index=True, unique=True)   # DataGouv always; BOAMP: siret[:9]
+    siret          = Column(String(14), nullable=True, index=True, unique=True)   # BOAMP when available
     nom            = Column(String,     nullable=True)
 
     # ── Address ──────────────────────────────────────────────
@@ -116,6 +116,7 @@ class Entreprise(Base):
     # ── Lead / Tender (BOAMP only) ────────────────────────────
     # ── Source provenance (field-level, already produced by extractors) ──
     sources        = Column(JSONB, nullable=True)
+    taux_completude = Column(Float, nullable=True)
     # ── Airflow traceability ─────────────────────────────────
     dag_run_id     = Column(String, nullable=True)
     # ── Timestamps ───────────────────────────────────────────

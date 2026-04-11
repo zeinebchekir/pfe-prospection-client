@@ -93,6 +93,7 @@ class BoampCleaner(BaseCleaner):
             "lienOffre":clean_url(guard(lead.get("lienOffre"))),
             "info_complementaire":guard(lead.get("info_complementaire")) or "",
             "adresse_email":clean_email(lead.get("adresse_email")),
+            "valeurMarche":float(lead.get("valeurMarche")) if lead.get("valeurMarche") else None,
         }
         # ── 7. Info complémentaire ──
         return lead
