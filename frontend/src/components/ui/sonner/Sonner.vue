@@ -8,7 +8,7 @@ import {
   TriangleAlertIcon,
   XIcon,
 } from "lucide-vue-next";
-import { Toaster as Sonner } from "vue-sonner";
+import { Toaster } from "vue-sonner";
 
 const props = defineProps({
   id: { type: String, required: false },
@@ -37,7 +37,7 @@ const delegatedProps = reactiveOmit(props, "toastOptions");
 </script>
 
 <template>
-  <Sonner
+  <Toaster
     class="toaster group"
     :toast-options="{
       classes: {
@@ -72,5 +72,5 @@ const delegatedProps = reactiveOmit(props, "toastOptions");
     <template #close-icon>
       <XIcon class="size-4" />
     </template>
-  </Sonner>
+  </Toaster>
 </template>
