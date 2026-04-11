@@ -95,7 +95,7 @@ class Entreprise(Base):
 
     # ── Address ──────────────────────────────────────────────
     ville          = Column(String,  nullable=True)
-    code_postal    = Column(Integer, nullable=True)
+    code_postal    = Column(String,  nullable=True)
     pays           = Column(String,  nullable=True, default="France")
 
     # ── Company info (DataGouv-rich, BOAMP-partial) ───────────
@@ -113,6 +113,7 @@ class Entreprise(Base):
     adresse_email  = Column(String, nullable=True)   # BOAMP only
     info_boamp  = Column(JSONB, nullable=True)
     dirigeants = Column(JSONB, nullable=True)
+    statut         = Column(String, nullable=True, default="Nouveau")
     # ── Lead / Tender (BOAMP only) ────────────────────────────
     # ── Source provenance (field-level, already produced by extractors) ──
     sources        = Column(JSONB, nullable=True)
@@ -123,7 +124,7 @@ class Entreprise(Base):
     created_at     = Column(DateTime(timezone=True), server_default=func.now())
     updated_at     = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
     def __repr__(self):
-        return f"<CleanLead(id={self.id}, source={self.source}, siren={self.siren}, nom={self.nom})>"
+        return f"<Entreprise(identifiant={self.identifiant}, siren={self.siren}, nom={self.nom})>"
 
 
 # ──────────────────────────────────────────────────────────────

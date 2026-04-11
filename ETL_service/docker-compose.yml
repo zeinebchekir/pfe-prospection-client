@@ -307,6 +307,8 @@ services:
           --lastname Admin \
           --role Admin \
           --email ali@example.com || echo "User 'ali' already exists, skipping."
+        echo "Creating ETL pipeline tables (idempotent)..."
+        python -c "import sys; sys.path.insert(0, '/opt/airflow/ETL_pipeline'); from db.database import create_tables; create_tables(); print('[INIT] ETL tables OK')" || echo "[WARN] ETL table creation skipped."
         echo "Done."
         
     # yamllint enable rule:line-length
@@ -324,7 +326,7 @@ services:
       context: .
       dockerfile: dockerfile.apis
     ports:
-      - "8000:8000"
+      - "8001:8000"
     volumes:
       - ./ETL_pipeline:/app              # ← ton code
       - ./exports:/opt/airflow/exports   # ← fichiers xlsx

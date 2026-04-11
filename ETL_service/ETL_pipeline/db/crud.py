@@ -25,6 +25,7 @@ import logging
 from datetime import date as date_type, datetime
 from sqlalchemy.orm import Session
 from sqlalchemy.exc import SQLAlchemyError
+from sqlalchemy.dialects.postgresql import insert as pg_insert
 
 from db.models import RawLead, Entreprise
 logger = logging.getLogger(__name__)
@@ -193,7 +194,7 @@ def _map_data(rec: dict, source: str,date_scraping: date_type | None,dag_run_id:
         siret                = entreprise.get("siret"),
         nom                  = entreprise.get("nom"),
         ville                = entreprise.get("ville"),
-        code_postal          = _to_int(entreprise.get("code_postal")),
+        code_postal          = str(entreprise.get("code_postal")).strip() if entreprise.get("code_postal") else None,
         pays                 = entreprise.get("pays", "France"),
         secteur_activite     = entreprise.get("secteur_activite"),
         forme_juridique      = entreprise.get("forme_juridique"),
@@ -297,6 +298,30 @@ def insert_clean_leads(
     dag_run_id: str | None = None,
     date_scraping: date_type | None = None,
 ) -> int:
+
+    """
+    Upsert cleaned records into the `entreprise` table.
+
+    Behaviour by source
+    ───────────────────
+    BOAMP   : full UPSERT — updates all enrichable columns when the identifiant
+              already exists.  This allows subsequent BOAMP sync runs to refresh
+              company data (dirigeants, CA, taille, etc.) for known entreprises.
+    dataGouv: INSERT … ON CONFLICT DO NOTHING — DataGouv is the authoritative
+              initial load; existing rows are not overwritten to preserve any
+              manual edits made through the CRM.
+
+    Args:
+        db         : SQLAlchemy session
+        records    : list of cleaned dicts from DataGouvCleaner or BoampCleaner
+                     each in shape {"entreprise": {...}, "lead": {...}|None}
+        source     : 'dataGouv' or 'BOAMP'
+        dag_run_id : Airflow run_id for traceability
+        date_scraping : scraping date watermark
+
+    Returns:
+        Number of rows affected (inserted + updated).
+    """
     if not records:
         logger.warning(f"[CLEAN INSERT] {source}: empty records list.")
         return 0
@@ -361,9 +386,11 @@ def insert_clean_leads(
     except SQLAlchemyError as e:
         db.rollback()
         logger.error(f"[CLEAN INSERT] {source}: DB error — {e}")
+        raise
     except Exception as e:
         db.rollback()
         logger.error(f"[CLEAN INSERT] {source}: unexpected error — {e}")
+        raise
 
     return new_inserts + updates
 # ──────────────────────────────────────────────────────────────
