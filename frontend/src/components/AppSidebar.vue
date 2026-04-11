@@ -204,6 +204,7 @@ const navigation = computed(() => {
         { name: 'Dashboard', href: '/admin', icon: ShieldCheck, exact: true },
         { name: 'Utilisateurs', href: '/admin/users', icon: Users },
         { name: 'Logs système', href: '/admin/logs', icon: FileText },
+        { name: 'Monitoring ETL', href: '/admin/monitoring-etl', icon: Settings },
         { name: 'Config CRM', href: '/admin/crm', icon: Settings },
       ],
     })

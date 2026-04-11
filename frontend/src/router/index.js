@@ -3,7 +3,7 @@
  */
 
 import { createRouter, createWebHistory } from "vue-router"
-import { useAuth } from "@/composables/useAuth"
+import {useAuth} from "@/composables/useAuth"
 
 const routes = [
   // ───────────── PUBLIC ROUTES ─────────────
@@ -76,6 +76,13 @@ const routes = [
     name: "AuditLogs",
     component: () => import("@/pages/admin/AuditLogs.vue"),
     meta: { requiresAuth: true, roles: ["ADMIN"] },
+  },
+  {
+    path: "/admin/monitoring-etl",
+    name: "MonitoringETL",
+    component: () => import("@/pages/admin/monitoringETLPipeline.vue"),
+    meta: { requiresAuth: true, roles: ["ADMIN"] },
+
   },
   {
     path: "/admin/crm",
