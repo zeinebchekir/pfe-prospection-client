@@ -276,58 +276,33 @@ class ConfirmLeadPayload(BaseModel):
         extra = "allow"
 
 
-@router.post("/confirm_lead", summary="Confirmer et sauvegarder un lead choisi")
+
+@router.post("/confirm_lead", summary="Confirmer et déclencher la sauvegarde en BDD (via DAG Airflow)")
 def confirm_lead(payload: ConfirmLeadPayload, db: Session = Depends(get_db)):
     """
     Étape 2 du workflow d'ajout de lead :
     Le frontend renvoie l'entreprise choisie (depuis /search_from_query).
-    On sauvegarde en raw_leads + entreprise (Clean) et on renvoie le lead final.
+    On déclenche un DAG Airflow spécial ('load_manual_lead') pour enregistrer cette 
+    entreprise proprement en laissant la trace dans Airflow.
     """
-    from cleaners.dataGouv_cleaner import DataGouvCleaner
-    from db import crud
-    import uuid
-
-    run_id = f"manual_api_{uuid.uuid4().hex[:8]}"
-    now_str = datetime.now().isoformat()
-
     entreprise_data = payload.entreprise
 
-    # Wrap dans le format attendu par le cleaner et crud
-    record = {"entreprise": entreprise_data, "lead": None}
+    if not entreprise_data or not entreprise_data.get("siren"):
+        raise HTTPException(status_code=422, detail="Données d'entreprise invalides ou SIREN manquant")
 
-    # Re-clean pour s'assurer de la coherence (cas où le frontend aurait modifié des champs)
-    try:
-        cleaned_records, _ = DataGouvCleaner().clean([record])
-        if not cleaned_records:
-            raise HTTPException(status_code=422, detail="Données entreprise invalides après nettoyage")
-    except HTTPException:
-        raise
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Erreur nettoyage: {str(e)}")
+    config = {
+        "entreprise": entreprise_data
+    }
 
-    try:
-        # Sauvegarde dans raw_leads pour garder la trace
-        crud.insert_raw_leads(
-            db, [entreprise_data], source="dataGouv",
-            dag_run_id=run_id, date_scraping=now_str
-        )
-        for cr in cleaned_records:
-            cr["date_scraping"] = now_str
+    # On déclenche le DAG Airflow que nous venons de créer
+    result = _trigger_dag("load_manual_lead", config=config)
+    
+    return {
+        "status": "success", 
+        "message": "Enregistrement du lead validé et lancé. Le lead sera disponible dans quelques secondes.",
+        "run_id": result.get("dag_run_id"),
+        "lead_preview": entreprise_data
+    }
 
-        crud.insert_clean_leads(
-            db, cleaned_records, source="dataGouv",
-            dag_run_id=run_id, date_scraping=now_str
-        )
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Erreur insertion BDD: {str(e)}")
-
-    # Retourne le lead sauvegardé depuis la DB
-    siren = cleaned_records[0]["entreprise"].get("siren")
-    if siren:
-        lead_obj = db.query(Entreprise).filter_by(identifiant=siren).first()
-        if lead_obj:
-            return {"status": "success", "message": "Lead sauvegardé avec succès", "lead": lead_obj}
-
-    return {"status": "success", "message": "Lead sauvegardé", "lead": cleaned_records[0]["entreprise"]}
 
 
