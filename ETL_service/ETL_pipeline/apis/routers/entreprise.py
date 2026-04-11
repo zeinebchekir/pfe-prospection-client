@@ -233,11 +233,13 @@ def add_new_lead_sync(query: str, db: Session = Depends(get_db)):
     import uuid
     from datetime import datetime
     
-    # 1. Scrape
+    # 1. Scrape (Restreint à 1 seul résultat pour garantir la rapidité de la réponse synchrone)
     try:
-        raw = DataGouvService().source_scraping(filtre=[{"q": query}])
-        if not raw:
+        service = DataGouvService()
+        data = service.fetch_data(service.base_url, params={"q": query, "per_page": 1})
+        if not data or not data.get("results"):
             raise HTTPException(status_code=404, detail="Aucune entreprise trouvée dans DataGouv")
+        raw = data.get("results", [])
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Erreur scraping DataGouv: {str(e)}")
 
