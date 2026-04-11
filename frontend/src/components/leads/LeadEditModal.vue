@@ -1,10 +1,12 @@
 <template>
   <Dialog :open="open" @update:open="emit('close')">
-    <DialogContent class="max-w-2xl max-h-[85vh] p-0 flex flex-col">
+    <DialogContent class="max-w-2xl max-h-[90vh] p-0 flex flex-col overflow-hidden">
       <template v-if="lead">
         <!-- Header -->
         <DialogHeader class="p-6 pb-0 flex-shrink-0">
-          <DialogTitle class="text-lg font-semibold">Modifier le lead — {{ lead.nom }}</DialogTitle>
+          <DialogTitle class="text-lg font-semibold">
+            Modifier le lead — {{ lead.nom }}
+          </DialogTitle>
         </DialogHeader>
 
         <!-- Tabs nav -->
@@ -22,14 +24,20 @@
               ]"
             >
               {{ tab.label }}
+              <span
+                v-if="tab.key === 'dirigeants' && modalDirigeants.length"
+                class="ml-1 text-[10px] font-semibold bg-muted text-muted-foreground px-1.5 py-0.5 rounded-full"
+              >
+                {{ modalDirigeants.length }}
+              </span>
             </button>
           </div>
         </div>
 
         <!-- Tab content -->
-        <div class="flex-1 overflow-y-auto px-6 py-4">
+        <div class="flex-1 overflow-y-auto px-6 py-4 relative">
 
-          <!-- Général -->
+          <!-- ── Informations ── -->
           <div v-if="activeTab === 'general'" class="space-y-4">
             <div class="grid grid-cols-2 gap-4">
               <div class="space-y-1.5">
@@ -75,20 +83,9 @@
                 <option value="Opportunité">Opportunité</option>
               </select>
             </div>
-
-            <!-- Notes -->
-            <div class="space-y-1.5">
-              <label class="text-[11px] font-medium text-muted-foreground">Notes internes</label>
-              <textarea
-                v-model="form.notes"
-                placeholder="Ajouter des notes…"
-                rows="3"
-                class="w-full text-sm rounded-md border border-input bg-background px-3 py-2 focus:outline-none focus:ring-2 focus:ring-ring resize-none"
-              />
-            </div>
           </div>
 
-          <!-- Contact -->
+          <!-- ── Contact ── -->
           <div v-if="activeTab === 'contact'" class="space-y-4">
             <div class="grid grid-cols-2 gap-4">
               <div class="space-y-1.5">
@@ -114,37 +111,121 @@
             </div>
           </div>
 
-          <!-- Dirigeants (read-only) -->
-          <div v-if="activeTab === 'dirigeants'" class="space-y-3">
-            <p class="text-xs text-muted-foreground flex items-center gap-1">
-              <Users class="w-3.5 h-3.5" />
-              {{ modalDirigeants.length }} dirigeant{{ modalDirigeants.length > 1 ? 's' : '' }} (lecture seule)
-            </p>
-            <div
-              v-for="d in modalDirigeants"
-              :key="d.id"
-              class="flex items-center gap-3 p-3 rounded-lg bg-muted/40"
-            >
-              <div class="w-8 h-8 rounded-full bg-purple-50 text-purple-700 flex items-center justify-center text-[11px] font-semibold">
-                {{ d.initials }}
-              </div>
-              <div>
-                <p class="text-sm font-medium">{{ d.fullName }}</p>
-                <p class="text-[11px] text-muted-foreground">{{ d.qualite }}</p>
+          <!-- ── Dirigeants (editable) ── -->
+          <div v-if="activeTab === 'dirigeants'" class="space-y-4">
+            <!-- Header row -->
+            <div class="flex items-center justify-between">
+              <p class="text-xs text-muted-foreground flex items-center gap-1.5">
+                <Users class="w-3.5 h-3.5" />
+                <span>{{ modalDirigeants.length }} dirigeant{{ modalDirigeants.length > 1 ? 's' : '' }}</span>
+                <span class="text-[10px] bg-amber-50 text-amber-700 border border-amber-200 rounded-full px-2 py-0.5 font-medium">Modifiable</span>
+              </p>
+              <button
+                @click="addDirigeant"
+                class="inline-flex items-center gap-1.5 h-7 px-3 text-xs font-medium rounded-md bg-tacir-blue/10 text-tacir-blue hover:bg-tacir-blue/20 transition-colors"
+              >
+                <Plus class="w-3 h-3" /> Ajouter
+              </button>
+            </div>
+
+            <!-- Empty state -->
+            <div v-if="modalDirigeants.length === 0" class="text-center py-8 text-sm text-muted-foreground italic border border-dashed border-border rounded-xl">
+              Aucun dirigeant — cliquez sur "Ajouter" pour en créer un
+            </div>
+
+            <!-- Dirigeant cards -->
+            <div class="space-y-3">
+              <div
+                v-for="(d, i) in modalDirigeants"
+                :key="d._uid"
+                class="group rounded-xl border border-border bg-card p-4 hover:border-tacir-blue/30 transition-colors"
+              >
+                <!-- Avatar + delete button -->
+                <div class="flex items-center justify-between mb-3">
+                  <div class="flex items-center gap-2">
+                    <div :class="['w-9 h-9 rounded-full flex items-center justify-center text-[11px] font-bold flex-shrink-0', AVATAR_COLORS[i % AVATAR_COLORS.length]]">
+                      {{ getInitials(d.prenoms, d.nom) }}
+                    </div>
+                    <span class="text-sm font-medium text-foreground">
+                      {{ [d.prenoms, d.nom].filter(Boolean).join(' ') || 'Nouveau dirigeant' }}
+                    </span>
+                  </div>
+                  <button
+                    @click="removeDirigeant(i)"
+                    class="opacity-0 group-hover:opacity-100 transition-opacity h-7 w-7 flex items-center justify-center rounded-md hover:bg-destructive/10 hover:text-destructive text-muted-foreground"
+                    title="Supprimer"
+                  >
+                    <Trash2 class="w-3.5 h-3.5" />
+                  </button>
+                </div>
+
+                <!-- Editable fields in 2-col grid -->
+                <div class="grid grid-cols-2 gap-3">
+                  <div class="space-y-1">
+                    <label class="text-[10px] font-medium text-muted-foreground uppercase tracking-wide">Prénom(s)</label>
+                    <input
+                      v-model="d.prenoms"
+                      type="text"
+                      placeholder="Jean-Pierre"
+                      class="w-full h-8 text-sm rounded-md border border-input bg-background px-2.5 focus:outline-none focus:ring-1 focus:ring-tacir-blue"
+                    />
+                  </div>
+                  <div class="space-y-1">
+                    <label class="text-[10px] font-medium text-muted-foreground uppercase tracking-wide">Nom</label>
+                    <input
+                      v-model="d.nom"
+                      type="text"
+                      placeholder="DUPONT"
+                      class="w-full h-8 text-sm rounded-md border border-input bg-background px-2.5 focus:outline-none focus:ring-1 focus:ring-tacir-blue"
+                    />
+                  </div>
+                  <div class="space-y-1">
+                    <label class="text-[10px] font-medium text-muted-foreground uppercase tracking-wide">Qualité / Rôle</label>
+                    <input
+                      v-model="d.qualite"
+                      type="text"
+                      placeholder="Président"
+                      class="w-full h-8 text-sm rounded-md border border-input bg-background px-2.5 focus:outline-none focus:ring-1 focus:ring-tacir-blue"
+                    />
+                  </div>
+                  <div class="space-y-1">
+                    <label class="text-[10px] font-medium text-muted-foreground uppercase tracking-wide">Nationalité</label>
+                    <input
+                      v-model="d.nationalite"
+                      type="text"
+                      placeholder="Française"
+                      class="w-full h-8 text-sm rounded-md border border-input bg-background px-2.5 focus:outline-none focus:ring-1 focus:ring-tacir-blue"
+                    />
+                  </div>
+                  <div class="col-span-2 space-y-1">
+                    <label class="text-[10px] font-medium text-muted-foreground uppercase tracking-wide flex items-center gap-1">
+                      <Linkedin class="w-3 h-3" /> LinkedIn URL
+                    </label>
+                    <input
+                      v-model="d.linkedin_url"
+                      type="url"
+                      placeholder="https://www.linkedin.com/in/..."
+                      class="w-full h-8 text-sm rounded-md border border-input bg-background px-2.5 focus:outline-none focus:ring-1 focus:ring-tacir-blue"
+                    />
+                  </div>
+                </div>
               </div>
             </div>
-            <p v-if="modalDirigeants.length === 0" class="text-sm text-muted-foreground italic">
-              Aucun dirigeant renseigné
-            </p>
           </div>
+
+          <!-- Loading overlay -->
+          <Transition name="fade-overlay">
+            <div v-if="isLoadingData" class="absolute inset-0 z-20 bg-background/60 flex items-center justify-center backdrop-blur-[2px] rounded-b-xl">
+              <div class="flex flex-col items-center gap-2">
+                <Loader2 class="h-7 w-7 animate-spin text-tacir-blue" />
+                <span class="text-xs text-muted-foreground font-medium">Chargement...</span>
+              </div>
+            </div>
+          </Transition>
         </div>
 
-        <!-- Progress Overlay -->
-        <div v-if="isLoadingData" class="absolute inset-0 z-20 bg-background/50 flex items-center justify-center backdrop-blur-[1px] pointer-events-none">
-          <Loader2 class="h-6 w-6 animate-spin text-tacir-blue" />
-        </div>
-
-        <div class="flex-shrink-0 border-t border-border px-6 py-4 flex justify-end gap-3 z-30 bg-background">
+        <!-- Footer -->
+        <div class="flex-shrink-0 border-t border-border px-6 py-4 flex justify-end gap-3 bg-background">
           <button
             @click="emit('close')"
             :disabled="isSaving"
@@ -169,7 +250,8 @@
 <script setup>
 import { ref, watch } from 'vue'
 import axios from 'axios'
-import { Users, Loader2 } from 'lucide-vue-next'
+import { Users, Loader2, Plus, Trash2, Linkedin } from 'lucide-vue-next'
+import { toast } from 'vue-sonner'
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle,
 } from '@/components/ui/dialog'
@@ -192,12 +274,30 @@ const inputClass = {
   class: 'w-full h-9 text-sm rounded-md border border-input bg-background px-3 focus:outline-none focus:ring-2 focus:ring-ring disabled:opacity-50 disabled:cursor-not-allowed',
 }
 
+const AVATAR_COLORS = [
+  'bg-purple-100 text-purple-700',
+  'bg-emerald-100 text-emerald-700',
+  'bg-orange-100 text-orange-700',
+  'bg-blue-100 text-blue-700',
+  'bg-rose-100 text-rose-700',
+  'bg-teal-100 text-teal-700',
+]
+
+let _uidCounter = 0
+function nextUid() { return ++_uidCounter }
+
+function getInitials(prenoms, nom) {
+  const p = prenoms?.[0]?.toUpperCase() || ''
+  const n = nom?.[0]?.toUpperCase() || ''
+  return (p + n) || '?'
+}
+
 const emptyForm = () => ({
   nom: '', siren: '', siret: '', identifiant: '',
-  segment: '', tailleEntreprise: '', secteurActivite: '',
+  tailleEntreprise: '', secteurActivite: '',
   formeJuridique: '', ville: '', codePostal: '', pays: '',
   caFormatted: '', telephone: '', email: '',
-  status: 'Nouveau', notes: '',
+  status: 'Nouveau',
 })
 
 const form = ref(emptyForm())
@@ -205,25 +305,37 @@ const modalDirigeants = ref([])
 const isLoadingData = ref(false)
 const isSaving = ref(false)
 
-// Populate form when lead changes
+// Add / remove dirigeant helpers
+function addDirigeant() {
+  modalDirigeants.value.push({
+    _uid: nextUid(),
+    nom: '', prenoms: '', qualite: '',
+    nationalite: '', linkedin_url: '',
+  })
+}
+
+function removeDirigeant(index) {
+  modalDirigeants.value.splice(index, 1)
+}
+
+// Watch open → fetch from /modal endpoint
 watch(() => props.open, async (isOpen) => {
-  if (!isOpen || !props.lead) { 
-    form.value = emptyForm(); 
-    modalDirigeants.value = [];
-    return;
+  if (!isOpen || !props.lead) {
+    form.value = emptyForm()
+    modalDirigeants.value = []
+    return
   }
-  
+
   const lead = props.lead
   const clean = (v) => (v === '—' ? '' : v ?? '')
-  
-  // Set initial data before network fetch finishes
+
+  // Immediate population from local data (instant UX)
   form.value = {
     nom:             clean(lead.nom),
     siren:           clean(lead.siren),
     siret:           clean(lead.siret),
     identifiant:     clean(lead.identifiant),
-    segment:         lead.segment ?? '',
-    tailleEntreprise:clean(lead.tailleEntreprise),
+    tailleEntreprise: clean(lead.tailleEntreprise),
     secteurActivite: clean(lead.secteurActivite),
     formeJuridique:  clean(lead.formeJuridique),
     ville:           clean(lead.ville),
@@ -233,21 +345,26 @@ watch(() => props.open, async (isOpen) => {
     telephone:       clean(lead.telephone),
     email:           clean(lead.email),
     status:          lead.status ?? 'Nouveau',
-    notes:           '',
   }
-  modalDirigeants.value = lead.dirigeants || []
+  modalDirigeants.value = (lead.dirigeants || []).map((d) => ({
+    _uid: nextUid(),
+    nom:          d.nom || '',
+    prenoms:      d.prenoms || '',
+    qualite:      d.qualite || '',
+    nationalite:  d.nationalite || '',
+    linkedin_url: d.linkedinUrl || d.linkedin_url || '',
+  }))
   activeTab.value = 'general'
 
-  // Fetch precise data from endpoints 
+  // Fetch authoritative data from API
   isLoadingData.value = true
   try {
     const baseUrl = import.meta.env.VITE_FASTAPI_URL || 'http://localhost:8001'
     const leadId = lead.identifiant || lead.siren || lead.id
-    
     const res = await axios.get(`${baseUrl}/entreprises/${leadId}/modal`)
     const data = res.data
 
-    const info = data.Informations || {}
+    const info    = data.Informations || {}
     const contact = data.Contact || {}
 
     form.value = {
@@ -255,7 +372,7 @@ watch(() => props.open, async (isOpen) => {
       siren:           clean(info.siren),
       siret:           clean(info.siret),
       identifiant:     clean(info.identifiant),
-      tailleEntreprise:clean(info.taille_entreprise),
+      tailleEntreprise: clean(info.taille_entreprise),
       secteurActivite: clean(info.secteur_activite),
       formeJuridique:  clean(info.forme_juridique),
       caFormatted:     clean(info.ca_affiche),
@@ -265,19 +382,20 @@ watch(() => props.open, async (isOpen) => {
       telephone:       clean(contact.telephone),
       email:           clean(contact.email),
       status:          clean(info.statut) || 'Nouveau',
-      notes:           '',
     }
 
-    if (data.Dirigeants) {
-      modalDirigeants.value = data.Dirigeants.map((d, i) => ({
-        id: `modal-dir-${i}`,
-        fullName: `${d.prenoms || ''} ${d.nom || ''}`.trim() || 'Inconnu',
-        initials: ((d.prenoms?.[0] || '') + (d.nom?.[0] || '')).toUpperCase() || '?',
-        qualite: d.qualite || ''
+    if (Array.isArray(data.Dirigeants)) {
+      modalDirigeants.value = data.Dirigeants.map((d) => ({
+        _uid:         nextUid(),
+        nom:          d.nom || '',
+        prenoms:      d.prenoms || '',
+        qualite:      d.qualite || d.role || '',
+        nationalite:  d.nationalite || '',
+        linkedin_url: d.linkedin_url || '',
       }))
     }
   } catch (err) {
-    console.error('[Modal] Failed to fetch data:', err)
+    console.error('[Modal] Fetch error:', err)
   } finally {
     isLoadingData.value = false
   }
@@ -286,10 +404,14 @@ watch(() => props.open, async (isOpen) => {
 async function handleSave() {
   if (!props.lead) return
   const leadId = props.lead.identifiant || props.lead.siren || props.lead.id
-  
+
   isSaving.value = true
   try {
     const baseUrl = import.meta.env.VITE_FASTAPI_URL || 'http://localhost:8001'
+
+    // Build clean dirigeants array (strip internal _uid)
+    const dirigeants = modalDirigeants.value.map(({ _uid, ...d }) => d)
+
     const payload = {
       nom_entreprise:    form.value.nom,
       siren:             form.value.siren,
@@ -305,34 +427,47 @@ async function handleSave() {
       pays:              form.value.pays,
       telephone:         form.value.telephone,
       email:             form.value.email,
+      dirigeants,
     }
 
     await axios.patch(`${baseUrl}/entreprises/${leadId}`, payload)
 
     const dash = (v) => v?.trim() || '—'
     emit('save', props.lead.id, {
-      nom:        dash(form.value.nom),
-      siren:      dash(form.value.siren),
-      siret:      dash(form.value.siret),
-      identifiant:dash(form.value.identifiant),
+      nom:             dash(form.value.nom),
+      siren:           dash(form.value.siren),
+      siret:           dash(form.value.siret),
+      identifiant:     dash(form.value.identifiant),
       tailleEntreprise: dash(form.value.tailleEntreprise),
-      secteurActivite:  dash(form.value.secteurActivite),
-      formeJuridique:   dash(form.value.formeJuridique),
-      caFormatted: dash(form.value.caFormatted),
-      ville:      dash(form.value.ville),
-      codePostal: dash(form.value.codePostal),
-      pays:       dash(form.value.pays),
-      telephone:  dash(form.value.telephone),
-      email:      dash(form.value.email),
-      status:     form.value.status,
+      secteurActivite: dash(form.value.secteurActivite),
+      formeJuridique:  dash(form.value.formeJuridique),
+      caFormatted:     dash(form.value.caFormatted),
+      ville:           dash(form.value.ville),
+      codePostal:      dash(form.value.codePostal),
+      pays:            dash(form.value.pays),
+      telephone:       dash(form.value.telephone),
+      email:           dash(form.value.email),
+      status:          form.value.status,
+    })
+
+    toast.success('Lead mis à jour avec succès', {
+      description: `${form.value.nom || 'Entreprise'} — ${form.value.ville || ''}`,
     })
     emit('close')
   } catch (err) {
-    console.error('[Modal] Failed to save lead:', err)
-    alert("Erreur lors de la sauvegarde du lead.")
+    console.error('[Modal] Save error:', err)
+    toast.error('Erreur lors de la sauvegarde', {
+      description: err?.response?.data?.detail || 'Veuillez réessayer.',
+    })
   } finally {
     isSaving.value = false
   }
 }
 </script>
 
+<style scoped>
+.fade-overlay-enter-active,
+.fade-overlay-leave-active { transition: opacity 0.15s ease; }
+.fade-overlay-enter-from,
+.fade-overlay-leave-to    { opacity: 0; }
+</style>

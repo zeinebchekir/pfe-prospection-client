@@ -15,12 +15,16 @@
       <component :is="Component" />
     </Transition>
   </RouterView>
+
+  <!-- Global Sonner toaster -->
+  <Sonner rich-colors position="top-right" :duration="4000" close-button />
 </template>
 
 <script setup>
 import { ref, onMounted } from 'vue'
 import { useAuth } from '@/composables/useAuth'
 import { Loader2 } from 'lucide-vue-next'
+import Sonner from '@/components/ui/sonner/Sonner.vue'
 
 const { fetchUser } = useAuth()
 

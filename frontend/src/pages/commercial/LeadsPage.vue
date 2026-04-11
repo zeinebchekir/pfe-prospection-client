@@ -56,6 +56,37 @@
             @reset="resetFilters"
           />
 
+          <!-- "Add from API" banner — shown when search yields no local results -->
+          <Transition name="fade-banner">
+            <div
+              v-if="showAddBanner"
+              class="rounded-xl border border-tacir-blue/30 bg-blue-50/60 px-5 py-4 flex items-center justify-between gap-4 shadow-sm"
+            >
+              <div class="flex items-center gap-3">
+                <div class="w-9 h-9 rounded-full bg-tacir-blue/10 flex items-center justify-center flex-shrink-0">
+                  <SearchX class="w-4 h-4 text-tacir-blue" />
+                </div>
+                <div>
+                  <p class="text-sm font-semibold text-tacir-darkblue">
+                    Aucun résultat local pour "{{ filters.search }}"
+                  </p>
+                  <p class="text-xs text-muted-foreground mt-0.5">
+                    Rechercher cette entreprise sur DataGouv et l'ajouter à votre base ?
+                  </p>
+                </div>
+              </div>
+              <button
+                @click="addFromQuery"
+                :disabled="isAddingFromApi"
+                class="inline-flex items-center gap-2 h-9 px-4 text-sm font-medium rounded-md bg-tacir-blue text-white hover:opacity-90 transition-opacity disabled:opacity-60 flex-shrink-0"
+              >
+                <Loader2 v-if="isAddingFromApi" class="w-4 h-4 animate-spin" />
+                <Plus v-else class="w-4 h-4" />
+                {{ isAddingFromApi ? 'Recherche...' : 'Rechercher & Ajouter' }}
+              </button>
+            </div>
+          </Transition>
+
           <!-- Table card -->
           <div class="bg-white rounded-xl border border-border shadow-card overflow-hidden relative">
             <div v-if="isLoading" class="absolute inset-0 z-10 bg-white/70 backdrop-blur-sm flex items-center justify-center">
@@ -114,9 +145,11 @@
 </template>
 
 <script setup>
-import { ref } from 'vue'
+import { ref, computed } from 'vue'
 import { useRouter } from 'vue-router'
-import { Building2, Plus, Loader2 } from 'lucide-vue-next'
+import axios from 'axios'
+import { Building2, Plus, Loader2, SearchX } from 'lucide-vue-next'
+import { toast } from 'vue-sonner'
 
 import TheSidebar     from '@/components/AppSidebar.vue'
 import LeadKPICards   from '@/components/leads/LeadKPICards.vue'
@@ -127,10 +160,12 @@ import LeadPreviewDrawer from '@/components/leads/LeadPreviewDrawer.vue'
 import LeadEditModal  from '@/components/leads/LeadEditModal.vue'
 
 import { useLeads } from '@/composables/useLeads'
+import { adaptLead } from '@/lib/leadAdapter'
 
 const router = useRouter()
 
 const {
+  allLeads,
   filteredLeads,
   paginatedLeads,
   filters,
@@ -155,8 +190,16 @@ const {
 } = useLeads()
 
 // Local UI state
-const previewLead = ref(null)
-const editLead    = ref(null)
+const previewLead     = ref(null)
+const editLead        = ref(null)
+const isAddingFromApi = ref(false)
+
+// Show banner only when: search query present, not loading, and zero local results
+const showAddBanner = computed(() =>
+  !!filters.value.search.trim() &&
+  !isLoading.value &&
+  filteredLeads.value.length === 0
+)
 
 // ---- Event handlers ----
 
@@ -173,12 +216,60 @@ function handleNavigate(lead) {
 }
 
 function handleDelete(lead) {
-  // Simulation — hook up to API later
   console.info(`[Leads] Delete requested for ${lead.nom} (${lead.id})`)
 }
 
 function handleSave(id, updates) {
   updateLead(id, updates)
+}
+
+// ---- Add from DataGouv via API ----
+async function addFromQuery() {
+  const query = filters.value.search.trim()
+  if (!query) return
+
+  isAddingFromApi.value = true
+  try {
+    const baseUrl = import.meta.env.VITE_FASTAPI_URL || 'http://localhost:8001'
+    const res = await axios.post(`${baseUrl}/entreprises/add_from_query/${encodeURIComponent(query)}`)
+
+    if (res.data?.status === 'success' && res.data?.lead) {
+      const raw = res.data.lead
+      // Adapt and push to local store
+      const adapted = adaptLead({
+        identifiant:            raw.identifiant,
+        siren:                  raw.siren,
+        nom:                    raw.nom,
+        ville:                  raw.ville,
+        code_postal:            raw.code_postal,
+        pays:                   raw.pays,
+        secteur_activite:       raw.secteur_activite,
+        forme_juridique:        raw.forme_juridique,
+        taille_entrep:          raw.taille_entrep,
+        ca:                     raw.ca ?? null,
+        dirigeants:             raw.dirigeants || [],
+      }, allLeads.value.length)
+
+      allLeads.value.unshift(adapted)
+
+      toast.success(`Entreprise ajoutée : ${raw.nom}`, {
+        description: `${raw.ville || ''} · ${raw.secteur_activite || ''}`.replace(/^ · | · $/g, '')
+      })
+      // Clear search so the new lead is visible
+      setFilter('search', '')
+    } else {
+      toast.warning('Aucune entreprise trouvée', {
+        description: `Aucun résultat pour "${query}" sur DataGouv.`,
+      })
+    }
+  } catch (err) {
+    console.error('[Leads] add_from_query error:', err)
+    toast.error('Erreur de recherche', {
+      description: err?.response?.data?.detail || 'Impossible de contacter DataGouv.',
+    })
+  } finally {
+    isAddingFromApi.value = false
+  }
 }
 </script>
 
@@ -186,4 +277,8 @@ function handleSave(id, updates) {
 .shadow-card {
   box-shadow: 0 1px 3px rgba(0,0,0,0.06), 0 4px 16px rgba(48,62,140,0.06);
 }
+.fade-banner-enter-active,
+.fade-banner-leave-active { transition: all 0.25s ease; }
+.fade-banner-enter-from,
+.fade-banner-leave-to     { opacity: 0; transform: translateY(-6px); }
 </style>
