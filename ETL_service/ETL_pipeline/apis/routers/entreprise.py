@@ -219,70 +219,115 @@ def _get_airflow_token() -> str:
     return response.json()["access_token"]
 
 
-@router.post("/add_from_query/{query}", summary="Rechercher et ajouter un lead (Synchrone)")
-def add_new_lead_sync(query: str, db: Session = Depends(get_db)):
+
+@router.post("/search_from_query/{query}", summary="Rechercher et prévisualiser un lead (sans sauvegarder)")
+def search_lead_preview(query: str):
     """
-    Exécute le pipeline (Scrape -> Extract -> Clean -> Load) de manière synchrone 
-    sans passer par Airflow. Idéal pour que le frontend Vue puisse ajouter un 
-    lead et l'afficher immédiatement.
+    Étape 1 du workflow d'ajout de lead :
+    Scrape + Extract + Clean → renvoie les données au frontend pour prévisualisation.
+    Aucune écriture en base. Le commercial valide ensuite via /confirm_lead.
     """
     from scrapers.dataGouv import DataGouvService
     from extractors.dataGouv.datagouv_extractor import extract_data_from_datagouv
     from cleaners.dataGouv_cleaner import DataGouvCleaner
-    from db import crud
-    import uuid
-    from datetime import datetime
-    
-    # 1. Scrape (Restreint à 1 seul résultat pour garantir la rapidité de la réponse synchrone)
+
+    # 1. Scrape — top 5 résultats pour que le commercial puisse choisir
     try:
         service = DataGouvService()
-        data = service.fetch_data(service.base_url, params={"q": query, "per_page": 1})
+        data = service.fetch_data(service.base_url, params={"q": query, "per_page": 5})
         if not data or not data.get("results"):
             raise HTTPException(status_code=404, detail="Aucune entreprise trouvée dans DataGouv")
         raw = data.get("results", [])
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Erreur scraping DataGouv: {str(e)}")
 
-    # 2. Extract (includes LinkedIn enrichment)
+    # 2. Extract (dirigeants, CA, etc.)
     try:
         extracted = extract_data_from_datagouv(raw)
         if not extracted:
             raise HTTPException(status_code=500, detail="L'extraction a échoué")
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Erreur extraction: {str(e)}")
 
-    # 3. Clean (ensure layout {"entreprise": {}, "lead": None})
+    # 3. Clean
     records = [{"entreprise": item, "lead": None} for item in extracted]
     try:
-        cleaned_records, report = DataGouvCleaner().clean(records)
+        cleaned_records, _ = DataGouvCleaner().clean(records)
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Erreur nettoyage: {str(e)}")
 
-    # 4. Load Raw & Clean
+    # On retourne les données nettoyées — pas de sauvegarde
+    preview = [r["entreprise"] for r in cleaned_records]
+    return {
+        "status": "preview",
+        "message": f"{len(preview)} résultat(s) trouvé(s) — choisissez une entreprise à ajouter",
+        "results": preview
+    }
+
+
+class ConfirmLeadPayload(BaseModel):
+    entreprise: dict  # le dict nettoyé que le frontend renvoie après sélection
+
+    class Config:
+        extra = "allow"
+
+
+@router.post("/confirm_lead", summary="Confirmer et sauvegarder un lead choisi")
+def confirm_lead(payload: ConfirmLeadPayload, db: Session = Depends(get_db)):
+    """
+    Étape 2 du workflow d'ajout de lead :
+    Le frontend renvoie l'entreprise choisie (depuis /search_from_query).
+    On sauvegarde en raw_leads + entreprise (Clean) et on renvoie le lead final.
+    """
+    from cleaners.dataGouv_cleaner import DataGouvCleaner
+    from db import crud
+    import uuid
+
     run_id = f"manual_api_{uuid.uuid4().hex[:8]}"
     now_str = datetime.now().isoformat()
-    
+
+    entreprise_data = payload.entreprise
+
+    # Wrap dans le format attendu par le cleaner et crud
+    record = {"entreprise": entreprise_data, "lead": None}
+
+    # Re-clean pour s'assurer de la coherence (cas où le frontend aurait modifié des champs)
     try:
-        for r in raw:
-            r["date_scraping"] = now_str
-        crud.insert_raw_leads(db, raw, source="dataGouv", dag_run_id=run_id, date_scraping=now_str)
-        
+        cleaned_records, _ = DataGouvCleaner().clean([record])
+        if not cleaned_records:
+            raise HTTPException(status_code=422, detail="Données entreprise invalides après nettoyage")
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Erreur nettoyage: {str(e)}")
+
+    try:
+        # Sauvegarde dans raw_leads pour garder la trace
+        crud.insert_raw_leads(
+            db, [entreprise_data], source="dataGouv",
+            dag_run_id=run_id, date_scraping=now_str
+        )
         for cr in cleaned_records:
             cr["date_scraping"] = now_str
-            
-        inserted_count = crud.insert_clean_leads(db, cleaned_records, source="dataGouv", dag_run_id=run_id, date_scraping=now_str)
-        
+
+        crud.insert_clean_leads(
+            db, cleaned_records, source="dataGouv",
+            dag_run_id=run_id, date_scraping=now_str
+        )
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Erreur insertion BDD: {str(e)}")
 
-    # Fetch the exact inserted/upserted record to return to frontend
-    from db.models import Entreprise
-    # We take the SIREN of the first cleaned record
-    first_siren = cleaned_records[0]["entreprise"].get("siren")
-    if first_siren:
-        # Assuming identifiant is siren for DataGouv
-        lead_obj = db.query(Entreprise).filter_by(identifiant=first_siren).first()
+    # Retourne le lead sauvegardé depuis la DB
+    siren = cleaned_records[0]["entreprise"].get("siren")
+    if siren:
+        lead_obj = db.query(Entreprise).filter_by(identifiant=siren).first()
         if lead_obj:
-            return {"status": "success", "message": f"{inserted_count} lead(s) traité(s)", "lead": lead_obj}
+            return {"status": "success", "message": "Lead sauvegardé avec succès", "lead": lead_obj}
 
-    return {"status": "success", "message": f"{inserted_count} lead(s) traité(s)", "lead": cleaned_records[0]["entreprise"]}
+    return {"status": "success", "message": "Lead sauvegardé", "lead": cleaned_records[0]["entreprise"]}
+
+
