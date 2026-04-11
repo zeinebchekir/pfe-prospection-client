@@ -189,7 +189,11 @@ def _map_data(rec: dict, source: str,date_scraping: date_type | None,dag_run_id:
     print("tauuuuuuuuuuuuuuuuuuuuux",entreprise.get("taux_completude"))
 
     boamp_data = entreprise.get("data_from_boamp") or {}
+    # Provide identifiant exactly as needed by the PostgreSQL schema (VARCHAR 25)
+    _identifiant = str(entreprise.get("siren")) if source == "dataGouv" else str(boamp_data.get("idweb") or entreprise.get("siret"))
+    
     return Entreprise(
+        identifiant          = _identifiant,
         siren                = entreprise.get("siren"),
         siret                = entreprise.get("siret"),
         nom                  = entreprise.get("nom"),
@@ -210,10 +214,9 @@ def _map_data(rec: dict, source: str,date_scraping: date_type | None,dag_run_id:
         dirigeants           = entreprise.get("dirigeants"),
         sources              = entreprise.get("sources"),
         dag_run_id           = dag_run_id,
-        date_derniere_modif_site = _to_date(entreprise.get("dateDerniereModification")) if source == "dataGouv" else entreprise.get("dateMAJ"),
+        date_derniere_modif_site = _to_date(entreprise.get("dateDerniereModification")) if source == "dataGouv" else _to_date(entreprise.get("dateMAJ")),
         date_scraping        = _to_date(date_scraping),
         taux_completude      = entreprise.get("taux_completude"),
-        
     )
 
 
@@ -356,7 +359,7 @@ def insert_clean_leads(
                     row_dict = {
                         c.name: getattr(obj, c.name)
                         for c in Entreprise.__table__.columns
-                        if c.name not in ("identifiant", "created_at", "updated_at")
+                        if c.name not in ("created_at", "updated_at")
                     }
                     stmt = pg_insert(Entreprise).values(**row_dict)
                     set_clause = _build_set_clause(stmt, owned_fields)
@@ -370,7 +373,7 @@ def insert_clean_leads(
                     row_dict = {
                         c.name: getattr(obj, c.name)
                         for c in Entreprise.__table__.columns
-                        if c.name not in ("identifiant", "created_at", "updated_at")
+                        if c.name not in ("created_at", "updated_at")
                     }
                     db.execute(Entreprise.__table__.insert().values(**row_dict))
                     new_inserts += 1

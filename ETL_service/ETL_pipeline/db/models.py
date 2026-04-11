@@ -84,7 +84,7 @@ class Entreprise(Base):
     """
     __tablename__ = "entreprise"
 
-    identifiant    = Column(Integer, primary_key=True, autoincrement=True)
+    identifiant    = Column(String(25), primary_key=True)
 
     # Link back to the raw staging row (nullable — bulk loads may skip it)
     raw_lead_id    = Column(Integer, ForeignKey("raw_leads.id"), nullable=True, index=True)
