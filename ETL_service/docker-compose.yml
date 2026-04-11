@@ -330,6 +330,7 @@ services:
     volumes:
       - ./ETL_pipeline:/app              # ← ton code
       - ./exports:/opt/airflow/exports   # ← fichiers xlsx
+      - ./logs:/opt/airflow/logs
     environment:
       DATABASE_URL: postgresql://airflow:airflow@postgres/airflow
       AIRFLOW_URL: http://airflow-apiserver:8080   # ← nom du service Docker

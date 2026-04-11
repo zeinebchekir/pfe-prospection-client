@@ -3,7 +3,8 @@ sys.path.insert(0, "/app")
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from apis.routers import sync, entreprise
+from apis.routers import sync, entreprise 
+from apis.routers.monitoring import router as monitoring_router
 from db.database import create_tables
 
 app = FastAPI(
@@ -34,6 +35,7 @@ def startup():
 
 app.include_router(sync.router,        prefix="/sync",        tags=["Sync"])
 app.include_router(entreprise.router, prefix="/entreprises", tags=["Entreprises"])
+app.include_router(monitoring_router)
 
 @app.get("/")
 def root():
