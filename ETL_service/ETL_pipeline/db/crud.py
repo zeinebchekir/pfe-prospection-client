@@ -266,21 +266,21 @@ def _find_conflict_target(db: Session, obj: Entreprise) -> str | None:
     """
     Cherche si l'entreprise existe déjà en base par siren, siret,
     ou (nom + code_postal) — dans cet ordre de priorité.
-    Retourne la colonne de conflict à utiliser.
+    Retourne l'identifiant existant ou None.
     """
     if obj.siren:
         exists = db.query(Entreprise.identifiant)\
                    .filter(Entreprise.siren == obj.siren)\
                    .first()
         if exists:
-            return "siren"
+            return exists[0]
 
     if obj.siret:
         exists = db.query(Entreprise.identifiant)\
                    .filter(Entreprise.siret == obj.siret)\
                    .first()
         if exists:
-            return "siret"
+            return exists[0]
 
     if obj.nom and obj.code_postal:
         exists = db.query(Entreprise.identifiant)\
@@ -289,7 +289,7 @@ def _find_conflict_target(db: Session, obj: Entreprise) -> str | None:
                        Entreprise.code_postal == obj.code_postal,
                    ).first()
         if exists:
-            return "nom_cp"
+            return exists[0]
 
     return None  # pas de doublon → INSERT pur
 
@@ -333,12 +333,6 @@ def insert_clean_leads(
     owned_fields = DATAGOUV_OWN_FIELDS if is_datagouv else BOAMP_OWN_FIELDS
     new_inserts = updates = skipped = 0
 
-    CONFLICT_TARGETS = {
-        "siren"  : ["siren"],
-        "siret"  : ["siret"],
-        "nom_cp" : ["nom", "code_postal"],
-    }
-
     try:
         with db.no_autoflush:
             for rec in records:
@@ -353,9 +347,12 @@ def insert_clean_leads(
                     skipped += 1
                     continue
 
-                conflict_key = _find_conflict_target(db, obj)
+                existing_id = _find_conflict_target(db, obj)
 
-                if conflict_key:
+                if existing_id:
+                    # On force l'identifiant à correspondre à la base pour déclencher l'UPSERT
+                    obj.identifiant = existing_id
+                    
                     row_dict = {
                         c.name: getattr(obj, c.name)
                         for c in Entreprise.__table__.columns
@@ -364,7 +361,7 @@ def insert_clean_leads(
                     stmt = pg_insert(Entreprise).values(**row_dict)
                     set_clause = _build_set_clause(stmt, owned_fields)
                     stmt = stmt.on_conflict_do_update(
-                        index_elements=CONFLICT_TARGETS[conflict_key],
+                        index_elements=["identifiant"],
                         set_=set_clause,
                     )
                     db.execute(stmt)
