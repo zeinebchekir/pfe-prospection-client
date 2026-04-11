@@ -214,3 +214,70 @@ def _get_airflow_token() -> str:
             detail=f"Impossible d'obtenir le token Airflow : {response.text}"
         )
     return response.json()["access_token"]
+
+
+@router.post("/add_from_query/{query}", summary="Rechercher et ajouter un lead (Synchrone)")
+def add_new_lead_sync(query: str, db: Session = Depends(get_db)):
+    """
+    Exécute le pipeline (Scrape -> Extract -> Clean -> Load) de manière synchrone 
+    sans passer par Airflow. Idéal pour que le frontend Vue puisse ajouter un 
+    lead et l'afficher immédiatement.
+    """
+    from scrapers.dataGouv import DataGouvService
+    from extractors.dataGouv.datagouv_extractor import extract_data_from_datagouv
+    from cleaners.dataGouv_cleaner import DataGouvCleaner
+    from db import crud
+    import uuid
+    from datetime import datetime
+    
+    # 1. Scrape
+    try:
+        raw = DataGouvService().source_scraping(filtre=[{"q": query}])
+        if not raw:
+            raise HTTPException(status_code=404, detail="Aucune entreprise trouvée dans DataGouv")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Erreur scraping DataGouv: {str(e)}")
+
+    # 2. Extract (includes LinkedIn enrichment)
+    try:
+        extracted = extract_data_from_datagouv(raw)
+        if not extracted:
+            raise HTTPException(status_code=500, detail="L'extraction a échoué")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Erreur extraction: {str(e)}")
+
+    # 3. Clean (ensure layout {"entreprise": {}, "lead": None})
+    records = [{"entreprise": item, "lead": None} for item in extracted]
+    try:
+        cleaned_records, report = DataGouvCleaner().clean(records)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Erreur nettoyage: {str(e)}")
+
+    # 4. Load Raw & Clean
+    run_id = f"manual_api_{uuid.uuid4().hex[:8]}"
+    now_str = datetime.now().isoformat()
+    
+    try:
+        for r in raw:
+            r["date_scraping"] = now_str
+        crud.insert_raw_leads(db, raw, source="dataGouv", dag_run_id=run_id, date_scraping=now_str)
+        
+        for cr in cleaned_records:
+            cr["date_scraping"] = now_str
+            
+        inserted_count = crud.insert_clean_leads(db, cleaned_records, source="dataGouv", dag_run_id=run_id, date_scraping=now_str)
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Erreur insertion BDD: {str(e)}")
+
+    # Fetch the exact inserted/upserted record to return to frontend
+    from db.models import Entreprise
+    # We take the SIREN of the first cleaned record
+    first_siren = cleaned_records[0]["entreprise"].get("siren")
+    if first_siren:
+        # Assuming identifiant is siren for DataGouv
+        lead_obj = db.query(Entreprise).filter_by(identifiant=first_siren).first()
+        if lead_obj:
+            return {"status": "success", "message": f"{inserted_count} lead(s) traité(s)", "lead": lead_obj}
+
+    return {"status": "success", "message": f"{inserted_count} lead(s) traité(s)", "lead": cleaned_records[0]["entreprise"]}
