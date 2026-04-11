@@ -80,6 +80,7 @@ class EntrepriseUpdate(BaseModel):
     pays: str | None = None
     telephone: str | None = None
     email: str | None = None
+    dirigeants: list | None = None
 
     class Config:
         extra = "forbid"
@@ -108,6 +109,7 @@ def update_entreprise(identifiant: str, payload: EntrepriseUpdate, db: Session =
     for k, v in update_data.items():
         if isinstance(v, str) and k != "email":
             update_data[k] = v.strip()
+        # For list types like dirigeants, we leave them as is
 
     # Map frontend fields to DB model columns
     field_mapping = {
@@ -123,7 +125,8 @@ def update_entreprise(identifiant: str, payload: EntrepriseUpdate, db: Session =
         "code_postal": "code_postal",
         "pays": "pays",
         "telephone": "telephone",
-        "email": "adresse_email"
+        "email": "adresse_email",
+        "dirigeants": "dirigeants"
     }
 
     mutated = False
