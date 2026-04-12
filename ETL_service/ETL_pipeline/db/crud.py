@@ -214,6 +214,7 @@ def _map_data(rec: dict, source: str,date_scraping: date_type | None,dag_run_id:
         date_scraping        = _to_date(date_scraping),
         taux_completude      = entreprise.get("taux_completude"),
         
+        
     )
 
 

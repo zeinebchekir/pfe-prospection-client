@@ -9,8 +9,13 @@ from fastapi.responses import StreamingResponse
 from sqlalchemy import text
 from db.database import SessionLocal
 
+import httpx
+import psutil
+from datetime import datetime
+
 router = APIRouter(prefix="/api/monitoring", tags=["monitoring"])
 
+PROMETHEUS_URL = os.getenv("PROMETHEUS_URL", "http://prometheus:9090")
 
 # ─────────────────────────────────────────────
 #  HELPERS
@@ -36,11 +41,11 @@ def _get_pipeline_state(dag_id: str) -> dict:
                 state,
                 start_date,
                 end_date,
-                execution_date,
+                logical_date,
                 conf
             FROM dag_run
             WHERE dag_id = :dag_id
-            ORDER BY execution_date DESC
+            ORDER BY logical_date DESC
             LIMIT 1
         """), {"dag_id": dag_id}).mappings().first()
 
@@ -81,16 +86,16 @@ def _get_pipeline_state(dag_id: str) -> dict:
         # Métriques ETL depuis tes tables
         metrics = {}
         try:
-            raw_metrics = db.execute(text("""
-                SELECT
-                    source,
-                    COUNT(*)                    AS total,
-                    ROUND(AVG(taux_completude)::numeric, 2) AS completude_moy,
-                    MAX(loaded_at)              AS last_loaded
-                FROM raw_leads
-                WHERE dag_run_id = :run_id
-                GROUP BY source
-            """), {"run_id": run_dict["run_id"]}).mappings().all()
+            # raw_metrics = db.execute(text("""
+            #     SELECT
+            #         source,
+            #         COUNT(*)                    AS total,
+            #         ROUND(AVG(taux_completude)::numeric, 2) AS completude_moy,
+            #         MAX(loaded_at)              AS last_loaded
+            #     FROM entreprise
+            #     WHERE dag_run_id = :run_id
+            #     GROUP BY source
+            # """), {"run_id": run_dict["run_id"]}).mappings().all()
 
             clean_metrics = db.execute(text("""
                 SELECT
@@ -102,7 +107,7 @@ def _get_pipeline_state(dag_id: str) -> dict:
             """), {"run_id": run_dict["run_id"]}).mappings().first()
 
             metrics = {
-                "raw":   [dict(r) for r in raw_metrics],
+                # "raw":   [dict(r) for r in raw_metrics],
                 "clean": dict(clean_metrics) if clean_metrics else {},
             }
         except Exception:
@@ -271,66 +276,308 @@ def stream_task_logs(dag_id: str, run_id: str, task_id: str):
 # ─────────────────────────────────────────────
 #  ENDPOINT 5 — Métriques globales ETL
 # ─────────────────────────────────────────────
+@router.get("/metrics/{dag_id}/{run_id}")
+def get_run_metrics(dag_id: str, run_id: str):
+    """Retourne les métriques XCom de chaque task pour un run donné."""
+    db = SessionLocal()
+    try:
+        rows = db.execute(text("""
+            SELECT task_id, key, value
+            FROM xcom
+            WHERE dag_id = :dag_id
+              AND run_id = :run_id
+              AND key IN (
+                'total_raw', 'total_extracted',
+                'total_raw_loaded', 'total_clean',
+                'total_clean_loaded', 'watermark_start'
+              )
+        """), {"dag_id": dag_id, "run_id": run_id}).fetchall()
+
+        # Regrouper par task_id
+        metrics = {}
+        for task_id, key, value in rows:
+            if task_id not in metrics:
+                metrics[task_id] = {}
+            # La valeur XCom est stockée en JSON dans Airflow
+            try:
+                metrics[task_id][key] = json.loads(value)
+            except (json.JSONDecodeError, TypeError):
+                metrics[task_id][key] = value
+
+        return {"dag_id": dag_id, "run_id": run_id, "metrics": metrics}
+    finally:
+        db.close()
+
 
 @router.get("/metrics")
 def get_metrics():
-    """Métriques globales raw_leads + entreprise."""
     db = SessionLocal()
     try:
+        today = datetime.now().strftime("%Y-%m-%d")
+
         raw = db.execute(text("""
             SELECT
                 source,
-                COUNT(*)                            AS total,
+                COUNT(*)                                AS total,
                 ROUND(AVG(taux_completude)::numeric, 2) AS completude_moy,
-                MAX(loaded_at)                      AS last_loaded
+                MAX(loaded_at)                          AS last_loaded
             FROM raw_leads
             GROUP BY source
         """)).mappings().all()
 
         clean = db.execute(text("""
             SELECT
-                COUNT(*)                            AS total,
+                COUNT(*)                                AS total,
                 ROUND(AVG(taux_completude)::numeric, 2) AS completude_moy,
-                MAX(updated_at)                     AS last_updated
+                MAX(updated_at)                         AS last_updated
             FROM entreprise
         """)).mappings().first()
 
+        # Lignes insérées aujourd'hui
+        inserted_today = db.execute(text("""
+            SELECT COUNT(*) FROM entreprise
+            WHERE DATE(created_at) = :today
+        """), {"today": today}).scalar() or 0
+
+        # Lignes modifiées aujourd'hui (updated mais pas créées aujourd'hui)
+        updated_today = db.execute(text("""
+            SELECT COUNT(*) FROM entreprise
+            WHERE DATE(updated_at) = :today
+              AND DATE(created_at) != :today
+        """), {"today": today}).scalar() or 0
+
         scheduler = db.execute(text("""
-            SELECT latest_heartbeat
-            FROM job
+            SELECT latest_heartbeat FROM job
             WHERE job_type = 'SchedulerJob'
             ORDER BY latest_heartbeat DESC
             LIMIT 1
         """)).scalar()
 
         return json.loads(json.dumps({
-            "raw":       [dict(r) for r in raw],
-            "clean":     dict(clean) if clean else {},
-            "scheduler": {"last_heartbeat": scheduler},
+            "raw":            [dict(r) for r in raw],
+            "clean":          dict(clean) if clean else {},
+            "inserted_today": inserted_today,
+            "updated_today":  updated_today,
+            "scheduler":      {"last_heartbeat": scheduler},
         }, default=_serialize))
 
     finally:
         db.close()
 
-
 # ─────────────────────────────────────────────
 #  ENDPOINT 6 — Déclencher un DAG
 # ─────────────────────────────────────────────
 
+def _get_airflow_token(base_url: str, user: str, pwd: str) -> str:
+    """
+    Airflow 3 n'accepte plus Basic Auth sur /api/v2.
+    Il faut d'abord obtenir un JWT via /auth/token.
+    """
+    import requests
+    resp = requests.post(
+        f"{base_url}/auth/token",
+        json={"username": user, "password": pwd},
+        timeout=10,
+    )
+    resp.raise_for_status()
+    return resp.json()["access_token"]
+
+
 @router.post("/trigger/{dag_id}")
 def trigger_dag(dag_id: str, conf: dict = {}):
     import requests
+
     url  = os.getenv("AIRFLOW_URL",      "http://airflow-apiserver:8080")
     user = os.getenv("AIRFLOW_USER",     "ali")
     pwd  = os.getenv("AIRFLOW_PASSWORD", "ali")
 
     try:
+        # 1. Obtenir le token JWT Airflow 3
+        token = _get_airflow_token(url, user, pwd)
+
+        # 2. Déclencher le DAG avec le token
+        # Airflow 3 exige logical_date dans le body
+        from datetime import timezone
+        payload = {
+            "conf":         conf if conf else {},
+            "logical_date": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.000Z"),
+        }
         resp = requests.post(
             f"{url}/api/v2/dags/{dag_id}/dagRuns",
-            json={"conf": conf},
-            auth=(user, pwd),
+            json=payload,
+            headers={"Authorization": f"Bearer {token}"},
             timeout=10,
         )
         return {"status": resp.status_code, "data": resp.json()}
+
     except requests.RequestException as e:
         return {"status": 500, "error": str(e)}
+@router.get("/runs/today/{dag_id}")
+
+
+
+#compter les runs depuis l'API Airflow.
+def get_today_runs(dag_id: str):
+    db = SessionLocal()
+    try:
+        today = datetime.now().strftime("%Y-%m-%d")
+        rows = db.execute(text("""
+            SELECT state, COUNT(*) as cnt
+            FROM dag_run
+            WHERE dag_id  = :dag_id
+              AND DATE(logical_date) = :today
+            GROUP BY state
+        """), {"dag_id": dag_id, "today": today}).fetchall()
+
+        counts = {"success": 0, "failed": 0, "running": 0, "total": 0}
+        for state, cnt in rows:
+            counts[state] = cnt
+            counts["total"] += cnt
+
+        return counts
+    finally:
+        db.close()
+
+
+
+
+
+
+async def _query_prometheus(query: str) -> float | None:
+    """Exécute une PromQL query et retourne la valeur scalaire."""
+    try:
+        async with httpx.AsyncClient(timeout=3.0) as client:
+            resp = await client.get(
+                f"{PROMETHEUS_URL}/api/v1/query",
+                params={"query": query}
+            )
+            data = resp.json()
+            results = data.get("data", {}).get("result", [])
+            if results:
+                return float(results[0]["value"][1])
+    except Exception:
+        pass
+    return None
+
+
+async def _query_prometheus_range(
+    query: str,
+    start: str,
+    end: str,
+    step: str = "15s"
+) -> list:
+    """Exécute une PromQL range query — retourne une liste de [timestamp, value]."""
+    try:
+        async with httpx.AsyncClient(timeout=5.0) as client:
+            resp = await client.get(
+                f"{PROMETHEUS_URL}/api/v1/query_range",
+                params={"query": query, "start": start, "end": end, "step": step}
+            )
+            data = resp.json()
+            results = data.get("data", {}).get("result", [])
+            if results:
+                return results[0].get("values", [])
+    except Exception:
+        pass
+    return []
+
+
+# ── Endpoint : ressources système globales ──────────────
+@router.get("/resources/system")
+async def get_system_resources():
+    """CPU / RAM / Disk en temps réel via Node Exporter + Prometheus."""
+
+    cpu_query  = '100 - (avg(rate(node_cpu_seconds_total{mode="idle"}[1m])) * 100)'
+    ram_query  = '(1 - (node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes)) * 100'
+    disk_query = '100 - ((node_filesystem_avail_bytes{mountpoint="/"} / node_filesystem_size_bytes{mountpoint="/"}) * 100)'
+
+    cpu, ram, disk = await asyncio.gather(
+        _query_prometheus(cpu_query),
+        _query_prometheus(ram_query),
+        _query_prometheus(disk_query),
+    )
+
+    # Fallback psutil si Prometheus pas encore disponible
+    if cpu is None:
+        cpu  = psutil.cpu_percent(interval=0.1)
+        ram  = psutil.virtual_memory().percent
+        disk = psutil.disk_usage('/').percent
+
+    return {
+        "cpu":  round(cpu  or 0, 1),
+        "ram":  round(ram  or 0, 1),
+        "disk": round(disk or 0, 1),
+        "source": "prometheus" if cpu is not None else "psutil",
+    }
+
+
+# ── Endpoint : ressources par task (pendant l'exécution) ─
+@router.get("/resources/task/{dag_id}/{run_id}/{task_id}")
+async def get_task_resources(dag_id: str, run_id: str, task_id: str):
+    """
+    Ressources consommées pendant l'exécution d'une task spécifique.
+    Récupère les métriques dans la fenêtre temporelle start_date → end_date.
+    """
+    db = SessionLocal()
+    try:
+        task = db.execute(text("""
+            SELECT start_date, end_date, state
+            FROM task_instance
+            WHERE dag_id  = :dag_id
+              AND run_id  = :run_id
+              AND task_id = :task_id
+        """), {"dag_id": dag_id, "run_id": run_id, "task_id": task_id}).mappings().first()
+
+        if not task or not task["start_date"]:
+            return {"cpu": 0, "ram": 0, "disk": 0}
+
+        start = task["start_date"].isoformat()
+        end   = (task["end_date"] or datetime.utcnow()).isoformat()
+
+        cpu_query  = '100 - (avg(rate(node_cpu_seconds_total{mode="idle"}[30s])) * 100)'
+        ram_query  = '(1 - (node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes)) * 100'
+        disk_query = 'rate(node_disk_io_time_seconds_total[30s]) * 100'
+
+        cpu_vals, ram_vals, disk_vals = await asyncio.gather(
+            _query_prometheus_range(cpu_query,  start, end, "15s"),
+            _query_prometheus_range(ram_query,  start, end, "15s"),
+            _query_prometheus_range(disk_query, start, end, "15s"),
+        )
+
+        def avg_values(vals):
+            if not vals: return 0
+            return round(sum(float(v[1]) for v in vals) / len(vals), 1)
+
+        return {
+            "cpu":       avg_values(cpu_vals),
+            "ram":       avg_values(ram_vals),
+            "disk":      avg_values(disk_vals),
+            "cpu_series": [[v[0], round(float(v[1]), 1)] for v in cpu_vals],
+            "ram_series": [[v[0], round(float(v[1]), 1)] for v in ram_vals],
+        }
+
+    finally:
+        db.close()
+
+
+# ── Endpoint : historique CPU sur N minutes ──────────────
+@router.get("/resources/history")
+async def get_resources_history(minutes: int = 10):
+    """Série temporelle CPU/RAM sur les N dernières minutes."""
+    end   = datetime.utcnow().isoformat() + "Z"
+    start = datetime.utcnow().replace(
+        minute=datetime.utcnow().minute - minutes
+    ).isoformat() + "Z"
+
+    cpu_query = '100 - (avg(rate(node_cpu_seconds_total{mode="idle"}[1m])) * 100)'
+    ram_query = '(1 - (node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes)) * 100'
+
+    cpu_series, ram_series = await asyncio.gather(
+        _query_prometheus_range(cpu_query, start, end, "30s"),
+        _query_prometheus_range(ram_query, start, end, "30s"),
+    )
+
+    return {
+        "cpu": [[v[0], round(float(v[1]), 1)] for v in cpu_series],
+        "ram": [[v[0], round(float(v[1]), 1)] for v in ram_series],
+    }        

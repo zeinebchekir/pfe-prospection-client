@@ -6,6 +6,9 @@ from fastapi.middleware.cors import CORSMiddleware
 from apis.routers import sync, entreprise 
 from apis.routers.monitoring import router as monitoring_router
 from db.database import create_tables
+from prometheus_fastapi_instrumentator import Instrumentator
+from prometheus_client import Gauge, Counter, Histogram
+import psutil
 
 app = FastAPI(
     title="ETL Scraping Service",
@@ -21,7 +24,11 @@ origins = [
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=origins,
+    allow_origins=[
+        "http://localhost:5173",   # Vite dev server
+        "http://localhost:3000",   # si tu utilises un autre port
+        "http://127.0.0.1:5173",
+    ],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -37,6 +44,17 @@ app.include_router(sync.router,        prefix="/sync",        tags=["Sync"])
 app.include_router(entreprise.router, prefix="/entreprises", tags=["Entreprises"])
 app.include_router(monitoring_router)
 
+
+etl_task_cpu    = Gauge('etl_task_cpu_percent',    'CPU usage per task',    ['dag_id','task_id'])
+etl_task_ram    = Gauge('etl_task_ram_percent',    'RAM usage per task',    ['dag_id','task_id'])
+etl_task_disk   = Gauge('etl_task_disk_io_percent','Disk IO per task',      ['dag_id','task_id'])
+etl_rows_raw    = Counter('etl_rows_raw_total',    'Raw rows inserted',     ['source'])
+etl_rows_clean  = Counter('etl_rows_clean_total',  'Clean rows upserted',   ['source'])
+etl_run_success = Counter('etl_run_success_total', 'Successful runs',       ['dag_id'])
+etl_run_failed  = Counter('etl_run_failed_total',  'Failed runs',           ['dag_id'])
+
+# ── Prometheus endpoint ───────────────────────────────────
+Instrumentator().instrument(app).expose(app)
 @app.get("/")
 def root():
     return {"status": "ok", "message": "ETL Service API"}
