@@ -9,27 +9,29 @@
     <div class="flex-1 flex flex-col min-w-0">
 
       <!-- Header -->
-      <header class="h-16 border-b border-border bg-white sticky top-0 z-40 px-6 flex items-center justify-between shadow-sm">
-        <div class="flex items-center gap-3">
+      <header class="h-14 sm:h-16 border-b border-border bg-white sticky top-0 z-40 px-3 sm:px-6 flex items-center justify-between shadow-sm">
+        <div class="flex items-center gap-2 sm:gap-3 min-w-0">
           <button
             @click="router.push('/commercial/leads')"
-            class="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-tacir-lightgray text-tacir-darkgray transition-colors"
+            class="w-8 h-8 flex-shrink-0 flex items-center justify-center rounded-lg hover:bg-tacir-lightgray text-tacir-darkgray transition-colors"
           >
             <ArrowLeft class="h-4 w-4" />
           </button>
-          <span class="text-sm text-muted-foreground">Mes leads / Fiche entreprise</span>
+          <span class="text-xs sm:text-sm text-muted-foreground truncate hidden xs:block sm:block">Mes leads / Fiche entreprise</span>
         </div>
-        <div class="flex items-center gap-2">
+        <div class="flex items-center gap-1.5 sm:gap-2 flex-shrink-0">
           <button
             @click="editOpen = true"
-            class="inline-flex items-center gap-2 h-8 px-3 text-sm rounded-md border border-input hover:bg-accent transition-colors"
+            class="inline-flex items-center gap-1.5 h-8 px-2 sm:px-3 text-sm rounded-md border border-input hover:bg-accent transition-colors"
           >
-            <Pencil class="w-3.5 h-3.5" /> Modifier
+            <Pencil class="w-3.5 h-3.5" />
+            <span class="hidden sm:inline">Modifier</span>
           </button>
           <button
-            class="inline-flex items-center gap-2 h-8 px-3 text-sm rounded-md border border-input hover:bg-destructive/10 hover:text-destructive transition-colors"
+            class="inline-flex items-center gap-1.5 h-8 px-2 sm:px-3 text-sm rounded-md border border-input hover:bg-destructive/10 hover:text-destructive transition-colors"
           >
-            <Trash2 class="w-3.5 h-3.5" /> Supprimer
+            <Trash2 class="w-3.5 h-3.5" />
+            <span class="hidden sm:inline">Supprimer</span>
           </button>
         </div>
       </header>
@@ -56,15 +58,15 @@
         <div class="max-w-[1100px] mx-auto space-y-6">
 
           <!-- Hero card -->
-          <div class="bg-white rounded-xl border border-border shadow-card p-6">
-            <div class="flex items-start justify-between flex-wrap gap-4">
-              <div class="flex items-center gap-4">
-                <div class="w-14 h-14 rounded-xl bg-blue-50 flex items-center justify-center text-tacir-blue font-semibold text-xl flex-shrink-0">
+          <div class="bg-white rounded-xl border border-border shadow-card p-4 sm:p-6">
+            <div class="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
+              <div class="flex items-center gap-3 sm:gap-4">
+                <div class="w-12 h-12 sm:w-14 sm:h-14 rounded-xl bg-blue-50 flex items-center justify-center text-tacir-blue font-semibold text-lg sm:text-xl flex-shrink-0">
                   {{ initials }}
                 </div>
-                <div>
-                  <h1 class="text-xl font-semibold text-foreground">{{ displayLead.nom }}</h1>
-                  <p class="text-sm text-muted-foreground mt-0.5">
+                <div class="min-w-0">
+                  <h1 class="text-lg sm:text-xl font-semibold text-foreground truncate">{{ displayLead.nom }}</h1>
+                  <p class="text-xs sm:text-sm text-muted-foreground mt-0.5">
                     SIREN {{ displayLead.siren }} · {{ displayLead.ville }}, {{ displayLead.pays }}
                   </p>
                   <div class="flex flex-wrap gap-1.5 mt-2">
@@ -79,17 +81,18 @@
                   </div>
                 </div>
               </div>
-              <div class="flex items-center gap-4">
-                <div class="text-center p-3 rounded-xl bg-muted/50 min-w-[70px]">
+              <!-- Metric chips — wrap naturally on mobile -->
+              <div class="flex items-center gap-2 sm:gap-4 flex-wrap">
+                <div class="text-center p-2.5 sm:p-3 rounded-xl bg-muted/50 min-w-[64px] sm:min-w-[70px]">
                   <ScoreRing :score="displayLead.score" size="md" />
                   <p class="text-[10px] text-muted-foreground mt-1">Score</p>
                 </div>
-                <div class="text-center p-3 rounded-xl bg-muted/50 min-w-[70px]">
-                  <p class="text-lg font-semibold text-foreground">{{ displayLead.probaConversion }}%</p>
+                <div class="text-center p-2.5 sm:p-3 rounded-xl bg-muted/50 min-w-[64px] sm:min-w-[70px]">
+                  <p class="text-base sm:text-lg font-semibold text-foreground">{{ displayLead.probaConversion }}%</p>
                   <p class="text-[10px] text-muted-foreground">Proba.</p>
                 </div>
-                <div class="text-center p-3 rounded-xl bg-muted/50 min-w-[70px]">
-                  <p class="text-lg font-semibold text-foreground">{{ displayLead.completude }}%</p>
+                <div class="text-center p-2.5 sm:p-3 rounded-xl bg-muted/50 min-w-[64px] sm:min-w-[70px]">
+                  <p class="text-base sm:text-lg font-semibold text-foreground">{{ displayLead.completude }}%</p>
                   <p class="text-[10px] text-muted-foreground">Complétude</p>
                 </div>
               </div>

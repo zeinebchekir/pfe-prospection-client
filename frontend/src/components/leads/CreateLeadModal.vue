@@ -1,6 +1,6 @@
 <template>
   <Dialog :open="open" @update:open="handleOpenChange">
-    <DialogContent class="max-w-2xl max-h-[90vh] p-0 flex flex-col overflow-hidden">
+    <DialogContent class="w-[calc(100vw-2rem)] sm:max-w-2xl max-h-[92vh] p-0 flex flex-col overflow-hidden">
 
       <!-- ── HEADER ─────────────────────────────────────────────── -->
       <DialogHeader class="px-6 pt-6 pb-4 flex-shrink-0 border-b border-border">
@@ -88,7 +88,7 @@
           </div>
 
           <!-- SIREN + SIRET -->
-          <div class="grid grid-cols-2 gap-4">
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div class="space-y-1.5">
               <label class="block text-xs font-semibold text-foreground">SIREN</label>
               <p class="text-[10px] text-muted-foreground -mt-0.5">Identifiant national à 9 chiffres</p>
@@ -507,7 +507,7 @@
       </div>
 
       <!-- ── FOOTER ──────────────────────────────────────────────── -->
-      <div class="flex-shrink-0 border-t border-border px-6 py-4 flex items-center justify-between bg-muted/20">
+      <div class="flex-shrink-0 border-t border-border px-4 sm:px-6 py-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 bg-muted/20">
         <!-- Error summary -->
         <div>
           <p v-if="submitted && totalErrors > 0" class="flex items-center gap-1.5 text-xs text-red-600 font-semibold">
@@ -519,18 +519,18 @@
           </p>
         </div>
 
-        <div class="flex items-center gap-3">
+        <div class="flex items-center gap-3 w-full sm:w-auto">
           <button
             @click="handleClose"
             :disabled="isSaving"
-            class="h-9 px-4 text-sm rounded-md border border-input hover:bg-accent transition-colors disabled:opacity-50"
+            class="flex-1 sm:flex-none h-9 px-4 text-sm rounded-md border border-input hover:bg-accent transition-colors disabled:opacity-50"
           >
             Annuler
           </button>
           <button
             @click="handleCreate"
             :disabled="isSaving"
-            class="h-9 px-5 text-sm font-semibold rounded-md bg-tacir-blue text-white hover:opacity-90 active:scale-95 transition-all flex items-center gap-2 disabled:opacity-60 shadow-sm"
+            class="flex-1 sm:flex-none h-9 px-5 text-sm font-semibold rounded-md bg-tacir-blue text-white hover:opacity-90 active:scale-95 transition-all flex items-center justify-center gap-2 disabled:opacity-60 shadow-sm"
           >
             <Loader2 v-if="isSaving" class="h-4 w-4 animate-spin" />
             <PlusCircle v-else class="h-4 w-4" />

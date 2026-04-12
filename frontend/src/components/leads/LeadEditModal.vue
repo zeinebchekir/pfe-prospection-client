@@ -1,6 +1,6 @@
 <template>
   <Dialog :open="open" @update:open="emit('close')">
-    <DialogContent class="max-w-2xl max-h-[90vh] p-0 flex flex-col overflow-hidden">
+    <DialogContent class="w-[calc(100vw-2rem)] sm:max-w-2xl max-h-[92vh] p-0 flex flex-col overflow-hidden">
       <template v-if="lead">
         <!-- Header -->
         <DialogHeader class="p-6 pb-0 flex-shrink-0">
@@ -39,7 +39,7 @@
 
           <!-- ── Informations ── -->
           <div v-if="activeTab === 'general'" class="space-y-4">
-            <div class="grid grid-cols-2 gap-4">
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div class="space-y-1.5">
                 <label class="text-[11px] font-medium text-muted-foreground">Nom de l'entreprise</label>
                 <input v-model="form.nom" type="text" v-bind="inputClass" />
@@ -87,7 +87,7 @@
 
           <!-- ── Contact ── -->
           <div v-if="activeTab === 'contact'" class="space-y-4">
-            <div class="grid grid-cols-2 gap-4">
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div class="space-y-1.5">
                 <label class="text-[11px] font-medium text-muted-foreground">Ville</label>
                 <input v-model="form.ville" type="text" v-bind="inputClass" />
@@ -160,7 +160,7 @@
                 </div>
 
                 <!-- Editable fields in 2-col grid -->
-                <div class="grid grid-cols-2 gap-3">
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <div class="space-y-1">
                     <label class="text-[10px] font-medium text-muted-foreground uppercase tracking-wide">Prénom(s)</label>
                     <input
@@ -197,7 +197,7 @@
                       class="w-full h-8 text-sm rounded-md border border-input bg-background px-2.5 focus:outline-none focus:ring-1 focus:ring-tacir-blue"
                     />
                   </div>
-                  <div class="col-span-2 space-y-1">
+                  <div class="col-span-1 sm:col-span-2 space-y-1">
                     <label class="text-[10px] font-medium text-muted-foreground uppercase tracking-wide flex items-center gap-1">
                       <Linkedin class="w-3 h-3" /> LinkedIn URL
                     </label>
@@ -225,7 +225,7 @@
         </div>
 
         <!-- Footer -->
-        <div class="flex-shrink-0 border-t border-border px-6 py-4 flex justify-end gap-3 bg-background">
+        <div class="flex-shrink-0 border-t border-border px-4 sm:px-6 py-4 flex flex-col-reverse sm:flex-row justify-end gap-3 bg-background">
           <button
             @click="emit('close')"
             :disabled="isSaving"
