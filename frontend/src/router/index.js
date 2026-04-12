@@ -62,7 +62,7 @@ const routes = [
   {
     path: "/commercial",
     name: "CommercialDashboard",
-    component: () => import("@/pages/DashboardPage.vue"),
+    component: () => import("@/pages/commercial/DashboardPage.vue"),
     meta: { requiresAuth: true, roles: ["COMMERCIAL"] },
   },
   {
