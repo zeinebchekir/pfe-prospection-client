@@ -197,6 +197,28 @@
                       class="w-full h-8 text-sm rounded-md border border-input bg-background px-2.5 focus:outline-none focus:ring-1 focus:ring-tacir-blue"
                     />
                   </div>
+                  <div class="space-y-1">
+                    <label class="text-[10px] font-medium text-muted-foreground uppercase tracking-wide flex items-center gap-1">
+                      <Mail class="w-3 h-3" /> Email
+                    </label>
+                    <input
+                      v-model="d.email"
+                      type="email"
+                      placeholder="jean.dupont@entreprise.fr"
+                      class="w-full h-8 text-sm rounded-md border border-input bg-background px-2.5 focus:outline-none focus:ring-1 focus:ring-tacir-blue"
+                    />
+                  </div>
+                  <div class="space-y-1">
+                    <label class="text-[10px] font-medium text-muted-foreground uppercase tracking-wide flex items-center gap-1">
+                      <Phone class="w-3 h-3" /> Téléphone
+                    </label>
+                    <input
+                      v-model="d.telephone"
+                      type="tel"
+                      placeholder="+33 6 12 34 56 78"
+                      class="w-full h-8 text-sm rounded-md border border-input bg-background px-2.5 focus:outline-none focus:ring-1 focus:ring-tacir-blue"
+                    />
+                  </div>
                   <div class="col-span-1 sm:col-span-2 space-y-1">
                     <label class="text-[10px] font-medium text-muted-foreground uppercase tracking-wide flex items-center gap-1">
                       <Linkedin class="w-3 h-3" /> LinkedIn URL
@@ -250,7 +272,7 @@
 <script setup>
 import { ref, watch } from 'vue'
 import axios from 'axios'
-import { Users, Loader2, Plus, Trash2, Linkedin } from 'lucide-vue-next'
+import { Users, Loader2, Plus, Trash2, Linkedin, Mail, Phone } from 'lucide-vue-next'
 import { toast } from 'vue-sonner'
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle,
@@ -311,6 +333,7 @@ function addDirigeant() {
     _uid: nextUid(),
     nom: '', prenoms: '', qualite: '',
     nationalite: '', linkedin_url: '',
+    email: '', telephone: '',
   })
 }
 
@@ -353,6 +376,8 @@ watch(() => props.open, async (isOpen) => {
     qualite:      d.qualite || '',
     nationalite:  d.nationalite || '',
     linkedin_url: d.linkedinUrl || d.linkedin_url || '',
+    email:        d.email || '',
+    telephone:    d.telephone || '',
   }))
   activeTab.value = 'general'
 
@@ -392,6 +417,8 @@ watch(() => props.open, async (isOpen) => {
         qualite:      d.qualite || d.role || '',
         nationalite:  d.nationalite || '',
         linkedin_url: d.linkedin_url || '',
+        email:        d.email || '',
+        telephone:    d.telephone || '',
       }))
     }
   } catch (err) {

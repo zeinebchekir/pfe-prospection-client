@@ -167,8 +167,23 @@
                   <p class="text-sm font-medium text-foreground truncate">{{ d.fullName }}</p>
                   <p class="text-[11px] text-muted-foreground">{{ d.qualite }}</p>
                   <div class="flex items-center gap-3 mt-1.5 flex-wrap">
-                    <span class="text-[11px] text-muted-foreground italic">Email non renseigné</span>
-                    <span class="text-[11px] text-muted-foreground italic">Tél. non renseigné</span>
+                    <a
+                      v-if="d.email"
+                      :href="`mailto:${d.email}`"
+                      class="flex items-center gap-1 text-[11px] text-tacir-blue hover:underline"
+                    >
+                      <Mail class="w-3 h-3" />{{ d.email }}
+                    </a>
+                    <span v-else class="text-[11px] text-muted-foreground italic">Email non renseigné</span>
+
+                    <a
+                      v-if="d.telephone"
+                      :href="`tel:${d.telephone}`"
+                      class="flex items-center gap-1 text-[11px] text-tacir-blue hover:underline"
+                    >
+                      <Phone class="w-3 h-3" />{{ d.telephone }}
+                    </a>
+                    <span v-else class="text-[11px] text-muted-foreground italic">Tél. non renseigné</span>
                   </div>
                 </div>
                 <div class="flex flex-col items-end gap-1 flex-shrink-0">
@@ -335,8 +350,16 @@ const initials = computed(() => {
 
 const contactCompleteness = computed(() => {
   if (!displayLead.value || displayLead.value.nbDirigeants === 0) return 0
-  const withLinkedin = displayLead.value.dirigeants.filter((d) => d.linkedinUrl).length
-  return Math.round((withLinkedin / displayLead.value.nbDirigeants) * 100)
+  const dirs = displayLead.value.dirigeants
+  // 3 contact fields per dirigeant: email, telephone, LinkedIn
+  const totalFields = dirs.length * 3
+  const filledFields = dirs.reduce((sum, d) => {
+    return sum
+      + (d.email      ? 1 : 0)
+      + (d.telephone  ? 1 : 0)
+      + (d.linkedinUrl ? 1 : 0)
+  }, 0)
+  return Math.round((filledFields / totalFields) * 100)
 })
 
 // ---- Constants ----

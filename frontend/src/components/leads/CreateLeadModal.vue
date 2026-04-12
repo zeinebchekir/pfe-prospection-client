@@ -471,6 +471,38 @@
                   />
                 </div>
 
+                <!-- Email dirigeant -->
+                <div class="space-y-1">
+                  <label class="block text-[10px] font-semibold text-muted-foreground uppercase tracking-wide flex items-center gap-1">
+                    <Mail class="w-3 h-3" /> Email
+                  </label>
+                  <div class="relative">
+                    <Mail class="absolute left-2.5 top-1/2 -translate-y-1/2 w-3 h-3 text-muted-foreground" />
+                    <input
+                      v-model="d.email"
+                      type="email"
+                      placeholder="jean.dupont@entreprise.fr"
+                      class="w-full h-8 text-sm rounded-md border border-input bg-background pl-7 pr-2.5 focus:outline-none focus:ring-1 focus:ring-tacir-blue transition-colors"
+                    />
+                  </div>
+                </div>
+
+                <!-- Téléphone dirigeant -->
+                <div class="space-y-1">
+                  <label class="block text-[10px] font-semibold text-muted-foreground uppercase tracking-wide flex items-center gap-1">
+                    <Phone class="w-3 h-3" /> Téléphone
+                  </label>
+                  <div class="relative">
+                    <Phone class="absolute left-2.5 top-1/2 -translate-y-1/2 w-3 h-3 text-muted-foreground" />
+                    <input
+                      v-model="d.telephone"
+                      type="tel"
+                      placeholder="+33 6 12 34 56 78"
+                      class="w-full h-8 text-sm rounded-md border border-input bg-background pl-7 pr-2.5 focus:outline-none focus:ring-1 focus:ring-tacir-blue transition-colors"
+                    />
+                  </div>
+                </div>
+
                 <!-- LinkedIn URL (full width) -->
                 <div class="col-span-2 space-y-1">
                   <label class="block text-[10px] font-semibold text-muted-foreground uppercase tracking-wide flex items-center gap-1">
@@ -708,6 +740,7 @@ function addDirigeant() {
     _uid: nextUid(),
     prenom: '', nom: '', role: '',
     nationalite: '', linkedin_url: '',
+    email: '', telephone: '',
   })
 }
 
