@@ -3,7 +3,12 @@
  */
 
 import { createRouter, createWebHistory } from "vue-router"
-import {useAuth} from "@/composables/useAuth"
+import { useAuth } from "@/composables/useAuth"
+
+// Timestamp of the last successful session verification
+// Re-validate with backend every SESSION_TTL ms to detect expired tokens
+const SESSION_TTL = 15 * 60 * 1000 // 15 minutes
+let lastSessionCheck = 0
 
 const routes = [
   // ───────────── PUBLIC ROUTES ─────────────
@@ -168,26 +173,36 @@ const router = createRouter({
 router.beforeEach(async (to) => {
   const { isAuthenticated, fetchUser, user } = useAuth()
 
-  // First load → restore session
-  if (user.value === null) {
+  const requiresAuth = to.meta.requiresAuth === true
+  const guestOnly    = to.meta.guestOnly === true
+  const allowedRoles = to.meta.roles
+  const now          = Date.now()
+
+  // ── 1. First load OR session stale → verify with backend ──────────────
+  // Always check on first navigation (user.value === null).
+  // On subsequent navigations to protected routes, silently re-validate
+  // every SESSION_TTL ms to catch expired tokens without disrupting UX.
+  const isFirstLoad = user.value === null
+  const isStale     = requiresAuth && (now - lastSessionCheck > SESSION_TTL)
+
+  if (isFirstLoad || isStale) {
     await fetchUser()
+    if (user.value !== null) {
+      lastSessionCheck = now
+    }
   }
 
-  const requiresAuth = to.meta.requiresAuth === true
-  const guestOnly = to.meta.guestOnly === true
-  const allowedRoles = to.meta.roles
-
-  //  Not authenticated but route requires auth
+  // ── 2. Not authenticated → redirect to login ──────────────────────────
   if (requiresAuth && !isAuthenticated.value) {
     return { name: "Login", query: { redirect: to.fullPath } }
   }
 
-  //  Authenticated trying login/register
+  // ── 3. Authenticated trying to access guest-only page ─────────────────
   if (guestOnly && isAuthenticated.value) {
     return getDashboardRedirect(user.value && user.value.role)
   }
 
-  //  Role-based protection
+  // ── 4. Role-based protection ───────────────────────────────────────────
   if (
     requiresAuth &&
     allowedRoles &&
@@ -196,7 +211,7 @@ router.beforeEach(async (to) => {
     return getDashboardRedirect(user.value && user.value.role)
   }
 
-  // Redirect generic dashboard to role-specific
+  // ── 5. Redirect generic /dashboard to role-specific dashboard ────────
   if (to.name === "Dashboard" && isAuthenticated.value) {
     return getDashboardRedirect(user.value && user.value.role)
   }

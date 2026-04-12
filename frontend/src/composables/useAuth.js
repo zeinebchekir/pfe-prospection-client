@@ -18,6 +18,17 @@ const isLoading = ref(false)
 const error = ref(null)
 let fetchPromise = null
 
+// ── Session expiry handler ────────────────────────────────────────────────
+// Fired by axios.js when the refresh token is also expired/invalid.
+// Clears user state immediately before the hard redirect to /login.
+if (typeof window !== 'undefined') {
+  window.addEventListener('auth:session-expired', () => {
+    user.value = null
+    isLoading.value = false
+    fetchPromise = null
+  })
+}
+
 export function useAuth() {
   const isAuthenticated = computed(() => user.value !== null)
 
