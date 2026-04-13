@@ -524,3 +524,46 @@ with DAG(
     t_cleanup = PythonOperator(task_id="cleanup", python_callable=cleanup)
 
     t_scrape >> t_ext >> t_load_r >> t_clean >> t_load_c >> t_rapport >> t_cleanup
+
+
+# ══════════════════════════════════════════════
+#  DAG 5 — Sauvegarde manuel d'un lead (depuis Vue.js)
+# ══════════════════════════════════════════════
+
+def load_manual_datagouv(**context):
+    """
+    Task spéciale pour sauvegarder un lead validé par le commercial depuis le front-end.
+    Prend le dictionnaire de l'entreprise via la configuration (dag_run.conf).
+    """
+    dag_run = context["dag_run"]
+    entreprise_data = dag_run.conf.get("entreprise")
+    if not entreprise_data:
+        raise ValueError("Aucune donnée d'entreprise n'a été transmise dans la configuration")
+
+    run_id = context.get("run_id", "")
+    now_str = datetime.now().isoformat()
+    db = SessionLocal()
+    
+    # On reconstruit la structure {"entreprise": ..., "lead": None}
+    cr = {"entreprise": entreprise_data, "lead": None, "date_scraping": now_str}
+    
+    try:
+        # Save raw
+        crud.insert_raw_leads(db, [entreprise_data], source="dataGouv", dag_run_id=run_id, date_scraping=now_str)
+        # Save clean
+        inserted = crud.insert_clean_leads(db, [cr], source="dataGouv", dag_run_id=run_id, date_scraping=now_str)
+        print(f"[LOAD MANUAL LEAD] {inserted} lignes insérées/mises à jour dans clean_leads")
+    finally:
+        db.close()
+
+
+with DAG(
+    dag_id="load_manual_lead",
+    start_date=datetime(2026, 3, 27),
+    schedule=None,
+    catchup=False,
+    tags=["manual", "etl"],
+) as dag5:
+
+    t_load_manual = PythonOperator(task_id="load_manual_datagouv", python_callable=load_manual_datagouv)
+    t_load_manual

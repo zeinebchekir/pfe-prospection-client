@@ -80,6 +80,7 @@ class EntrepriseUpdate(BaseModel):
     pays: str | None = None
     telephone: str | None = None
     email: str | None = None
+    dirigeants: list | None = None
 
     class Config:
         extra = "forbid"
@@ -108,6 +109,7 @@ def update_entreprise(identifiant: str, payload: EntrepriseUpdate, db: Session =
     for k, v in update_data.items():
         if isinstance(v, str) and k != "email":
             update_data[k] = v.strip()
+        # For list types like dirigeants, we leave them as is
 
     # Map frontend fields to DB model columns
     field_mapping = {
@@ -123,7 +125,8 @@ def update_entreprise(identifiant: str, payload: EntrepriseUpdate, db: Session =
         "code_postal": "code_postal",
         "pays": "pays",
         "telephone": "telephone",
-        "email": "adresse_email"
+        "email": "adresse_email",
+        "dirigeants": "dirigeants"
     }
 
     mutated = False
@@ -214,3 +217,119 @@ def _get_airflow_token() -> str:
             detail=f"Impossible d'obtenir le token Airflow : {response.text}"
         )
     return response.json()["access_token"]
+
+
+
+@router.post("/search_from_query/{query}", summary="Rechercher et prévisualiser un lead (sans sauvegarder)")
+def search_lead_preview(query: str):
+    """
+    Étape 1 du workflow d'ajout de lead :
+    Scrape + Extract + Clean → renvoie les données au frontend pour prévisualisation.
+    Aucune écriture en base. Le commercial valide ensuite via /confirm_lead.
+    """
+    from scrapers.dataGouv import DataGouvService
+    from extractors.dataGouv.datagouv_extractor import extract_data_from_datagouv
+    from cleaners.dataGouv_cleaner import DataGouvCleaner
+
+    # 1. Scrape — top 5 résultats pour que le commercial puisse choisir
+    try:
+        service = DataGouvService()
+        data = service.fetch_data(service.base_url, params={"q": query, "per_page": 5})
+        if not data or not data.get("results"):
+            raise HTTPException(status_code=404, detail="Aucune entreprise trouvée dans DataGouv")
+        raw = data.get("results", [])
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Erreur scraping DataGouv: {str(e)}")
+
+    # 2. Extract (dirigeants, CA, etc.)
+    try:
+        extracted = extract_data_from_datagouv(raw)
+        if not extracted:
+            raise HTTPException(status_code=500, detail="L'extraction a échoué")
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Erreur extraction: {str(e)}")
+
+    # 3. Clean
+    records = [{"entreprise": item, "lead": None} for item in extracted]
+    try:
+        cleaned_records, _ = DataGouvCleaner().clean(records)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Erreur nettoyage: {str(e)}")
+
+    # On retourne les données nettoyées — pas de sauvegarde
+    preview = [r["entreprise"] for r in cleaned_records]
+    return {
+        "status": "preview",
+        "message": f"{len(preview)} résultat(s) trouvé(s) — choisissez une entreprise à ajouter",
+        "results": preview
+    }
+
+
+class ConfirmLeadPayload(BaseModel):
+    entreprise: dict  # le dict nettoyé que le frontend renvoie après sélection
+
+    class Config:
+        extra = "allow"
+
+
+
+@router.post("/confirm_lead", summary="Confirmer et sauvegarder un lead choisi en BDD")
+def confirm_lead(payload: ConfirmLeadPayload, db: Session = Depends(get_db)):
+    """
+    Étape 2 du workflow d'ajout de lead :
+    Le frontend renvoie l'entreprise choisie (depuis /search_from_query).
+    On nettoie une dernière fois et on sauvegarde directement en BDD (synchrone).
+    """
+    from cleaners.dataGouv_cleaner import DataGouvCleaner
+    from db import crud
+    import uuid
+
+    entreprise_data = payload.entreprise
+
+    if not entreprise_data or not entreprise_data.get("siren"):
+        raise HTTPException(status_code=422, detail="Données d'entreprise invalides ou SIREN manquant")
+
+    run_id  = f"manual_ui_{uuid.uuid4().hex[:8]}"
+    now_str = datetime.now().isoformat()
+
+    # Re-nettoyage pour garantir la cohérence
+    record = {"entreprise": entreprise_data, "lead": None}
+    try:
+        cleaned_records, _ = DataGouvCleaner().clean([record])
+        if not cleaned_records:
+            raise HTTPException(status_code=422, detail="Données entreprise invalides après nettoyage")
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Erreur nettoyage: {str(e)}")
+
+    try:
+        # 1. Raw trace
+        crud.insert_raw_leads(
+            db, [entreprise_data], source="dataGouv",
+            dag_run_id=run_id, date_scraping=now_str
+        )
+        # 2. Clean insert/upsert
+        for cr in cleaned_records:
+            cr["date_scraping"] = now_str
+        crud.insert_clean_leads(
+            db, cleaned_records, source="dataGouv",
+            dag_run_id=run_id, date_scraping=now_str
+        )
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Erreur insertion BDD: {str(e)}")
+
+    # Retourne l'objet final depuis la BDD
+    siren = cleaned_records[0]["entreprise"].get("siren")
+    lead_obj = db.query(Entreprise).filter_by(identifiant=siren).first() if siren else None
+
+    return {
+        "status":  "success",
+        "message": "Lead sauvegardé avec succès en base de données.",
+        "lead":    lead_obj or cleaned_records[0]["entreprise"],
+    }
+
