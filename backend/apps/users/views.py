@@ -52,6 +52,7 @@ def get_client_ip(request):
 
 class RegisterView(APIView):
     permission_classes = [AllowAny]
+    authentication_classes = []
 
     def post(self, request):
         serializer = RegisterSerializer(data=request.data)
@@ -73,6 +74,7 @@ class RegisterView(APIView):
 
 class LoginView(APIView):
     permission_classes = [AllowAny]
+    authentication_classes = []
 
     def post(self, request):
         serializer = LoginSerializer(data=request.data)
@@ -153,6 +155,7 @@ class LogoutView(APIView):
 
 class RefreshView(APIView):
     permission_classes = [AllowAny]
+    authentication_classes = []
 
     def post(self, request):
         refresh_token = request.COOKIES.get(settings.AUTH_COOKIE_REFRESH)
@@ -365,6 +368,7 @@ class ToggleUserActiveView(generics.UpdateAPIView):
 
 class PasswordResetRequestView(APIView):
     permission_classes = [AllowAny]
+    authentication_classes = []
 
     def post(self, request):
         serializer = PasswordResetRequestSerializer(data=request.data)
@@ -416,6 +420,7 @@ class PasswordResetRequestView(APIView):
 
 class PasswordResetConfirmView(APIView):
     permission_classes = [AllowAny]
+    authentication_classes = []
 
     def post(self, request):
         serializer = PasswordResetConfirmSerializer(data=request.data)

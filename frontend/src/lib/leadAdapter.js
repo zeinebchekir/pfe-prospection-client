@@ -93,6 +93,8 @@ function adaptDirigeant(d, index) {
     qualite: safeStr(d.qualite),
     nationalite: safeStr(d.nationalite),
     linkedinUrl: d.linkedin_url ?? null,
+    email: d.email || null,
+    telephone: d.telephone || null,
     typeDirigeant: safeStr(d.type_dirigeant),
     age: calculateAge(d.annee_de_naissance),
     anneeNaissance: d.annee_de_naissance ? parseInt(d.annee_de_naissance, 10) : null,

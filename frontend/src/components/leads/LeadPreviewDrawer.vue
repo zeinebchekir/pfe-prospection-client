@@ -1,6 +1,6 @@
 <template>
   <Sheet :open="open" @update:open="emit('close')">
-    <SheetContent class="w-[420px] sm:w-[460px] overflow-y-auto p-0 flex flex-col">
+    <SheetContent class="w-full sm:w-[460px] max-h-screen overflow-y-auto p-0 flex flex-col">
       <template v-if="lead">
         <!-- Header -->
         <SheetHeader class="p-5 pb-0">

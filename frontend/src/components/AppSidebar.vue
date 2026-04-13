@@ -6,7 +6,7 @@
     <div class="hidden md:flex flex-col w-64 h-screen sticky top-0 bg-white border-r border-border shadow-sm">
 
       <!-- Logo -->
-      <div data-v-53430c37="" class="px-10 py-4 border-b border-border flex items-center justify-center"><img data-v-53430c37="" src="/src/assets/logo.png" alt="crmPfe Logo" class="h-8 w-auto object-contain"></div>
+      <div data-v-53430c37="" class="px-10 py-4 border-b border-border flex items-center justify-center"><img data-v-53430c37="" src="@/assets/LetterX.png" alt="Logo" class="h-8 w-auto object-contain"></div>
 
       <!-- Navigation -->
       <nav class="flex-1 px-3 py-4 overflow-y-auto space-y-5">
@@ -102,7 +102,7 @@
         <div class="flex flex-col h-full">
 
           <!-- Logo -->
-          <div data-v-53430c37="" class="px-10 py-4 border-b border-border flex items-center justify-center"><img data-v-53430c37="" src="/src/assets/logo.png" alt="crmPfe Logo" class="h-8 w-auto object-contain"></div>
+          <div data-v-53430c37="" class="px-10 py-4 border-b border-border flex items-center justify-center"><img data-v-53430c37="" src="@/assets/LetterX.png" alt="Logo" class="h-8 w-auto object-contain"></div>
 
           <!-- Navigation -->
           <nav class="flex-1 px-3 py-4 overflow-y-auto space-y-5">

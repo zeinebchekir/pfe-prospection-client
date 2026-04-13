@@ -6,7 +6,7 @@
  * - X-CSRFToken header is read from the csrftoken cookie (not HttpOnly)
  *   and attached to every mutating request (Django CSRF protection)
  * - On 401 response → attempt silent token refresh then retry original request
- * - On refresh failure → redirect to login (clears expired session)
+ * - On refresh failure → force logout + redirect to /login
  *
  * Tokens are NEVER stored in localStorage or sessionStorage.
  */
@@ -31,7 +31,6 @@ const api = axios.create({
 
 // ── Request interceptor ────────────────────────────────────────────────────
 // Attach the CSRF token to every mutating request.
-// Django sets a csrftoken cookie (NOT HttpOnly) that we can read here.
 api.interceptors.request.use((config) => {
   const csrfToken = getCookie('csrftoken')
   if (csrfToken) {
@@ -44,6 +43,11 @@ api.interceptors.request.use((config) => {
 let isRefreshing = false
 let pendingRequests = [] // Queue requests while refreshing
 
+/**
+ * Resolve or reject all requests that were queued during a token refresh.
+ * On success: each pending request is retried.
+ * On failure: each pending request is rejected with the refresh error.
+ */
 function processQueue(error) {
   pendingRequests.forEach((prom) => {
     if (error) {
@@ -53,6 +57,21 @@ function processQueue(error) {
     }
   })
   pendingRequests = []
+}
+
+/**
+ * Force a clean logout:
+ * - Reset user state in useAuth (avoid circular import → use custom event)
+ * - Redirect to /login preserving the intended destination
+ */
+function forceLogout() {
+  // Dispatch a global event that main.js / App.vue listens to
+  window.dispatchEvent(new CustomEvent('auth:session-expired'))
+  // Hard redirect to break any Vue state
+  const currentPath = window.location.pathname
+  if (currentPath !== '/login') {
+    window.location.href = `/login?redirect=${encodeURIComponent(currentPath)}&reason=session_expired`
+  }
 }
 
 api.interceptors.response.use(
@@ -68,11 +87,12 @@ api.interceptors.response.use(
     // Don't try to refresh on auth endpoints themselves
     const authEndpoints = ['/auth/login/', '/auth/register/', '/auth/refresh/', '/auth/logout/']
     if (authEndpoints.some((ep) => originalRequest.url?.includes(ep))) {
+      // A 401 on /auth/me/ or /auth/login/ means credentials are wrong — not a token issue
       return Promise.reject(error)
     }
 
     if (isRefreshing) {
-      // Queue while a refresh is already in progress
+      // Queue while a refresh is already in progress — retry once resolved
       return new Promise((resolve, reject) => {
         pendingRequests.push({ resolve, reject })
       })
@@ -84,18 +104,20 @@ api.interceptors.response.use(
     isRefreshing = true
 
     try {
+      // Ask backend to rotate tokens using the HTTP-only refresh cookie
       await api.post('/auth/refresh/')
       isRefreshing = false
       processQueue(null)
+      // Retry the original failed request with the new access token
       return api(originalRequest)
     } catch (refreshError) {
       isRefreshing = false
       processQueue(refreshError)
-      
-      // Refresh failed — session is dead. 
-      // We don't redirect here to avoid circular dependency with router.
-      // The calling code (like router guards or useAuth) should handle the failure.
-      
+
+      // ── Refresh failed: both tokens are expired / invalid ──
+      // Clear the user state and redirect to login.
+      forceLogout()
+
       return Promise.reject(refreshError)
     }
   },

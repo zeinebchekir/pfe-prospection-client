@@ -17,6 +17,7 @@
     "vee-validate": "^4.15.1",
     "vue": "^3.4.27",
     "vue-router": "^4.3.3",
+    "vue-sonner": "^2.0.9",
     "zod": "^3.25.76"
   },
   "devDependencies": {
