@@ -1,6 +1,7 @@
 from airflow import DAG
 from airflow.operators.python import PythonOperator
 from datetime import datetime
+import psutil
 import sys, json, os
 
 # ── Fix: path must match the actual folder name on disk ──
@@ -54,6 +55,29 @@ def _update_sync(source: str, date: str, total_clean: int):
     with SessionLocal() as db:
         sync_crud.update_sync_state(db, source, date, total_clean)
 
+def measure_task(func):
+    """Décorateur qui mesure CPU/RAM d'une task et pousse via XCom."""
+    def wrapper(**context):
+        process = psutil.Process(os.getpid())
+
+        # Snapshot avant
+        cpu_before = process.cpu_percent(interval=0.1)
+        ram_before = process.memory_info().rss / (1024 ** 2)  # MB
+
+        # Exécuter la vraie task
+        result = func(**context)
+
+        # Snapshot après
+        cpu_after = process.cpu_percent(interval=0.1)
+        ram_after = process.memory_info().rss / (1024 ** 2)
+
+        # Pousser les métriques via XCom
+        context['ti'].xcom_push(key='cpu_used', value=round(cpu_after, 1))
+        context['ti'].xcom_push(key='ram_used_mb', value=round(ram_after, 1))
+        context['ti'].xcom_push(key='ram_delta_mb', value=round(ram_after - ram_before, 1))
+
+        return result
+    return wrapper
 
 # ──────────────────────────────────────────────
 #  DB INIT
@@ -68,7 +92,7 @@ def init_db(**context):
 # ──────────────────────────────────────────────
 #  SCRAPING
 # ──────────────────────────────────────────────
-
+@measure_task
 def scrape_boamp(is_incremental: bool = False, **context):
     aujourdhui = datetime.now().strftime("%Y-%m-%dT%H:%M:%S")
     codes      = ["186", "14", "453", "463", "454", "163"]
@@ -98,7 +122,7 @@ def scrape_boamp(is_incremental: bool = False, **context):
     context["ti"].xcom_push(key="watermark_start", value=aujourdhui)
     print(f"[SCRAPE BOAMP] {len(raw)} avis bruts")
 
-
+@measure_task
 def scrape_datagouv(**context):
     aujourdhui = datetime.now().strftime("%Y-%m-%dT%H:%M:%S")
     conf       = context.get("dag_run").conf or {}
@@ -115,7 +139,7 @@ def scrape_datagouv(**context):
     context["ti"].xcom_push(key="watermark_start", value=aujourdhui)
     print(f"[SCRAPE DATAGOUV] {len(raw)} entreprises brutes")
 
-
+@measure_task
 def scrape_sirene(**context):
     aujourdhui = datetime.now().strftime("%Y-%m-%dT%H:%M:%S")
     last_sync  = _get_last_sync("datagouv")
@@ -137,7 +161,7 @@ def scrape_sirene(**context):
 # ──────────────────────────────────────────────
 #  EXTRACTION
 # ──────────────────────────────────────────────
-
+@measure_task
 def extract_boamp(**context):
     raw   = _read(RAW_BOAMP_PATH)
     clean = get_global_information(raw)
@@ -145,14 +169,14 @@ def extract_boamp(**context):
     context["ti"].xcom_push(key="total_extracted", value=len(clean))
     print(f"[EXTRACT BOAMP] {len(clean)} enregistrements extraits")
 
-
+@measure_task
 def enrich_boamp(**context):
     records = _read(RAW_BOAMP_PATH)
     enriched = enrich_boamp_data(records)
     _write(RAW_BOAMP_PATH, enriched)
     print(f"[ENRICH BOAMP] {len(enriched)} enregistrements enrichis avec DataGouv")
 
-
+@measure_task
 def extract_datagouv(**context):
     raw   = _read(RAW_DATAGOUV_PATH)
     clean = extract_data_from_datagouv(raw)
@@ -164,7 +188,7 @@ def extract_datagouv(**context):
 # ──────────────────────────────────────────────
 #  LOAD RAW  (extracted → raw_leads table)
 # ──────────────────────────────────────────────
-
+@measure_task
 def load_raw_boamp(**context):
     ti = context["ti"]
     run_id  = context.get("run_id", "")
@@ -185,7 +209,7 @@ def load_raw_boamp(**context):
     context["ti"].xcom_push(key="total_raw_loaded", value=inserted)
     print(f"[LOAD RAW BOAMP] {inserted} lignes → raw_leads")
 
-
+@measure_task
 def load_raw_datagouv(**context):
     ti = context["ti"]
     run_id  = context.get("run_id", "")
@@ -219,7 +243,7 @@ def _ensure_records_shape(data: list) -> list:
         return data
     return [{"entreprise": item, "lead": None} for item in data]
 
-
+@measure_task
 def clean_boamp(**context):
     raw_data = _read(RAW_BOAMP_PATH)
     records  = _ensure_records_shape(raw_data)
@@ -230,7 +254,7 @@ def clean_boamp(**context):
     for issue in report.issues:
         print(f"  ⚠ index {issue['index']}: {issue['reason']}")
 
-
+@measure_task
 def clean_datagouv(**context):
     raw_data = _read(RAW_DATAGOUV_PATH)
     records  = _ensure_records_shape(raw_data)
@@ -245,7 +269,7 @@ def clean_datagouv(**context):
 # ──────────────────────────────────────────────
 #  LOAD CLEAN  (cleaned → clean_leads table)
 # ──────────────────────────────────────────────
-
+@measure_task
 def load_clean_boamp(**context):
     ti = context["ti"]
     run_id  = context.get("run_id", "")
@@ -266,7 +290,7 @@ def load_clean_boamp(**context):
     context["ti"].xcom_push(key="total_clean_loaded", value=inserted)
     print(f"[LOAD CLEAN BOAMP] {inserted} lignes → clean_leads")
 
-
+@measure_task
 def load_clean_datagouv(**context):
     ti = context["ti"]
     run_id  = context.get("run_id", "")
@@ -288,6 +312,8 @@ def load_clean_datagouv(**context):
         db.close()
     context["ti"].xcom_push(key="total_clean_loaded", value=inserted)
     print(f"[LOAD CLEAN DATAGOUV] {inserted} lignes → clean_leads")
+
+@measure_task    
 def load_clean_sirene(**context):
     ti = context["ti"]
     run_id  = context.get("run_id", "")
@@ -324,7 +350,7 @@ def cleanup(**context):
 # ──────────────────────────────────────────────
 #  RAPPORT FINAL
 # ──────────────────────────────────────────────
-
+@measure_task
 def rapport_final(sources: list, **context):
     ti = context["ti"]
     print("=" * 55)

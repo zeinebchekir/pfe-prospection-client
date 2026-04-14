@@ -21,10 +21,14 @@ PROMETHEUS_URL = os.getenv("PROMETHEUS_URL", "http://prometheus:9090")
 #  HELPERS
 # ─────────────────────────────────────────────
 
+import decimal
+
 def _serialize(obj):
     """Convertit les dates en string pour JSON."""
     if isinstance(obj, datetime):
         return obj.isoformat()
+    if isinstance(obj, decimal.Decimal):
+        return float(obj)
     raise TypeError(f"Object of type {type(obj)} is not JSON serializable")
 
 
@@ -176,13 +180,13 @@ def get_history(dag_id: str, limit: int = 10):
             SELECT
                 run_id,
                 state,
-                execution_date,
+                logical_date,
                 start_date,
                 end_date,
                 EXTRACT(EPOCH FROM (end_date - start_date)) AS duration_sec
             FROM dag_run
             WHERE dag_id = :dag_id
-            ORDER BY execution_date DESC
+            ORDER BY logical_date DESC
             LIMIT :limit
         """), {"dag_id": dag_id, "limit": limit}).mappings().all()
         return json.loads(json.dumps([dict(r) for r in rows], default=_serialize))
@@ -315,15 +319,15 @@ def get_metrics():
     try:
         today = datetime.now().strftime("%Y-%m-%d")
 
-        raw = db.execute(text("""
-            SELECT
-                source,
-                COUNT(*)                                AS total,
-                ROUND(AVG(taux_completude)::numeric, 2) AS completude_moy,
-                MAX(loaded_at)                          AS last_loaded
-            FROM raw_leads
-            GROUP BY source
-        """)).mappings().all()
+        # raw = db.execute(text("""
+        #     SELECT
+        #         source,
+        #         COUNT(*)                                AS total,
+        #         ROUND(AVG(taux_completude)::numeric, 2) AS completude_moy,
+        #         MAX(loaded_at)                          AS last_loaded
+        #     FROM raw_leads
+        #     GROUP BY source
+        # """)).mappings().all()
 
         clean = db.execute(text("""
             SELECT
@@ -354,7 +358,7 @@ def get_metrics():
         """)).scalar()
 
         return json.loads(json.dumps({
-            "raw":            [dict(r) for r in raw],
+            # "raw":            [dict(r) for r in raw],
             "clean":          dict(clean) if clean else {},
             "inserted_today": inserted_today,
             "updated_today":  updated_today,
@@ -581,3 +585,245 @@ async def get_resources_history(minutes: int = 10):
         "cpu": [[v[0], round(float(v[1]), 1)] for v in cpu_series],
         "ram": [[v[0], round(float(v[1]), 1)] for v in ram_series],
     }        
+
+
+
+
+
+
+    ############## superviser les ressources depuis xcom  ##############
+
+
+    @router.get("/resources/task/{dag_id}/{run_id}/{task_id}")
+    def get_task_resources(dag_id: str, run_id: str, task_id: str):
+        db = SessionLocal()
+        try:
+            # Lire les XCom poussés par le décorateur
+            xcoms = db.execute(text("""
+                SELECT key, value
+            FROM xcom
+            WHERE dag_id  = :dag_id
+              AND run_id  = :run_id
+              AND task_id = :task_id
+              AND key IN ('cpu_used', 'ram_used_mb', 'ram_delta_mb')
+            """), {
+            "dag_id":  dag_id,
+            "run_id":  run_id,
+            "task_id": task_id,
+            }).mappings().all()
+
+            xcom_map = {x["key"]: x["value"] for x in xcoms}
+
+            cpu      = float(xcom_map.get("cpu_used",    0) or 0)
+            ram_mb   = float(xcom_map.get("ram_used_mb", 0) or 0)
+            ram_pct  = round((ram_mb / 4096) * 100, 1)  # 4GB total
+
+        # Fallback estimation si XCom pas encore disponible
+            if cpu == 0 and ram_pct == 0:
+                cpu, ram_pct, disk = _estimate_task_resources(task_id, 0)
+            else:
+                disk = _estimate_task_resources(task_id, 0)[2]
+
+            return {
+                "cpu":       cpu,
+                "ram":       ram_pct,
+                "ram_mb":    ram_mb,
+                "disk":      disk,
+                "source":    "xcom" if xcom_map else "estimated",
+            }
+        finally:
+            db.close()
+
+
+
+######################### ANALYTICS ######################""""  
+
+
+from fastapi import Depends
+from sqlalchemy.orm import Session
+from sqlalchemy import text
+from typing import List
+from db.database import get_db
+
+# WARNING: Make sure these imports match your actual paths. 
+# Previously this file used db.database.SessionLocal
+from .schemas.monitoringSchema import (
+    DagSuccessRateItem, TaskDurationItem,
+    VolumeItem, DataQualityItem, KPISummary
+)
+
+
+@router.get("/dag-success-rate", response_model=List[DagSuccessRateItem])
+def get_dag_success_rate(days: int = 14, db: Session = Depends(get_db)):
+    """Graph 1 — taux succès/échec/retry par DAG"""
+    query = text("""
+        SELECT
+            dag_id,
+            COUNT(*) FILTER (WHERE state = 'success') AS success,
+            COUNT(*) FILTER (WHERE state = 'failed')  AS failed,
+            COUNT(*) FILTER (WHERE state = 'up_for_retry') AS up_for_retry,
+            COUNT(*) AS total
+        FROM dag_run
+        WHERE logical_date >= NOW() - CAST(:days || ' days' AS INTERVAL)
+        GROUP BY dag_id
+        ORDER BY dag_id
+    """)
+    rows = db.execute(query, {"days": days}).fetchall()
+    result = []
+    for row in rows:
+        total = row.total or 1
+        result.append(DagSuccessRateItem(
+            dag_id=row.dag_id,
+            success=row.success,
+            failed=row.failed,
+            up_for_retry=row.up_for_retry,
+            total=total,
+            success_rate=round(row.success / total * 100, 1)
+        ))
+    return result
+
+
+@router.get("/task-duration", response_model=List[TaskDurationItem])
+def get_task_duration(dag_id: str = "sync_boamp", days: int = 7,
+                      db: Session = Depends(get_db)):
+    """Graph 2 — durée moyenne par tâche (pour un DAG donné)"""
+    query = text("""
+        SELECT
+            task_id,
+            ROUND(AVG(EXTRACT(EPOCH FROM (end_date - start_date))), 1) AS avg_duration_sec,
+            ROUND(MAX(EXTRACT(EPOCH FROM (end_date - start_date))), 1) AS max_duration_sec
+        FROM task_instance
+        WHERE dag_id = :dag_id
+          AND start_date >= NOW() - CAST(:days || ' days' AS INTERVAL)
+          AND state = 'success'
+          AND end_date IS NOT NULL
+        GROUP BY task_id
+        ORDER BY avg_duration_sec DESC
+    """)
+    rows = db.execute(query, {"dag_id": dag_id, "days": days}).fetchall()
+    return [TaskDurationItem(
+        task_id=row.task_id,
+        avg_duration_sec=float(row.avg_duration_sec or 0),
+        max_duration_sec=float(row.max_duration_sec or 0)
+    ) for row in rows]
+
+
+@router.get("/volume-over-time", response_model=List[VolumeItem])
+def get_volume_over_time(days: int = 7, db: Session = Depends(get_db)):
+    """Graph 3 — volume traité par source/jour (via XCom)"""
+    # Fix join to use run_id, task_id, and dag_id.
+    # Replace execution_date with start_date.
+    query = text("""
+        SELECT
+            DATE(ti.start_date)::text AS date,
+            ti.dag_id,
+            COALESCE(
+                (xc.value::jsonb->>'records_count')::int, 0
+            ) AS records_processed
+        FROM task_instance ti
+        LEFT JOIN xcom xc
+            ON xc.dag_id = ti.dag_id
+           AND xc.task_id = ti.task_id
+           AND xc.run_id = ti.run_id
+           AND xc.key = 'records_count'
+        WHERE ti.task_id = 'load_clean'
+          AND ti.start_date >= NOW() - CAST(:days || ' days' AS INTERVAL)
+          AND ti.state = 'success'
+        ORDER BY date, ti.dag_id
+    """)
+    rows = db.execute(query, {"days": days}).fetchall()
+    return [VolumeItem(
+        date=row.date,
+        dag_id=row.dag_id,
+        records_processed=row.records_processed
+    ) for row in rows]
+
+
+@router.get("/data-quality", response_model=List[DataQualityItem])
+def get_data_quality(db: Session = Depends(get_db)):
+    """Graph 4 — taux de remplissage des champs critiques sur la table entreprise"""
+    query = text("""
+        SELECT
+            'siret' AS field_name,
+            ROUND(100.0 * COUNT(*) FILTER (WHERE siret IS NOT NULL AND siret != '')
+                / NULLIF(COUNT(*), 0), 1) AS fill_rate
+        FROM entreprise
+        WHERE created_at >= NOW() - INTERVAL '7 days'
+
+        UNION ALL SELECT 'nom',
+            ROUND(100.0 * COUNT(*) FILTER (WHERE nom IS NOT NULL AND nom != '')
+                / NULLIF(COUNT(*), 0), 1)
+        FROM entreprise WHERE created_at >= NOW() - INTERVAL '7 days'
+        
+        UNION ALL SELECT 'ville',
+            ROUND(100.0 * COUNT(*) FILTER (WHERE ville IS NOT NULL AND ville != '')
+                / NULLIF(COUNT(*), 0), 1)
+        FROM entreprise WHERE created_at >= NOW() - INTERVAL '7 days'
+
+        UNION ALL SELECT 'telephone',
+            ROUND(100.0 * COUNT(*) FILTER (WHERE telephone IS NOT NULL AND telephone != '')
+                / NULLIF(COUNT(*), 0), 1)
+        FROM entreprise WHERE created_at >= NOW() - INTERVAL '7 days'
+        UNION ALL SELECT 'adresse_email',
+            ROUND(100.0 * COUNT(*) FILTER (WHERE adresse_email IS NOT NULL AND adresse_email != '')
+                / NULLIF(COUNT(*), 0), 1)
+        FROM entreprise WHERE created_at >= NOW() - INTERVAL '7 days'
+        
+    """)
+    rows = db.execute(query).fetchall()
+    return [DataQualityItem(
+        field_name=row.field_name,
+        fill_rate=float(row.fill_rate or 0)
+    ) for row in rows]
+
+@router.get("/data-quality-boamp", response_model=List[DataQualityItem])
+def get_data_quality_boamp(db: Session = Depends(get_db)):
+    """Graph 4 — taux de remplissage des champs spécifiques JSON dans info_boamp"""
+    query = text("""
+        SELECT
+            'boamp_besoin' AS field_name,
+            ROUND(100.0 * COUNT(*) FILTER (WHERE info_boamp IS NOT NULL AND info_boamp->>'besoin' IS NOT NULL AND info_boamp->>'besoin' != '')
+                / NULLIF(COUNT(*) FILTER (WHERE info_boamp IS NOT NULL), 0), 1) AS fill_rate
+        FROM entreprise
+        WHERE created_at >= NOW() - INTERVAL '7 days'
+
+        UNION ALL SELECT 'boamp_date_limite',
+            ROUND(100.0 * COUNT(*) FILTER (WHERE info_boamp IS NOT NULL AND info_boamp->>'date_limite' IS NOT NULL AND info_boamp->>'date_limite' != '')
+                / NULLIF(COUNT(*) FILTER (WHERE info_boamp IS NOT NULL), 0), 1)
+        FROM entreprise WHERE created_at >= NOW() - INTERVAL '7 days'
+
+        UNION ALL SELECT 'boamp_info_complementaire',
+            ROUND(100.0 * COUNT(*) FILTER (WHERE info_boamp IS NOT NULL AND info_boamp->>'info_complementaire' IS NOT NULL AND info_boamp->>'info_complementaire' != '')
+                / NULLIF(COUNT(*) FILTER (WHERE info_boamp IS NOT NULL), 0), 1)
+        FROM entreprise WHERE created_at >= NOW() - INTERVAL '7 days'
+        UNION ALL SELECT 'boamp_info_lienOffre',
+            ROUND(100.0 * COUNT(*) FILTER (WHERE info_boamp IS NOT NULL AND info_boamp->>'lienOffre' IS NOT NULL AND info_boamp->>'lienOffre' != '')
+                / NULLIF(COUNT(*) FILTER (WHERE info_boamp IS NOT NULL), 0), 1)
+        FROM entreprise WHERE created_at >= NOW() - INTERVAL '7 days'
+    """)
+    rows = db.execute(query).fetchall()
+    return [DataQualityItem(
+        field_name=row.field_name,
+        fill_rate=float(row.fill_rate or 0)
+    ) for row in rows]
+
+@router.get("/kpi-summary", response_model=KPISummary)
+def get_kpi_summary(db: Session = Depends(get_db)):
+    """KPI cards en haut du dashboard"""
+    q = text("""
+        SELECT
+            ROUND(100.0 * COUNT(*) FILTER (WHERE state='success')
+                / NULLIF(COUNT(*), 0), 1) AS global_success_rate,
+            COUNT(*) AS total_runs,
+            ROUND(AVG(EXTRACT(EPOCH FROM (end_date - start_date)) / 60.0), 1) AS avg_min
+        FROM dag_run
+        WHERE logical_date >= NOW() - INTERVAL '7 days'
+          AND end_date IS NOT NULL
+    """)
+    row = db.execute(q).fetchone()
+    return KPISummary(
+        global_success_rate=float(row.global_success_rate or 0),
+        total_runs_7d=row.total_runs,
+        avg_pipeline_duration_min=float(row.avg_min or 0),
+        data_quality_rate=0.0  # calculé séparément si besoin
+    )

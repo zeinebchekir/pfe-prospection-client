@@ -44,7 +44,7 @@ class SireneService(BaseScraper):
         curseur = "*"   # curseur initial obligatoire
         total = None
 
-        while True:
+        while True :
             # Curseur encodé manuellement pour éviter les problèmes d'encodage requests
             url = (
                 f"{self.base_url}"

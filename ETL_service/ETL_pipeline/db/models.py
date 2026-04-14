@@ -12,13 +12,14 @@ DataGouv rows  → company fields populated, lead fields (besoin, date_limite…
 BOAMP rows     → company + lead fields populated, DataGouv-only fields (ca, taille…) NULL
 """
 
+from alembic.util.sqla_compat import AUTOINCREMENT_DEFAULT
 from sqlalchemy import (
     Column, String, Text, Float, Integer,
     DateTime, Date, func, ForeignKey,
 )
 from sqlalchemy.dialects.postgresql import JSONB
 from db.database import Base
-
+from sqlalchemy import LargeBinary
 
 # ──────────────────────────────────────────────────────────────
 #  TABLE 1 — raw_leads  (staging, pre-cleaning)
@@ -84,7 +85,7 @@ class Entreprise(Base):
     """
     __tablename__ = "entreprise"
 
-    identifiant    = Column(String(25), primary_key=True)
+    identifiant    = Column(String(25), primary_key=True,autoincrement=True)
 
     # Link back to the raw staging row (nullable — bulk loads may skip it)
     raw_lead_id    = Column(Integer, ForeignKey("raw_leads.id"), nullable=True, index=True)
@@ -137,3 +138,16 @@ class SyncState(Base):
     source            = Column(String, nullable=False, primary_key=True)
     last_sync         = Column(DateTime(timezone=True), server_default=func.now())
     nbEnregistrements = Column(Integer, nullable=False)
+
+class RapportPDF(Base):
+    __tablename__ = "rapport_pdf"
+
+    id             = Column(Integer, primary_key=True, autoincrement=True)
+    report_date  = Column(Date, nullable=False, unique=True)  # ← unique=True ajouté    nb_runs        = Column(Integer, nullable=False)
+    nb_runs=Column(Integer, nullable=False)
+    nb_alertes     = Column(Integer, nullable=False)
+    success_rate   = Column(Float,   nullable=False)
+    generated_at     = Column(DateTime(timezone=True), server_default=func.now())
+    summary_json   = Column(JSONB,   nullable=True)
+    pdf_bytes      = Column(LargeBinary, nullable=False)
+    

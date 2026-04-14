@@ -190,10 +190,8 @@ def _map_data(rec: dict, source: str,date_scraping: date_type | None,dag_run_id:
 
     boamp_data = entreprise.get("data_from_boamp") or {}
     # Provide identifiant exactly as needed by the PostgreSQL schema (VARCHAR 25)
-    _identifiant = str(entreprise.get("siren")) if source == "dataGouv" else str(boamp_data.get("idweb") or entreprise.get("siret"))
     
     return Entreprise(
-        identifiant          = _identifiant,
         siren                = entreprise.get("siren"),
         siret                = entreprise.get("siret"),
         nom                  = entreprise.get("nom"),
@@ -217,6 +215,7 @@ def _map_data(rec: dict, source: str,date_scraping: date_type | None,dag_run_id:
         date_derniere_modif_site = _to_date(entreprise.get("dateDerniereModification")) if source == "dataGouv" else _to_date(entreprise.get("dateMAJ")),
         date_scraping        = _to_date(date_scraping),
         taux_completude      = entreprise.get("taux_completude"),
+        status="Nouveau"
         
         
     )
