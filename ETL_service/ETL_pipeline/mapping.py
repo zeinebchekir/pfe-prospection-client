@@ -141,8 +141,24 @@ formes_juridiques = {
     "5710": "SAS (Société par Actions Simplifiée)",
     "5720": "SASU (SAS à associé unique)",
 
+    # Sociétés en commandite
+    "5200": "Société en commandite par actions (SCA)",
+    "5202": "Société en commandite par actions (SCA)",
+
+    # Sociétés coopératives
+    "5192": "Société coopérative de production à responsabilité limitée (SCOP)",
+    "5191": "Société coopérative commerciale de consommation",
+    "5193": "Société coopérative d'intérêt collectif à responsabilité limitée",
+    "5194": "Société coopérative d'intérêt maritime à responsabilité limitée",
+    "5195": "Société coopérative de transport",
+    "5196": "Société coopérative ouvrière de production (SCOP) à responsabilité limitée",
+
+    # Autres sociétés civiles
+    "6596": "Société civile de moyens (SCM)",
+
     # Sociétés civiles
     "6540": "SCI (Société Civile Immobilière)",
+    "6599": "Autre société civile",
     "6316": "SCI de construction-vente",
     "6317": "SCI d'attribution",
     "6318": "SCPI (Société Civile de Placement Immobilier)",
@@ -173,6 +189,8 @@ formes_juridiques = {
     "7230": "Région",
     "7310": "Établissement public local d'enseignement",
     "7340": "Centre hospitalier",
+    "7344": "Métropole",
+    "7355": "Syndicat mixte ouvert",
     "7364": "Établissement d'hébergement pour personnes âgées (EHPA)",
     "7381": "Office public HLM",
     "7382": "Office public d'aménagement et construction (OPAC)",
@@ -199,5 +217,60 @@ formes_juridiques = {
     "9110": "Syndicat de copropriété",
     "9150": "Association syndicale libre",
     "9210": "Association non déclarée",
+    "7110": "Société en nom collectif (SNC)",
+    "7171": "Société en nom collectif (SNC)",
+
+    # Sociétés d'exercice libéral
+    "7385": "Société de participations financières de professions libérales (SPFPL)",
+
+    # Autres personnes morales de droit privé
+    "7400": "Autre personne morale de droit privé",
     "9900": "Autre personne morale de droit privé",
+
+    # --- Codes ajoutés suite à l'audit DQ (codes non encore mappés) ---
+    # Établissements publics complémentaires
+    "7354": "Syndicat mixte fermé",
+    "7410": "Groupement de collectivités territoriales",
+    "7172": "Syndicat de communes (SIVU / SIVOM)",
+    "7113": "Conseil départemental",
+    "7112": "Conseil régional",
+    "7111": "Sénat",
+    # Autres personnes morales
+    "4150": "Société à responsabilité limitée (SARL de droit local Alsace-Moselle)",
+    "6411": "Société d'assurance mutuelle",
+    "6599": "Autre société civile",
+    # Complément établissements publics
+    "7381": "Office public HLM",
+    "7382": "Office public d'aménagement et construction (OPAC)",
+    "7389": "Autre établissement public",
+    # Autres codes utilisateurs signalés
+    "5596": "SASU (SAS unipersonnelle)",
+    "1000": "Entrepreneur individuel",
+
+    # --- Codes supplémentaires détectés en base (audit DB complet) ---
+    # Syndicats / collectivités
+    "7171": "Syndicat de communes (SIVU / SIVOM)",
+    "7179": "Autre établissement public local à caractère administratif",
+    "7346": "Syndicat de copropriété (grande taille)",
+    "7348": "Syndicat de copropriété spécialisé",
+    "7160": "Communauté de communes",
+    "7361": "Autre collectivité locale",
+    "7373": "Établissement public local culturel",
+    "7379": "Autre établissement public national",
+    "7383": "OPAC (Office Public d'Aménagement et de Construction)",
+    # Sociétés civiles complémentaires
+    "6595": "Société civile de placement collectif",
+    "6560": "Autre société civile foncière",
+    # SCI complémentaires
+    "4110": "SCI non notifiée",
+    "4120": "SCI de construction-vente",
+    "4140": "SCI d'attribution",
+    "4160": "SCI para-hôtelière",
+    # Sociétés coopératives supplémentaires
+    "5194": "Société coopérative d'intérêt maritime à responsabilité limitée",
+    "5196": "Société coopérative ouvrière de production (à responsabilité limitée)",
+    "5306": "Autre société en commandite",
+    "5308": "Société en commandite simple (SCS)",
+    "5785": "SAS coopérative",
+    "5800": "Société civile professionnelle (SCP)",
 }

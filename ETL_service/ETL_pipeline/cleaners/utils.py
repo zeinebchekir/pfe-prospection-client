@@ -26,13 +26,29 @@ def normalize_text(value: str | None) -> str | None:
 
 def normalize_ville(value: str | None) -> str | None:
     """
-    Cleans a city name: strips, uppercases.
-    Example: '  paris 12ème  ' → 'PARIS 12ÈME'
+    Cleans a city name: strips, uppercases and removes embedded postal codes.
+
+    Handles all known BOAMP / DataGouv formats:
+      - '92400 COURBEVOIE'    → 'COURBEVOIE'  (leading CP)
+      - 'COURBEVOIE 92400'    → 'COURBEVOIE'  (trailing CP)
+      - '92400'               → None           (CP seul, pas de nom)
+      - 'Saint-Denis (93)'    → 'SAINT-DENIS'  (CP entre parenthèses)
+      - 'PARIS 12ÈME'         → 'PARIS 12ÈME'  (inchangé — pas de CP)
     """
     if not value or not isinstance(value, str):
         return None
     value = unicodedata.normalize("NFC", value.strip())
-    value = re.sub(r"\s+", " ", value)
+    # Remove postal code in parentheses e.g. 'Saint-Denis (93)' → 'Saint-Denis'
+    value = re.sub(r"\s*\(\d{2,5}\)", "", value)
+    # Remove leading 5-digit postal code: '92400 COURBEVOIE' → 'COURBEVOIE'
+    value = re.sub(r"^\d{5}\s+", "", value)
+    # Remove trailing 5-digit postal code: 'COURBEVOIE 92400' → 'COURBEVOIE'
+    value = re.sub(r"\s+\d{5}$", "", value)
+    # Collapse multiple spaces
+    value = re.sub(r"\s+", " ", value).strip()
+    # If what remains is only digits (just a postal code, no city name) → discard
+    if re.fullmatch(r"\d+", value):
+        return None
     return value.upper().strip() or None
 
 
@@ -194,10 +210,16 @@ def clean_url(value: str | None) -> str | None:
 
 
 def clean_ca(value) -> float | None:
+    """
+    Converts a CA value to float. Returns None if:
+    - value is None or unparseable
+    - value is 0 or negative (unknown/invalid, stored as NULL not 0.0)
+    """
     if value is None:
         return None
     try:
-        return float(value)
+        ca = float(value)
+        return ca if ca > 0 else None  # 0.0 and negatives → NULL
     except (ValueError, TypeError):
         return None
 

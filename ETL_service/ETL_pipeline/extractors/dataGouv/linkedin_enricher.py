@@ -13,9 +13,13 @@ load_dotenv()
 logger = logging.getLogger(__name__)
 
 SERPER_API_KEYS = [
-    "2ed47f22976b52da7c560d0a8dccdf48854ee259",
-    "4bb8a0d3b6528691d8d74d6b122bd94e7d32a89b",
-    "085a9d92be4773540eb733a68ec822ddfb94df78"
+    "0b7d3fbd79172ad85f6880181b1ff89a2efdb1c3",
+    "f1eeif4eaznfc5lvpzfnqe5hsfnhe7yq4tqyhoqbq",
+    "d714b95e5e8790ff6b66ad2c28581d9d7af9d96c",
+    "c0a1f1784010b2a7701ca2345d4a0bd5c89568be",
+    "fbccd70ef0217c0f786566a3ca5fda3140c3cf32",
+    "2d372bd33da77f8a68477ad0301dce4fd8dd7ed2",
+    "42b143d4db596d757a2706971683960304a0e0dc"
 ]
 
 # Global index to shuffle requests using round-robin

@@ -2,6 +2,7 @@ import time
 import random
 from scrapers.dataGouv import DataGouvService
 from extractors.dataGouv.datagouv_extractor import extract_data_from_datagouv
+from cleaners.utils import clean_ca
 
 
 def enrich_boamp_data(boamp_records, db=None):
@@ -52,13 +53,20 @@ def enrich_boamp_data(boamp_records, db=None):
                 api_results = data.get("results")
 
         if api_results:
-            parsed_dg_list = extract_data_from_datagouv(api_results)
+            parsed_dg_list = dg_service.data_extraction(api_results)
             if parsed_dg_list:
                 dg_data = parsed_dg_list[0]
 
                 # Siren manquant sur le record BOAMP → le compléter
                 if not record.get("siren"):
                     record["siren"] = dg_data.get("siren")
+
+                # ── SIRET : fallback depuis DataGouv (siege.siret) ──────────
+                # BOAMP fournit rarement le SIRET ; on le récupère depuis DataGouv
+                if not record.get("siret") and dg_data.get("siret"):
+                    record["siret"] = dg_data.get("siret")
+                    if "sources" in record:
+                        record["sources"]["siret"] = "dataGouv"
 
                 # DataGouv est prioritaire pour le secteur et la forme juridique
                 # (utilise le label NAF normalisé plutôt que le code brut BOAMP)
@@ -75,7 +83,7 @@ def enrich_boamp_data(boamp_records, db=None):
                 record["taille_entrep"]            = dg_data.get("taille_entrep")
                 record["categorie_entreprise"]     = dg_data.get("categorie_entreprise")
                 record["nb_locaux"]                = dg_data.get("nb_locaux")
-                record["ca"]                       = dg_data.get("ca")
+                record["ca"]                       = clean_ca(dg_data.get("ca"))
                 record["dateCreation"]             = dg_data.get("dateCreation")
                 record["dateDerniereModification"] = dg_data.get("dateDerniereModification")
                 record["dirigeants"]               = dg_data.get("dirigeants")
@@ -84,6 +92,7 @@ def enrich_boamp_data(boamp_records, db=None):
                     record["sources"]["dirigeants"]    = "dataGouv"
                     record["sources"]["ca"]            = "dataGouv"
                     record["sources"]["taille_entrep"] = "dataGouv"
+
 
         # Délai imposé pour le rate-limit de l'API gouvernementale
         time.sleep(random.uniform(1.5, 2.0))

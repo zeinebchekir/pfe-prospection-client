@@ -19,7 +19,7 @@ class DataGouvService(BaseScraper):
         page        = 1
         max_retries = 3
 
-        while True and page <= 5: 
+        while True and page <= 40: 
             params_page = {**params, "page": page, "per_page": self.per_page}
             data        = None
 
@@ -83,15 +83,40 @@ class DataGouvService(BaseScraper):
 
     def data_extraction(self, avis_brut):
         """
-        Extract data from Rechetche entreprise api.
+        Extract data from Recherche entreprise api.
         """
-        # 2. On utilise tes fonctions d'extraction existantes
-        # Note : Assure-toi que get_global_information prend le payload en paramètre
+        # 1. Extraction initiale
         clean_data = extract_data_from_datagouv(avis_brut)
         
+        # 2. Fallback SIRET : si SIRET manquant mais SIREN présent
+        # On tente de récupérer le SIRET du siège via l'API établissements
+        for record in clean_data:
+            if not record.get("siret") and record.get("siren"):
+                siren = record.get("siren")
+                fallback_siret = self.fetch_siege_siret(siren)
+                if fallback_siret:
+                    record["siret"] = fallback_siret
+                    print(f"[{self.nom_source}] 💡 Fallback SIRET réussi pour {siren} -> {fallback_siret}")
+
         return clean_data   
 
-    
+    def fetch_siege_siret(self, siren: str) -> str | None:
+        """
+        Interroge l'API établissements pour trouver le SIRET du siège social.
+        URL: https://recherche-entreprises.api.gouv.fr/etablissements?siren=XXX
+        """
+        url = "https://recherche-entreprises.api.gouv.fr/etablissements"
+        params = {"siren": siren}
+        try:
+            data = self.fetch_data(url, params=params)
+            if data and data.get("results"):
+                # On cherche l'établissement qui est le siège
+                for etablissement in data.get("results", []):
+                    if etablissement.get("est_siege"):
+                        return etablissement.get("siret")
+        except Exception as e:
+            print(f"[{self.nom_source}] ⚠️  Erreur fallback SIRET pour {siren}: {e}")
+        return None
     
     def get_data_from_siren(self, items: list[dict]) -> list[dict]:
         clean_data = []  

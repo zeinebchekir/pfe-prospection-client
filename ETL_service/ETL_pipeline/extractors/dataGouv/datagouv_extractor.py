@@ -22,6 +22,8 @@ def extract_data_from_datagouv(results):
         adresse = siege.get("adresse",None)
         code_postal = siege.get("code_postal",None)
         ville = siege.get("libelle_commune",None)
+        # SIRET du siège social — disponible dans l'objet `siege` de l'API DataGouv
+        siret_siege = siege.get("siret", None)
 
         # --- 4. SECTEUR D'ACTIVITÉ ET FORME JURIDIQUE ---
         activite = r.get("activite_principale",None)
@@ -66,6 +68,7 @@ def extract_data_from_datagouv(results):
         # === CRÉATION DE L'INSTANCE DJANGO ===
         nouvelle_entreprise ={ 
             "siren":siren,
+            "siret":siret_siege,        # SIRET du siège extrait de l'objet siege
             "nom":nom,
             "secteur_activite":activite,
             "taille_entrep":taille_globale,
