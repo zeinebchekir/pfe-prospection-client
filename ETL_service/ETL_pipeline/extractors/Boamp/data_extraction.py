@@ -97,6 +97,7 @@ def get_global_information(resultats):
             ext_email = data_mapa.get("Email",None)
             ext_num_tel = data_mapa.get("Telephone",None)
             ext_ville = data_mapa.get("Ville",None)
+            ext_cp = data_mapa.get("code_postal",None)
             ext_date_limite = data_mapa.get("DateLimite", date_fin)        
 
         # ──────────────────────────────────────────────

@@ -1,0 +1,720 @@
+{
+  "meta": {
+    "run_date": "2026-04-14T12:14:58.629108",
+    "total_records_entreprise": 1049,
+    "total_records_raw": 1073,
+    "total_rules": 55,
+    "overall_pass_rate": 90.31,
+    "critical_failures": 3,
+    "warning_failures": 10
+  },
+  "by_dimension": {
+    "Completude": {
+      "avg_pass_rate": 70.25,
+      "nb_rules": 16,
+      "nb_failures": 8
+    },
+    "Unicite": {
+      "avg_pass_rate": 100.0,
+      "nb_rules": 3,
+      "nb_failures": 0
+    },
+    "Validite": {
+      "avg_pass_rate": 98.0,
+      "nb_rules": 12,
+      "nb_failures": 3
+    },
+    "Coherence": {
+      "avg_pass_rate": 100.0,
+      "nb_rules": 5,
+      "nb_failures": 0
+    },
+    "Coherence_Metier": {
+      "avg_pass_rate": 97.2,
+      "nb_rules": 6,
+      "nb_failures": 4
+    },
+    "Standardisation": {
+      "avg_pass_rate": 100.0,
+      "nb_rules": 3,
+      "nb_failures": 0
+    },
+    "Coherence_MultiSource": {
+      "avg_pass_rate": 93.0,
+      "nb_rules": 2,
+      "nb_failures": 1
+    },
+    "Pertinence": {
+      "avg_pass_rate": 99.94,
+      "nb_rules": 2,
+      "nb_failures": 1
+    },
+    "Orthographe": {
+      "avg_pass_rate": 100.0,
+      "nb_rules": 3,
+      "nb_failures": 0
+    },
+    "Fraicheur": {
+      "avg_pass_rate": 99.25,
+      "nb_rules": 3,
+      "nb_failures": 1
+    }
+  },
+  "results": [
+    {
+      "dimension": "Completude",
+      "rule_name": "completude_siren",
+      "description": "Champ 'siren' renseigne",
+      "total_records": 1049,
+      "passing": 1049,
+      "failing": 0,
+      "pass_rate": 100.0,
+      "severity": "INFO",
+      "sample_failures": []
+    },
+    {
+      "dimension": "Completude",
+      "rule_name": "completude_nom",
+      "description": "Champ 'nom' renseigne",
+      "total_records": 1049,
+      "passing": 1049,
+      "failing": 0,
+      "pass_rate": 100.0,
+      "severity": "INFO",
+      "sample_failures": []
+    },
+    {
+      "dimension": "Completude",
+      "rule_name": "completude_siret",
+      "description": "Champ 'siret' renseigne",
+      "total_records": 1049,
+      "passing": 48,
+      "failing": 1001,
+      "pass_rate": 4.58,
+      "severity": "WARNING",
+      "sample_failures": []
+    },
+    {
+      "dimension": "Completude",
+      "rule_name": "completude_code_postal",
+      "description": "Champ 'code_postal' renseigne",
+      "total_records": 1049,
+      "passing": 1028,
+      "failing": 21,
+      "pass_rate": 98.0,
+      "severity": "INFO",
+      "sample_failures": []
+    },
+    {
+      "dimension": "Completude",
+      "rule_name": "completude_ville",
+      "description": "Champ 'ville' renseigne",
+      "total_records": 1049,
+      "passing": 1049,
+      "failing": 0,
+      "pass_rate": 100.0,
+      "severity": "INFO",
+      "sample_failures": []
+    },
+    {
+      "dimension": "Completude",
+      "rule_name": "completude_secteur_activite",
+      "description": "Champ 'secteur_activite' renseigne",
+      "total_records": 1049,
+      "passing": 1049,
+      "failing": 0,
+      "pass_rate": 100.0,
+      "severity": "INFO",
+      "sample_failures": []
+    },
+    {
+      "dimension": "Completude",
+      "rule_name": "completude_ca",
+      "description": "Champ 'ca' renseigne",
+      "total_records": 1049,
+      "passing": 626,
+      "failing": 423,
+      "pass_rate": 59.68,
+      "severity": "WARNING",
+      "sample_failures": []
+    },
+    {
+      "dimension": "Completude",
+      "rule_name": "completude_telephone",
+      "description": "Champ 'telephone' renseigne",
+      "total_records": 1049,
+      "passing": 47,
+      "failing": 1002,
+      "pass_rate": 4.48,
+      "severity": "WARNING",
+      "sample_failures": []
+    },
+    {
+      "dimension": "Completude",
+      "rule_name": "completude_forme_juridique",
+      "description": "Champ 'forme_juridique' renseigne",
+      "total_records": 1049,
+      "passing": 1049,
+      "failing": 0,
+      "pass_rate": 100.0,
+      "severity": "INFO",
+      "sample_failures": []
+    },
+    {
+      "dimension": "Completude",
+      "rule_name": "completude_adresse_email",
+      "description": "Champ 'adresse_email' renseigne",
+      "total_records": 1049,
+      "passing": 40,
+      "failing": 1009,
+      "pass_rate": 3.81,
+      "severity": "WARNING",
+      "sample_failures": []
+    },
+    {
+      "dimension": "Completude",
+      "rule_name": "completude_taille_entrep",
+      "description": "Champ 'taille_entrep' renseigne",
+      "total_records": 1049,
+      "passing": 1049,
+      "failing": 0,
+      "pass_rate": 100.0,
+      "severity": "INFO",
+      "sample_failures": []
+    },
+    {
+      "dimension": "Completude",
+      "rule_name": "completude_categorie_entreprise",
+      "description": "Champ 'categorie_entreprise' renseigne",
+      "total_records": 1049,
+      "passing": 1003,
+      "failing": 46,
+      "pass_rate": 95.61,
+      "severity": "INFO",
+      "sample_failures": []
+    },
+    {
+      "dimension": "Completude",
+      "rule_name": "completude_nb_locaux",
+      "description": "Champ 'nb_locaux' renseigne",
+      "total_records": 1049,
+      "passing": 1049,
+      "failing": 0,
+      "pass_rate": 100.0,
+      "severity": "INFO",
+      "sample_failures": []
+    },
+    {
+      "dimension": "Completude",
+      "rule_name": "completude_dirigeants",
+      "description": "Champ 'dirigeants' renseigne",
+      "total_records": 1049,
+      "passing": 607,
+      "failing": 442,
+      "pass_rate": 57.86,
+      "severity": "WARNING",
+      "sample_failures": []
+    },
+    {
+      "dimension": "Completude",
+      "rule_name": "completude_date_creation_entreprise",
+      "description": "Champ 'date_creation_entreprise' renseigne",
+      "total_records": 1049,
+      "passing": 1049,
+      "failing": 0,
+      "pass_rate": 100.0,
+      "severity": "INFO",
+      "sample_failures": []
+    },
+    {
+      "dimension": "Completude",
+      "rule_name": "completude_dirigeant_linkedin",
+      "description": "Profil LinkedIn renseigne par dirigeant",
+      "total_records": 3747,
+      "passing": 0,
+      "failing": 3747,
+      "pass_rate": 0.0,
+      "severity": "INFO",
+      "sample_failures": []
+    },
+    {
+      "dimension": "Unicite",
+      "rule_name": "unicite_siren",
+      "description": "Chaque SIREN doit etre unique",
+      "total_records": 1049,
+      "passing": 1049,
+      "failing": 0,
+      "pass_rate": 100.0,
+      "severity": "INFO",
+      "sample_failures": []
+    },
+    {
+      "dimension": "Unicite",
+      "rule_name": "unicite_siret",
+      "description": "Chaque SIRET doit etre unique",
+      "total_records": 48,
+      "passing": 48,
+      "failing": 0,
+      "pass_rate": 100.0,
+      "severity": "INFO",
+      "sample_failures": []
+    },
+    {
+      "dimension": "Unicite",
+      "rule_name": "unicite_nom_cp",
+      "description": "(nom + code_postal) doit etre unique",
+      "total_records": 1028,
+      "passing": 1028,
+      "failing": 0,
+      "pass_rate": 100.0,
+      "severity": "INFO",
+      "sample_failures": []
+    },
+    {
+      "dimension": "Validite",
+      "rule_name": "validite_siren_format",
+      "description": "SIREN = exactement 9 chiffres (standard INSEE)",
+      "total_records": 1049,
+      "passing": 1049,
+      "failing": 0,
+      "pass_rate": 100.0,
+      "severity": "CRITICAL",
+      "sample_failures": []
+    },
+    {
+      "dimension": "Validite",
+      "rule_name": "validite_siret_format",
+      "description": "SIRET = exactement 14 chiffres (standard INSEE)",
+      "total_records": 48,
+      "passing": 48,
+      "failing": 0,
+      "pass_rate": 100.0,
+      "severity": "CRITICAL",
+      "sample_failures": []
+    },
+    {
+      "dimension": "Validite",
+      "rule_name": "validite_siren_luhn",
+      "description": "SIREN passe la verification Luhn (checksum INSEE)",
+      "total_records": 1049,
+      "passing": 1049,
+      "failing": 0,
+      "pass_rate": 100.0,
+      "severity": "WARNING",
+      "sample_failures": []
+    },
+    {
+      "dimension": "Validite",
+      "rule_name": "validite_siret_luhn",
+      "description": "SIRET passe la verification Luhn (checksum INSEE)",
+      "total_records": 48,
+      "passing": 48,
+      "failing": 0,
+      "pass_rate": 100.0,
+      "severity": "WARNING",
+      "sample_failures": []
+    },
+    {
+      "dimension": "Validite",
+      "rule_name": "validite_code_postal",
+      "description": "Code postal = 5 chiffres (format La Poste)",
+      "total_records": 1028,
+      "passing": 1028,
+      "failing": 0,
+      "pass_rate": 100.0,
+      "severity": "WARNING",
+      "sample_failures": []
+    },
+    {
+      "dimension": "Validite",
+      "rule_name": "validite_email",
+      "description": "Email au format RFC (xxx@yyy.zz)",
+      "total_records": 40,
+      "passing": 40,
+      "failing": 0,
+      "pass_rate": 100.0,
+      "severity": "WARNING",
+      "sample_failures": []
+    },
+    {
+      "dimension": "Validite",
+      "rule_name": "validite_telephone",
+      "description": "Telephone au format E.164 (+33XXXXXXXXX)",
+      "total_records": 47,
+      "passing": 47,
+      "failing": 0,
+      "pass_rate": 100.0,
+      "severity": "WARNING",
+      "sample_failures": []
+    },
+    {
+      "dimension": "Validite",
+      "rule_name": "validite_ca_positif",
+      "description": "Chiffre d'affaires strictement positif",
+      "total_records": 626,
+      "passing": 566,
+      "failing": 60,
+      "pass_rate": 90.42,
+      "severity": "WARNING",
+      "sample_failures": [
+        "0.0",
+        "0.0",
+        "0.0",
+        "0.0",
+        "0.0"
+      ]
+    },
+    {
+      "dimension": "Validite",
+      "rule_name": "validite_secteur_naf_mapping",
+      "description": "Secteur d'activite mappe vers un label NAF lisible (pas un code brut)",
+      "total_records": 1049,
+      "passing": 1029,
+      "failing": 20,
+      "pass_rate": 98.09,
+      "severity": "WARNING",
+      "sample_failures": [
+        "77.11A (x6)",
+        "87.90B (x4)",
+        "66.19B (x2)",
+        "87.30A (x1)",
+        "88.10B (x1)",
+        "68.32A (x1)",
+        "77.11B (x1)",
+        "88.99A (x1)",
+        "84.30A (x1)",
+        "87.10C (x1)"
+      ]
+    },
+    {
+      "dimension": "Validite",
+      "rule_name": "validite_forme_juridique_mapping",
+      "description": "Forme juridique mappee vers un label lisible (pas un code brut)",
+      "total_records": 1049,
+      "passing": 918,
+      "failing": 131,
+      "pass_rate": 87.51,
+      "severity": "WARNING",
+      "sample_failures": [
+        "code=6596 (x34)",
+        "code=5192 (x10)",
+        "code=5202 (x9)",
+        "code=7385 (x9)",
+        "code=7171 (x9)",
+        "code=5194 (x8)",
+        "code=5785 (x7)",
+        "code=6411 (x5)",
+        "code=7172 (x5)",
+        "code=4110 (x3)"
+      ]
+    },
+    {
+      "dimension": "Validite",
+      "rule_name": "validite_taille_mapping",
+      "description": "Taille entreprise mappee vers un label INSEE lisible",
+      "total_records": 1049,
+      "passing": 1049,
+      "failing": 0,
+      "pass_rate": 100.0,
+      "severity": "INFO",
+      "sample_failures": []
+    },
+    {
+      "dimension": "Validite",
+      "rule_name": "validite_linkedin_url",
+      "description": "Profil LinkedIn = URL linkedin.com/in/ valide",
+      "total_records": 0,
+      "passing": 0,
+      "failing": 0,
+      "pass_rate": 100,
+      "severity": "INFO",
+      "sample_failures": []
+    },
+    {
+      "dimension": "Coherence",
+      "rule_name": "coherence_siret_siren",
+      "description": "SIRET[:9] == SIREN (meme entite legale)",
+      "total_records": 48,
+      "passing": 48,
+      "failing": 0,
+      "pass_rate": 100.0,
+      "severity": "CRITICAL",
+      "sample_failures": []
+    },
+    {
+      "dimension": "Coherence",
+      "rule_name": "coherence_date_creation_passee",
+      "description": "Date de creation <= aujourd'hui (pas dans le futur)",
+      "total_records": 1049,
+      "passing": 1049,
+      "failing": 0,
+      "pass_rate": 100.0,
+      "severity": "WARNING",
+      "sample_failures": []
+    },
+    {
+      "dimension": "Coherence",
+      "rule_name": "coherence_cp_departement",
+      "description": "Code postal[:2] = departement valide (01-95, 97x, 98x)",
+      "total_records": 1028,
+      "passing": 1028,
+      "failing": 0,
+      "pass_rate": 100.0,
+      "severity": "INFO",
+      "sample_failures": []
+    },
+    {
+      "dimension": "Coherence",
+      "rule_name": "coherence_identifiant_length",
+      "description": "Identifiant est non-vide et <= 25 caracteres (VARCHAR 25)",
+      "total_records": 1049,
+      "passing": 1049,
+      "failing": 0,
+      "pass_rate": 100.0,
+      "severity": "INFO",
+      "sample_failures": []
+    },
+    {
+      "dimension": "Coherence",
+      "rule_name": "coherence_taux_completude",
+      "description": "taux_completude entre 0 et 100",
+      "total_records": 1049,
+      "passing": 1049,
+      "failing": 0,
+      "pass_rate": 100.0,
+      "severity": "INFO",
+      "sample_failures": []
+    },
+    {
+      "dimension": "Coherence_Metier",
+      "rule_name": "coherence_age_taille",
+      "description": "Entreprise < 3 ans ne devrait pas avoir > 1000 employes",
+      "total_records": 1049,
+      "passing": 1048,
+      "failing": 1,
+      "pass_rate": 99.9,
+      "severity": "CRITICAL",
+      "sample_failures": [
+        "RECREACLUB: age=2.9ans, emp=1499.5"
+      ]
+    },
+    {
+      "dimension": "Coherence_Metier",
+      "rule_name": "coherence_taille_ca",
+      "description": "Entreprise > 500 emp ne devrait pas avoir CA < 1M. Petite < 5 emp pas CA > 500M",
+      "total_records": 626,
+      "passing": 605,
+      "failing": 21,
+      "pass_rate": 96.65,
+      "severity": "CRITICAL",
+      "sample_failures": [
+        "MCDONALD'S FRANCE: emp=0.0, CA=1,208,098,123EUR",
+        "CAISSE D'EPARGNE ET DE PREVOYANCE ILE-DE-FRANCE (CEIDF): emp=3499.5, CA=0EUR",
+        "BANQUE POPULAIRE AUVERGNE RHONE ALPES (BP AURA): emp=3499.5, CA=0EUR",
+        "CAISSE D'EPARGNE ET DE PREVOYANCE HAUTS DE FRANCE (CAISSE D'EPARGNE HAUTS DE FRANCE) (CEP (OU CAISSE D'EPA): emp=3499.5, CA=0EUR",
+        "NORAUTO FRANCE: emp=7499.5, CA=0EUR"
+      ]
+    },
+    {
+      "dimension": "Coherence_Metier",
+      "rule_name": "coherence_age_ca",
+      "description": "Entreprise < 2 ans ne devrait pas avoir CA > 100M EUR",
+      "total_records": 626,
+      "passing": 626,
+      "failing": 0,
+      "pass_rate": 100.0,
+      "severity": "INFO",
+      "sample_failures": []
+    },
+    {
+      "dimension": "Coherence_Metier",
+      "rule_name": "ratio_ca_par_employe",
+      "description": "Ratio CA/employe doit etre entre 10K et 2M EUR (moyenne: 1,924,414 EUR)",
+      "total_records": 491,
+      "passing": 426,
+      "failing": 65,
+      "pass_rate": 86.76,
+      "severity": "CRITICAL",
+      "sample_failures": [
+        "ELECTRICITE DE FRANCE (EDF): CA=118,690,000,000, emp=15000.0, ratio=7,912,667EUR/emp",
+        "BNP PARIBAS (HELLO BANK!): CA=48,831,000,000, emp=15000.0, ratio=3,255,400EUR/emp",
+        "ORANGE: CA=40,260,000,000, emp=15000.0, ratio=2,684,000EUR/emp",
+        "ENGIE: CA=40,805,000,000, emp=3499.5, ratio=11,660,237EUR/emp",
+        "HANA GROUP FRANCE: CA=1,312,965, emp=3499.5, ratio=375EUR/emp"
+      ]
+    },
+    {
+      "dimension": "Standardisation",
+      "rule_name": "standardisation_statut",
+      "description": "Le statut du lead doit etre dans la liste predéfinie (Nouveau, Contacte, Qualifie, Perdu, Gagne)",
+      "total_records": 0,
+      "passing": 0,
+      "failing": 0,
+      "pass_rate": 100,
+      "severity": "INFO",
+      "sample_failures": []
+    },
+    {
+      "dimension": "Standardisation",
+      "rule_name": "standardisation_pays",
+      "description": "Le pays doit etre 'France' (valeur standardisee)",
+      "total_records": 1049,
+      "passing": 1049,
+      "failing": 0,
+      "pass_rate": 100.0,
+      "severity": "INFO",
+      "sample_failures": []
+    },
+    {
+      "dimension": "Standardisation",
+      "rule_name": "standardisation_categorie",
+      "description": "Categorie entreprise doit etre MIC/PME/ETI/GE ou label INSEE equivalent",
+      "total_records": 1003,
+      "passing": 1003,
+      "failing": 0,
+      "pass_rate": 100.0,
+      "severity": "INFO",
+      "sample_failures": []
+    },
+    {
+      "dimension": "Coherence_MultiSource",
+      "rule_name": "multi_source_couverture",
+      "description": "Entreprises enrichies par sources multiples (DataGouv + BOAMP). Multi-source = meilleure qualite",
+      "total_records": 1049,
+      "passing": 1049,
+      "failing": 0,
+      "pass_rate": 100.0,
+      "severity": "INFO",
+      "sample_failures": []
+    },
+    {
+      "dimension": "Coherence_MultiSource",
+      "rule_name": "multi_source_boamp_siret",
+      "description": "Leads BOAMP doivent avoir un SIRET (identifiant source primaire BOAMP)",
+      "total_records": 50,
+      "passing": 43,
+      "failing": 7,
+      "pass_rate": 86.0,
+      "severity": "WARNING",
+      "sample_failures": [
+        "Région Grand Est",
+        "Tisséo Voyageurs",
+        "Agglomération Roissy Pays de France",
+        "SYCLUM",
+        "Loire-Atlantique développement - GIE"
+      ]
+    },
+    {
+      "dimension": "Pertinence",
+      "rule_name": "pertinence_dirigeant_nom",
+      "description": "Chaque dirigeant enrichi doit avoir au minimum un nom",
+      "total_records": 3747,
+      "passing": 3747,
+      "failing": 0,
+      "pass_rate": 100.0,
+      "severity": "INFO",
+      "sample_failures": []
+    },
+    {
+      "dimension": "Pertinence",
+      "rule_name": "pertinence_dirigeant_role",
+      "description": "Dirigeant doit avoir un role/qualite (PDG, DG, Gerant) pour la prospection",
+      "total_records": 3747,
+      "passing": 3742,
+      "failing": 5,
+      "pass_rate": 99.87,
+      "severity": "INFO",
+      "sample_failures": []
+    },
+    {
+      "dimension": "Coherence_Metier",
+      "rule_name": "coherence_secteur_taille",
+      "description": "Secteurs artisanaux/liberaux ne devraient pas avoir > 5000 employes",
+      "total_records": 1049,
+      "passing": 1048,
+      "failing": 1,
+      "pass_rate": 99.9,
+      "severity": "WARNING",
+      "sample_failures": [
+        "BOULANGERIES BG (B B G): secteur=Boulangerie et boulangerie-pâtisserie, emp=7499.5"
+      ]
+    },
+    {
+      "dimension": "Coherence_Metier",
+      "rule_name": "coherence_localisation_reglementation",
+      "description": "Entreprises de secteurs reglementes (finance, sante) doivent avoir un CP valide en France",
+      "total_records": 128,
+      "passing": 128,
+      "failing": 0,
+      "pass_rate": 100.0,
+      "severity": "INFO",
+      "sample_failures": []
+    },
+    {
+      "dimension": "Orthographe",
+      "rule_name": "orthographe_nom_capitalisation",
+      "description": "Le nom d'entreprise ne doit pas etre tout en minuscules",
+      "total_records": 1049,
+      "passing": 1049,
+      "failing": 0,
+      "pass_rate": 100.0,
+      "severity": "INFO",
+      "sample_failures": []
+    },
+    {
+      "dimension": "Orthographe",
+      "rule_name": "orthographe_ville_capitalisation",
+      "description": "La ville ne doit pas etre tout en minuscules",
+      "total_records": 1049,
+      "passing": 1049,
+      "failing": 0,
+      "pass_rate": 100.0,
+      "severity": "INFO",
+      "sample_failures": []
+    },
+    {
+      "dimension": "Orthographe",
+      "rule_name": "orthographe_espaces_doubles",
+      "description": "Les champs texte ne doivent pas contenir d'espaces doubles",
+      "total_records": 4196,
+      "passing": 4196,
+      "failing": 0,
+      "pass_rate": 100.0,
+      "severity": "INFO",
+      "sample_failures": []
+    },
+    {
+      "dimension": "Fraicheur",
+      "rule_name": "fraicheur_age_moyen",
+      "description": "Age moyen: 0.0j, max: 0j. Enregistrements < 30j",
+      "total_records": 1049,
+      "passing": 1049,
+      "failing": 0,
+      "pass_rate": 100.0,
+      "severity": "INFO",
+      "sample_failures": []
+    },
+    {
+      "dimension": "Fraicheur",
+      "rule_name": "fraicheur_maj_7j",
+      "description": "Mis a jour dans les 7 derniers jours",
+      "total_records": 1049,
+      "passing": 1049,
+      "failing": 0,
+      "pass_rate": 100.0,
+      "severity": "INFO",
+      "sample_failures": []
+    },
+    {
+      "dimension": "Fraicheur",
+      "rule_name": "fraicheur_raw_clean_ratio",
+      "description": "raw_leads (1073) -> entreprise (1049). Drop-rate = taux de perte au nettoyage",
+      "total_records": 1073,
+      "passing": 1049,
+      "failing": 24,
+      "pass_rate": 97.76,
+      "severity": "INFO",
+      "sample_failures": []
+    }
+  ]
+}

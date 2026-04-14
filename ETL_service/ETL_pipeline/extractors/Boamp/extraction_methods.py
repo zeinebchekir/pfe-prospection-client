@@ -25,7 +25,6 @@ def extraire_donnees_mapa(json_data):
     nom_contact = f"{contact.get('civilite', '')} {contact.get('pren', '')} {contact.get('nom', '')}".strip()
     
     voie = adresse.get("voie", {})
-    adresse_complete = f"{adresse.get('cp', '')} {adresse.get('ville', '')}".strip()
 
     # 4. On prépare le dictionnaire final avec les données extraites
     donnees_extraites = {
@@ -35,7 +34,8 @@ def extraire_donnees_mapa(json_data):
         "poste": contact.get("fonc", ""),
         "Telephone": coord.get("tel", ""),
         "Email": coord.get("mel", ""),
-        "Ville": adresse_complete,
+        "Ville": adresse.get("ville", "").strip(),
+        "code_postal": adresse.get("cp", "").strip(),
         "urlProfilAcheteur": organisme.get("urlProfilAcheteur", ""),
         "DateLimite": delais.get("receptionOffres", ""),
         # Délais

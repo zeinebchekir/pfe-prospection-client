@@ -200,6 +200,7 @@ def load_raw_boamp(**context):
     print("waterrrrrrmaaaaaaak",watermark)
     try:
         inserted = crud.insert_raw_leads(db, records, source="BOAMP", dag_run_id=run_id,date_scraping=watermark)
+        _write(RAW_BOAMP_PATH, records)
         if inserted == 0:
             print("[LOAD CLEAN BOAMP] 0 lignes insérées")
     except Exception as e:
@@ -221,6 +222,7 @@ def load_raw_datagouv(**context):
     print("waterrrrrrmaaaaaaak",watermark)
     try:
         inserted = crud.insert_raw_leads(db, records, source="dataGouv", dag_run_id=run_id, date_scraping=watermark)
+        _write(RAW_DATAGOUV_PATH, records)
         if inserted == 0:
             print("[LOAD CLEAN BOAMP] 0 lignes insérées")
     except Exception as e:
@@ -576,6 +578,8 @@ def load_manual_datagouv(**context):
     try:
         # Save raw
         crud.insert_raw_leads(db, [entreprise_data], source="dataGouv", dag_run_id=run_id, date_scraping=now_str)
+        if entreprise_data.get("_raw_lead_id"):
+            cr["entreprise"]["_raw_lead_id"] = entreprise_data.get("_raw_lead_id")
         # Save clean
         inserted = crud.insert_clean_leads(db, [cr], source="dataGouv", dag_run_id=run_id, date_scraping=now_str)
         print(f"[LOAD MANUAL LEAD] {inserted} lignes insérées/mises à jour dans clean_leads")

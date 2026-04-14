@@ -156,7 +156,12 @@ def insert_raw_leads(
 
             ))
 
-        db.bulk_save_objects(rows)
+        db.add_all(rows)
+        db.flush()
+        # Inject the generated ID back into the dictionaries
+        for rec, row in zip(records, rows):
+            rec["_raw_lead_id"] = row.id
+            
         db.commit()
         inserted = len(rows)
         logger.info(f"[RAW INSERT] {source}: {inserted} rows inserted into raw_leads.")
@@ -190,8 +195,16 @@ def _map_data(rec: dict, source: str,date_scraping: date_type | None,dag_run_id:
 
     boamp_data = entreprise.get("data_from_boamp") or {}
     # Provide identifiant exactly as needed by the PostgreSQL schema (VARCHAR 25)
+    if source == "dataGouv":
+        _id_raw = entreprise.get("siren")
+    else:
+        _id_raw = boamp_data.get("idweb") or entreprise.get("siret") or entreprise.get("siren")
+    
+    _identifiant = str(_id_raw) if _id_raw else None
     
     return Entreprise(
+        identifiant          = _identifiant,
+        raw_lead_id          = entreprise.get("_raw_lead_id"),
         siren                = entreprise.get("siren"),
         siret                = entreprise.get("siret"),
         nom                  = entreprise.get("nom"),
@@ -334,6 +347,11 @@ def insert_clean_leads(
     owned_fields = DATAGOUV_OWN_FIELDS if is_datagouv else BOAMP_OWN_FIELDS
     new_inserts = updates = skipped = 0
 
+    # Cache en mémoire pour éviter d'insérer des doublons (SIREN identiques)
+    # dans le même batch, car la BD ne les voit pas encore sans autoflush
+    batch_seen_siren = {}
+    batch_seen_siret = {}
+
     try:
         with db.no_autoflush:
             for rec in records:
@@ -348,7 +366,19 @@ def insert_clean_leads(
                     skipped += 1
                     continue
 
+                if not obj.identifiant:
+                    logger.warning(f"[CLEAN INSERT] {source}: skipping insert, missing identifiant.")
+                    skipped += 1
+                    continue
+
                 existing_id = _find_conflict_target(db, obj)
+
+                # Vérification dans le cache du batch (si non trouvé en base)
+                if not existing_id:
+                    if obj.siren and obj.siren in batch_seen_siren:
+                        existing_id = batch_seen_siren[obj.siren]
+                    elif obj.siret and obj.siret in batch_seen_siret:
+                        existing_id = batch_seen_siret[obj.siret]
 
                 if existing_id:
                     # On force l'identifiant à correspondre à la base pour déclencher l'UPSERT
@@ -374,6 +404,13 @@ def insert_clean_leads(
                         if c.name not in ("created_at", "updated_at")
                     }
                     db.execute(Entreprise.__table__.insert().values(**row_dict))
+                    
+                    # Store in cache for subsequent records in the same batch
+                    if obj.siren:
+                        batch_seen_siren[obj.siren] = obj.identifiant
+                    if obj.siret:
+                        batch_seen_siret[obj.siret] = obj.identifiant
+                        
                     new_inserts += 1
 
         db.commit()
