@@ -368,4 +368,21 @@ Avant, lors de l'enrichissement DataGouv, la donnée du CA était directement in
 
 ---
 
+## 10. Cohérence de Traçabilité : Liaison `raw_lead_id`
+
+**Problème :** Bien que la table `entreprise` (clean) possède une clé étrangère `raw_lead_id` censée la lier à l'enregistrement brut initial dans la table `raw_leads`, cette colonne était entièrement vide (`NULL`).
+
+**Correction Rétroactive (SQL) :**
+Une requête `UPDATE` directe a été passée sur la base de données de production pour lier tout l'historique :
+* 1000 leads DataGouv liant `entreprise.siren` au champ `siren` inclus dans le JSON de `raw_data`.
+* 52 leads BOAMP identifiés de la même manière via `idweb` / `siret` / `siren` dans le bloc JSON.
+
+**Implémentation Préventive (Code Pipeline) :**
+1. **`db/crud.py`** (Extraction ID) : La logique d'`insert_raw_leads` est modifiée de `bulk_save_objects` vers `add_all` + `flush()`. Ainsi, Postgres assigne les identifiants en direct et ces derniers sont ré-injectés de façon transitoire (`_raw_lead_id`) directement dans les dictionnaires métiers mis en mémoire.
+2. **`db/crud.py`** (Mapping ID) : Via la fonction standard de mapping `_map_data()`, le champ DB `raw_lead_id` est maintenant directement alimenté via ce champ nouvellement ré-injecté.
+3. **`dags/dag_initial_load.py`** : La pipeline Airflow sauvegarde désormais synchroniquement cet état injecté dans le pool temporaire JSON (`/tmp/raw_boamp.json`) pour que l’étape de *cleaning* puisse les propager harmonieusement jusqu’à l'insertion.
+4. **`routers/entreprise.py`** : Lors de la soumission manuelle d'un lead validé par le Front-end, ce `_raw_lead_id` est aussi intercepté et redirigé du modèle raw vers le modèle clean sans aucune casse.
+
+---
+
 *Document généré le 14/04/2026 — Pipeline ETL CRM B2B (PFE)*

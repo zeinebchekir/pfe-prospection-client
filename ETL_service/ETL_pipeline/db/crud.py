@@ -156,7 +156,12 @@ def insert_raw_leads(
 
             ))
 
-        db.bulk_save_objects(rows)
+        db.add_all(rows)
+        db.flush()
+        # Inject the generated ID back into the dictionaries
+        for rec, row in zip(records, rows):
+            rec["_raw_lead_id"] = row.id
+            
         db.commit()
         inserted = len(rows)
         logger.info(f"[RAW INSERT] {source}: {inserted} rows inserted into raw_leads.")
@@ -199,6 +204,7 @@ def _map_data(rec: dict, source: str,date_scraping: date_type | None,dag_run_id:
     
     return Entreprise(
         identifiant          = _identifiant,
+        raw_lead_id          = entreprise.get("_raw_lead_id"),
         siren                = entreprise.get("siren"),
         siret                = entreprise.get("siret"),
         nom                  = entreprise.get("nom"),

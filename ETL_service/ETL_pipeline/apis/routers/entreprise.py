@@ -546,9 +546,14 @@ def confirm_lead(payload: ConfirmLeadPayload, db: Session = Depends(get_db)):
             db, [entreprise_data], source="dataGouv",
             dag_run_id=run_id, date_scraping=now_str
         )
+        raw_id = entreprise_data.get("_raw_lead_id")
+        
         # 2. Clean insert/upsert
         for cr in cleaned_records:
             cr["date_scraping"] = now_str
+            if raw_id and cr.get("entreprise"):
+                cr["entreprise"]["_raw_lead_id"] = raw_id
+                
         crud.insert_clean_leads(
             db, cleaned_records, source="dataGouv",
             dag_run_id=run_id, date_scraping=now_str
