@@ -54,43 +54,49 @@
             <!-- Segment filter -->
             <div class="flex items-center gap-2">
               <span class="text-xs font-semibold text-foreground">Segment</span>
-              <select
-                v-model="segmentFilter"
-                class="h-9 px-3 text-sm rounded-md border border-input bg-background focus:outline-none focus:ring-2 focus:ring-ring"
-              >
-                <option value="all">Tous les segments</option>
-                <option value="Micro">Microentreprise</option>
-                <option value="PME">PME</option>
-                <option value="ETI">ETI</option>
-                <option value="GE">Grande Entreprise</option>
-              </select>
+              <Select v-model="segmentFilter">
+                  <SelectTrigger class="w-40 h-9 text-sm bg-background focus:outline-none focus:ring-1 focus:ring-ring">
+                    <SelectValue placeholder="Tous les segments" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">Tous les segments</SelectItem>
+                    <SelectItem value="Micro">Microentreprise</SelectItem>
+                    <SelectItem value="PME">PME</SelectItem>
+                    <SelectItem value="ETI">ETI</SelectItem>
+                    <SelectItem value="GE">Grande Entreprise</SelectItem>
+                  </SelectContent>
+                </Select>
             </div>
 
             <!-- Source filter -->
             <div class="flex items-center gap-2">
               <span class="text-xs font-semibold text-foreground">Source</span>
-              <select
-                v-model="sourceFilter"
-                class="h-9 px-3 text-sm rounded-md border border-input bg-background focus:outline-none focus:ring-2 focus:ring-ring"
-              >
-                <option value="all">Toutes sources</option>
-                <option value="DataGouv">DataGouv</option>
-                <option value="BOAMP">BOAMP</option>
-              </select>
+              <Select v-model="sourceFilter">
+                  <SelectTrigger class="w-40 h-9 text-sm bg-background focus:outline-none focus:ring-1 focus:ring-ring">
+                    <SelectValue placeholder="Toutes sources" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">Toutes sources</SelectItem>
+                    <SelectItem value="DataGouv">DataGouv</SelectItem>
+                    <SelectItem value="BOAMP">BOAMP</SelectItem>
+                  </SelectContent>
+                </Select>
             </div>
 
             <!-- Status filter -->
             <div class="flex items-center gap-2">
               <span class="text-xs font-semibold text-foreground">Statut</span>
-              <select
-                v-model="statusFilter"
-                class="h-9 px-3 text-sm rounded-md border border-input bg-background focus:outline-none focus:ring-2 focus:ring-ring"
-              >
-                <option value="all">Tous statuts</option>
-                <option value="Nouveau">Nouveau</option>
-                <option value="Qualifié">Qualifié</option>
-                <option value="Opportunité">Opportunité</option>
-              </select>
+              <Select v-model="statusFilter">
+                  <SelectTrigger class="w-40 h-9 text-sm bg-background focus:outline-none focus:ring-1 focus:ring-ring">
+                    <SelectValue placeholder="Tous statuts" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">Tous statuts</SelectItem>
+                    <SelectItem value="Nouveau">Nouveau</SelectItem>
+                    <SelectItem value="Qualifié">Qualifié</SelectItem>
+                    <SelectItem value="Opportunité">Opportunité</SelectItem>
+                  </SelectContent>
+                </Select>
             </div>
 
             <!-- Active filter chips -->
@@ -195,6 +201,7 @@
 import { ref, computed, onMounted } from 'vue'
 import axios from 'axios'
 import { BarChart3, RefreshCw, X } from 'lucide-vue-next'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 
 import TheSidebar from '@/components/AppSidebar.vue'
 import DashboardKpiCards       from '@/components/dashboard/DashboardKpiCards.vue'

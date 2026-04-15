@@ -78,7 +78,7 @@ export function useLeads() {
       const baseUrl = import.meta.env.VITE_FASTAPI_URL || 'http://localhost:8001'
       // Fetch a generous chunk to allow rich client-side filtering/sorting
       const res = await axios.get(`${baseUrl}/entreprises/`, {
-        params: { skip: 0, limit: 1000 }
+        params: { skip: 0, limit: 10000 }
       })
       const rawData = Array.isArray(res.data) ? res.data : (res.data.data || [])
       allLeads.value = adaptLeadResponse(rawData)
