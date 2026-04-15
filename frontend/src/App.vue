@@ -17,7 +17,7 @@
   </RouterView>
 
   <!-- Global Sonner toaster -->
-  <Sonner rich-colors position="top-right" :duration="4000" close-button />
+  <Sonner position="top-right" :duration="4000" />
 </template>
 
 <script setup>

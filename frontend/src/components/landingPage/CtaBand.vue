@@ -3,14 +3,14 @@
     <div class="container mx-auto max-w-3xl text-center">
 
       <Badge class="mb-5 bg-tacir-blue/10 text-tacir-blue border border-tacir-blue/20 font-semibold text-xs px-3 py-1 rounded-full inline-flex items-center gap-1">
-        <Globe class="w-3 h-3" /> Outil interne Tacir
+        <Globe class="w-3 h-3" /> Outil interne Numeryx
       </Badge>
 
       <h2 class="text-3xl font-bold text-tacir-darkblue mb-4">
         Prêt à centraliser votre intelligence commerciale ?
       </h2>
       <p class="text-tacir-darkgray mb-8 text-sm leading-relaxed">
-        Connectez-vous avec votre compte équipe ou demandez un accès à votre administrateur TacirIQ.
+        Connectez-vous avec votre compte équipe ou demandez un accès à votre administrateur Numeryx.
       </p>
 
       <div class="flex items-center justify-center gap-4 flex-wrap">

@@ -239,11 +239,17 @@ def delete_entreprise(identifiant: str, db: Session = Depends(get_db)):
     }
 
     try:
-        # Supprimer les raw_leads liées (si raw_lead_id exist)
-        if obj.raw_lead_id:
-            db.query(RawLead).filter(RawLead.id == obj.raw_lead_id).delete()
+        # Sauvegarder l'id avant suppression
+        raw_lead_id_to_delete = obj.raw_lead_id
 
+        # Supprimer le lead d'abord pour éviter l'erreur de clé étrangère
         db.delete(obj)
+        db.flush()
+
+        # Supprimer les raw_leads liées (si raw_lead_id exist)
+        if raw_lead_id_to_delete:
+            db.query(RawLead).filter(RawLead.id == raw_lead_id_to_delete).delete()
+
         db.commit()
     except Exception as e:
         db.rollback()
@@ -570,4 +576,4 @@ def confirm_lead(payload: ConfirmLeadPayload, db: Session = Depends(get_db)):
         "message": "Lead sauvegardé avec succès en base de données.",
         "lead":    lead_obj or cleaned_records[0]["entreprise"],
     }
-
+
