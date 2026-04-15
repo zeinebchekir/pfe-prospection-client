@@ -247,33 +247,7 @@
                   </div>
                 </div>
 
-                <!-- Action buttons -->
-                <div class="flex items-center gap-2">
-                  <Button
-                    @click="handleStart(pid)"
-                    :disabled="simulatingPipelines.has(pid)"
-                    class="flex-1 h-8 bg-tacir-blue hover:bg-tacir-darkblue text-white rounded-lg gap-1.5 shadow-sm transition-all active:scale-95 text-[11px] font-bold disabled:opacity-50"
-                  >
-                    <Play class="w-3 h-3" />
-                    Démarrer
-                  </Button>
-                  <Button
-                    @click="handleStop(pid)"
-                    variant="destructive"
-                    class="flex-1 h-8 rounded-lg gap-1.5 text-[11px] font-bold transition-all active:scale-95"
-                  >
-                    <Square class="w-3 h-3" />
-                    Stop
-                  </Button>
-                  <Button
-                    @click="handleReset(pid)"
-                    variant="outline"
-                    class="flex-1 h-8 rounded-lg gap-1.5 border-border text-tacir-darkblue hover:bg-tacir-lightgray text-[11px] font-bold transition-all active:scale-95"
-                  >
-                    <RotateCcw class="w-3 h-3" />
-                    Reset
-                  </Button>
-                </div>
+                
 
               </CardContent>
             </Card>
@@ -770,7 +744,6 @@ function startLogStream(dagId, runId, taskId) {
           if (!line.trim()) continue
           try {
             const parsed = JSON.parse(line)
-            console.log('parsed log line:', parsed)  // ← ajoute ça
 
             const phase  = pipelines[dagId].phases.find(p => p.name === taskId)
             if (phase) phase.logs.push(parsed)

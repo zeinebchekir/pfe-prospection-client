@@ -24,9 +24,11 @@ from cleaners.dataGouv_cleaner import DataGouvCleaner
 # ──────────────────────────────────────────────
 #  Chemins temporaires (supprimés après load)
 # ──────────────────────────────────────────────
-RAW_BOAMP_PATH    = "/tmp/raw_boamp.json"
-RAW_DATAGOUV_PATH = "/tmp/raw_datagouv.json"
+SHARED_DIR        = "/opt/airflow/shared_tmp"
+RAW_BOAMP_PATH    = os.path.join(SHARED_DIR, "raw_boamp.json")
+RAW_DATAGOUV_PATH = os.path.join(SHARED_DIR, "raw_datagouv.json")
 
+os.makedirs(SHARED_DIR, exist_ok=True)
 
 def _write(path, data):
     with open(path, "w", encoding="utf-8") as f:

@@ -150,4 +150,5 @@ class RapportPDF(Base):
     generated_at     = Column(DateTime(timezone=True), server_default=func.now())
     summary_json   = Column(JSONB,   nullable=True)
     pdf_bytes      = Column(LargeBinary, nullable=False)
+    file_size_kb   = Column(Integer, nullable=False)
     
