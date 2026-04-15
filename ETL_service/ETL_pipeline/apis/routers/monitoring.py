@@ -783,35 +783,50 @@ def get_data_quality(db: Session = Depends(get_db)):
 
 @router.get("/data-quality-boamp", response_model=List[DataQualityItem])
 def get_data_quality_boamp(db: Session = Depends(get_db)):
-    """Graph 4 — taux de remplissage des champs spécifiques JSON dans info_boamp"""
+    # La requête utilise un CTE (filtered_data) pour définir notre base de calcul
     query = text("""
-        SELECT
+        WITH filtered_data AS (
+            SELECT info_boamp 
+            FROM entreprise 
+            WHERE created_at >= NOW() - INTERVAL '7 days'
+              -- On élimine les 70 lignes NULL ou vides ici
+              AND info_boamp IS NOT NULL 
+              AND info_boamp::text != '{}' 
+        )
+        SELECT 
             'boamp_besoin' AS field_name,
-            ROUND(100.0 * COUNT(*) FILTER (WHERE info_boamp IS NOT NULL AND info_boamp->>'besoin' IS NOT NULL AND info_boamp->>'besoin' != '')
-                / NULLIF(COUNT(*) FILTER (WHERE info_boamp IS NOT NULL), 0), 1) AS fill_rate
-        FROM entreprise
-        WHERE created_at >= NOW() - INTERVAL '7 days'
+            ROUND(100.0 * COUNT(*) FILTER (WHERE info_boamp->>'besoin' IS NOT NULL AND info_boamp->>'besoin' != '') 
+                / NULLIF(COUNT(*), 0), 1) AS fill_rate
+        FROM filtered_data
 
-        UNION ALL SELECT 'boamp_date_limite',
-            ROUND(100.0 * COUNT(*) FILTER (WHERE info_boamp IS NOT NULL AND info_boamp->>'date_limite' IS NOT NULL AND info_boamp->>'date_limite' != '')
-                / NULLIF(COUNT(*) FILTER (WHERE info_boamp IS NOT NULL), 0), 1)
-        FROM entreprise WHERE created_at >= NOW() - INTERVAL '7 days'
+        UNION ALL 
+        SELECT 
+            'boamp_date_limite',
+            ROUND(100.0 * COUNT(*) FILTER (WHERE info_boamp->>'date_limite' IS NOT NULL AND info_boamp->>'date_limite' != '') 
+                / NULLIF(COUNT(*), 0), 1)
+        FROM filtered_data
 
-        UNION ALL SELECT 'boamp_info_complementaire',
-            ROUND(100.0 * COUNT(*) FILTER (WHERE info_boamp IS NOT NULL AND info_boamp->>'info_complementaire' IS NOT NULL AND info_boamp->>'info_complementaire' != '')
-                / NULLIF(COUNT(*) FILTER (WHERE info_boamp IS NOT NULL), 0), 1)
-        FROM entreprise WHERE created_at >= NOW() - INTERVAL '7 days'
-        UNION ALL SELECT 'boamp_info_lienOffre',
-            ROUND(100.0 * COUNT(*) FILTER (WHERE info_boamp IS NOT NULL AND info_boamp->>'lienOffre' IS NOT NULL AND info_boamp->>'lienOffre' != '')
-                / NULLIF(COUNT(*) FILTER (WHERE info_boamp IS NOT NULL), 0), 1)
-        FROM entreprise WHERE created_at >= NOW() - INTERVAL '7 days'
+        UNION ALL 
+        SELECT 
+            'boamp_info_complementaire',
+            ROUND(100.0 * COUNT(*) FILTER (WHERE info_boamp->>'info_complementaire' IS NOT NULL AND info_boamp->>'info_complementaire' != '') 
+                / NULLIF(COUNT(*), 0), 1)
+        FROM filtered_data
+
+        UNION ALL 
+        SELECT 
+            'boamp_info_lienOffre',
+            ROUND(100.0 * COUNT(*) FILTER (WHERE info_boamp->>'lienOffre' IS NOT NULL AND info_boamp->>'lienOffre' != '') 
+                / NULLIF(COUNT(*), 0), 1)
+        FROM filtered_data
     """)
+
     rows = db.execute(query).fetchall()
+    
     return [DataQualityItem(
         field_name=row.field_name,
         fill_rate=float(row.fill_rate or 0)
     ) for row in rows]
-
 @router.get("/kpi-summary", response_model=KPISummary)
 def get_kpi_summary(db: Session = Depends(get_db)):
     """KPI cards en haut du dashboard"""
