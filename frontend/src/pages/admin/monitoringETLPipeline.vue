@@ -15,6 +15,10 @@
         </div>
 
         <div class="flex items-center gap-3">
+          <Button @click="router.push('/admin/reports')" variant="outline" size="sm" class="hidden sm:flex items-center gap-2 border-border/60 text-tacir-darkblue bg-tacir-lightgray/20 hover:bg-tacir-lightgray/50">
+            <Database class="w-3.5 h-3.5 text-tacir-darkgray" />
+            <span class="text-xs font-semibold">Reports List</span>
+          </Button>
           <div class="hidden sm:flex items-center gap-2 bg-tacir-lightgray/50 border border-border/60 rounded-lg px-3 py-1.5">
             <Clock class="w-3.5 h-3.5 text-tacir-darkgray" />
             <span class="font-mono text-xs font-bold text-tacir-darkblue tabular-nums">{{ liveClock }}</span>
@@ -154,7 +158,31 @@
 
         </div>
 
+        <!-- ── ANALYTICS DASHBOARD ── -->
+        <div class="space-y-4 pt-4">
+          <h3 class="text-xs font-black text-tacir-darkblue uppercase tracking-widest flex items-center gap-2">
+            <svg class="w-4 h-4 text-tacir-blue" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"></path></svg>
+            Analytique Décisionnelle
+          </h3>
+           <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 pb-2">
+               <ChartStatusByDag class="lg:col-span-1" />
+               <ChartBoampQuality class="lg:col-span-1" />
+               <ChartQualityCompleteness class="lg:col-span-1" />
+           </div>
+           <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 pb-2 mt-4">
+               <ChartVolumeTrends class="lg:col-span-1" />
+               <ChartDurationBottlenecks class="lg:col-span-1" />
+           </div>
+        </div>
+        
+
+        <div class="h-px bg-border/60 w-full my-6"></div>
+
         <!-- ── SIDE BY SIDE PIPELINES GRID ── -->
+        <h3 class="text-xs font-black text-tacir-darkblue uppercase tracking-widest flex items-center gap-2 mb-4">
+          <Terminal class="w-4 h-4 text-tacir-blue" />
+          Temps Réel & Contrôle
+        </h3>
         <div class="grid grid-cols-1 xl:grid-cols-2 gap-6 items-start">
 
           <div
@@ -163,13 +191,18 @@
             class="flex flex-col gap-4"
           >
             <!-- Pipeline header label -->
-            <div class="flex items-center gap-2">
-              <span class="text-base">{{ pid === 'sync_boamp' ? '📄' : '🇫🇷' }}</span>
-              <h3 class="text-sm font-black text-tacir-darkblue tracking-tight">{{ pid }}</h3>
-              <Badge :class="pipelineStatusBadgeClass(pipelines[pid].status)" class="ml-1">
-                <component :is="pipelineStatusIcon(pipelines[pid].status)" class="w-2.5 h-2.5 mr-1" :class="pipelines[pid].status === 'run' ? 'animate-spin' : ''" />
-                {{ pipelineStatusLabel(pipelines[pid].status) }}
-              </Badge>
+            <div class="flex items-center justify-between cursor-pointer group" @click="togglePipeline(pid)">
+              <div class="flex items-center gap-2">
+                <span class="text-base">{{ pid === 'sync_boamp' ? '📄' : '🇫🇷' }}</span>
+                <h3 class="text-sm font-black text-tacir-darkblue tracking-tight">{{ pid }}</h3>
+                <Badge :class="pipelineStatusBadgeClass(pipelines[pid].status)" class="ml-1">
+                  <component :is="pipelineStatusIcon(pipelines[pid].status)" class="w-2.5 h-2.5 mr-1" :class="pipelines[pid].status === 'run' ? 'animate-spin' : ''" />
+                  {{ pipelineStatusLabel(pipelines[pid].status) }}
+                </Badge>
+              </div>
+              <Button variant="ghost" size="sm" class="h-8 w-8 p-0 text-tacir-darkgray group-hover:bg-tacir-lightgray/50 rounded-full transition-colors" @click.stop="togglePipeline(pid)">
+                <ChevronDown class="w-4 h-4 transition-transform duration-300" :class="{ 'rotate-180': expandedPipelines.has(pid) }" />
+              </Button>
             </div>
 
             <!-- ── RUN CONTROL CARD ── -->
@@ -246,8 +279,17 @@
             </Card>
 
             <!-- ── PHASE CARDS ── -->
-            <div class="space-y-0">
-              <template v-for="(phase, idx) in pipelines[pid].phases" :key="phase.name">
+            <Transition
+              enter-active-class="transition-all duration-500 ease-in-out origin-top"
+              enter-from-class="grid-rows-[0fr] opacity-0"
+              enter-to-class="grid-rows-[1fr] opacity-100"
+              leave-active-class="transition-all duration-300 ease-in-out origin-top"
+              leave-from-class="grid-rows-[1fr] opacity-100"
+              leave-to-class="grid-rows-[0fr] opacity-0"
+            >
+              <div v-show="expandedPipelines.has(pid)" class="grid">
+                <div class="space-y-0 min-h-0">
+                  <template v-for="(phase, idx) in pipelines[pid].phases" :key="phase.name">
 
                 <Card
                   class="border-border shadow-sm rounded-2xl bg-white overflow-hidden"
@@ -366,8 +408,10 @@
                   <ChevronDown class="w-3.5 h-3.5 text-tacir-darkgray/30" />
                 </div>
 
-              </template>
-            </div>
+                  </template>
+                </div>
+              </div>
+            </Transition>
 
           </div>
         </div>
@@ -379,6 +423,7 @@
 
 <script setup>
 import { ref, reactive, computed, onMounted, onUnmounted, watch } from 'vue'
+import { useRouter } from 'vue-router'
 import TheSidebar from '@/components/AppSidebar.vue'
 import { Card, CardContent }  from '@/components/ui/card'
 import { Badge }              from '@/components/ui/badge'
@@ -390,6 +435,11 @@ import {
   RefreshCw, Database, ArrowUpDown, Timer
 } from 'lucide-vue-next'
 import { usePipeline } from '@/composables/usePipeline'
+import ChartStatusByDag from '@/components/dashboard/ChartStatusByDag.vue'
+import ChartDurationBottlenecks from '@/components/dashboard/ChartDurationBottlenecks.vue'
+import ChartVolumeTrends from '@/components/dashboard/ChartVolumeTrends.vue'
+import ChartQualityCompleteness from '@/components/dashboard/ChartQualityCompleteness.vue'
+import ChartBoampQuality from '@/components/dashboard/ChartBoampQuality.vue'
 // ─────────────────────────────────────────────
 // CONFIG
 // ─────────────────────────────────────────────
@@ -427,6 +477,7 @@ const PIPELINE_PHASE_ORDER = {
 // ─────────────────────────────────────────────
 // STATE
 // ─────────────────────────────────────────────
+const router = useRouter()
 const globalMetrics = ref({ inserted_today: 0, updated_today: 0 })
 const taskResources = ref({})  // { sync_boamp: { scrape_boamp: {cpu,ram,disk}, ... }, sync_datagouv: {...} }
 const boamp    = usePipeline('sync_boamp',    taskResources)
@@ -443,6 +494,16 @@ const pipelines = reactive({
   sync_boamp: buildEmptyPipeline('sync_boamp'),
   sync_datagouv: buildEmptyPipeline('sync_datagouv'),
 })
+
+const expandedPipelines = ref(new Set())
+
+const togglePipeline = (pid) => {
+  if (expandedPipelines.value.has(pid)) {
+    expandedPipelines.value.delete(pid)
+  } else {
+    expandedPipelines.value.add(pid)
+  }
+}
 
 const openLogs         = ref(new Set())
 const liveClock        = ref('')
@@ -476,16 +537,17 @@ function buildEmptyPhase(name, num) {
   return {
     num,
     name,
-    sub:  TASK_LABELS[name] ?? name,
-    st:   'idle',
-    dur:  '—',
-    inp:  '—',
-    out:  '—',
-    cpu:  0,
-    ram:  0,
-    disk: 0,
-    err:  null,
-    logs: [],
+    sub:   TASK_LABELS[name] ?? name,
+    st:    'idle',
+    dur:   '—',
+    inp:   '—',
+    out:   '—',
+    cpu:   0,
+    ram:   0,
+    ramMb: 0,   // ← ajoute
+    disk:  0,
+    err:   null,
+    logs:  [],
   }
 }
 
@@ -559,6 +621,7 @@ async function applyStateToReactive(dagId, data) {
   const taskMap = {}
   for (const t of (data.tasks ?? [])) taskMap[t.task_id] = t
 
+  // ── Construire les phases depuis taskResources déjà en cache ──
   pl.phases = (PIPELINE_PHASE_ORDER[dagId] ?? []).map((name, i) => {
     const task     = taskMap[name]
     const existing = pl.phases.find(p => p.name === name)
@@ -570,59 +633,79 @@ async function applyStateToReactive(dagId, data) {
     if (!task) return existing ?? buildEmptyPhase(name, i + 1)
 
     const st  = mapState(task.state)
-    // Lire depuis taskResources partagé
     const res = taskResources.value[dagId]?.[name] ?? { cpu: 0, ram: 0, disk: 0 }
 
     return {
-      num:  i + 1,
-      name: task.task_id,
-      sub:  TASK_LABELS[task.task_id] ?? task.task_id,
+      num:            i + 1,
+      name:           task.task_id,
+      sub:            TASK_LABELS[task.task_id] ?? task.task_id,
       st,
-      dur:  formatDuration(task.duration),
-      inp:  st === 'idle' ? '—' : inpVal,
-      out:  st === 'idle' ? '—' : fmtMetric(outVal),
-      cpu:  res.cpu,
-      ram:  res.ram,
-      disk: res.disk,
-      err:  task.state === 'failed'
-              ? `Task ${task.task_id} failed\nDAG: ${dagId} | Voir logs`
-              : null,
-      logs: existing?.logs ?? [],
+      dur:            formatDuration(task.duration),
+      inp:            st === 'idle' ? '—' : inpVal,
+      out:            st === 'idle' ? '—' : fmtMetric(outVal),
+      cpu:            res.cpu,
+      ram:            res.ram,
+      ram_mb:         res.ram_mb  ?? 0,
+      disk:           res.disk,
+      resourceSource: res.source  ?? null,
+      err:            task.state === 'failed'
+                        ? `Task ${task.task_id} failed\nDAG: ${dagId} | Voir logs`
+                        : null,
+      logs:           existing?.logs ?? [],
     }
   })
 
-  // Charger les ressources des tasks non-idle en parallèle
+  // ── Charger les ressources en parallèle APRÈS avoir construit les phases ──
   const toLoad = (data.tasks ?? []).filter(
     t => t.state && !['queued', 'scheduled', 'none', null].includes(t.state)
   )
-  toLoad.forEach(t => {
-    const cached = taskResources.value[dagId]?.[t.task_id]
-    if (!cached || cached.cpu === 0) {
-      fetchTaskResources(dagId, run.run_id, t.task_id)
-    }
-  })
+
+  await Promise.all(
+    toLoad.map(async t => {
+      const cached = taskResources.value[dagId]?.[t.task_id]
+      // Recharger si : pas en cache, ou valeurs à 0, ou task encore running
+      if (!cached || cached.cpu === 0 || t.state === 'running') {
+        const data = await fetchTaskResources(dagId, run.run_id, t.task_id)
+        if (data) {
+          // Mettre à jour taskResources — Vue détecte le changement
+          taskResources.value = {
+            ...taskResources.value,
+            [dagId]: {
+              ...(taskResources.value[dagId] ?? {}),
+              [t.task_id]: {
+                cpu:    data.cpu    ?? 0,
+                ram:    data.ram    ?? 0,
+                ram_mb: data.ram_mb ?? 0,
+                disk:   data.disk   ?? 0,
+                source: data.source ?? 'estimated',
+              }
+            }
+          }
+          // Mettre à jour la phase directement aussi pour trigger la réactivité
+          const phase = pl.phases.find(p => p.name === t.task_id)
+          if (phase) {
+            phase.cpu            = data.cpu    ?? 0
+            phase.ram            = data.ram    ?? 0
+            phase.ram_mb         = data.ram_mb ?? 0
+            phase.disk           = data.disk   ?? 0
+            phase.resourceSource = data.source ?? 'estimated'
+          }
+        }
+      }
+    })
+  )
 }
 
 async function fetchTaskResources(dagId, runId, taskId) {
   try {
-    const r    = await fetch(`${BASE_URL}/api/monitoring/resources/task/${dagId}/${runId}/${taskId}`)
-    const data = await r.json()
-
-    if (!taskResources.value[dagId]) taskResources.value[dagId] = {}
-
-    // Forcer la réactivité Vue avec un remplacement d'objet
-    taskResources.value = {
-      ...taskResources.value,
-      [dagId]: {
-        ...taskResources.value[dagId],
-        [taskId]: {
-          cpu:  data.cpu  ?? 0,
-          ram:  data.ram  ?? 0,
-          disk: data.disk ?? 0,
-        }
-      }
-    }
-  } catch {}
+    const res  = await fetch(
+      `${BASE_URL}/api/monitoring/resources/task/${dagId}/${runId}/${taskId}`
+    )
+    if (!res.ok) return null
+    return await res.json()
+  } catch {
+    return null
+  }
 }
 
 
@@ -1049,7 +1132,7 @@ function completionRate(phase) {
 onMounted(() => {
   // Démarrer le polling pour les deux pipelines
   pipelineIds.forEach(startPolling)
-  fetchGlobalMetrics()                                    // ← ajoute
+  fetchGlobalMetrics()
   setInterval(fetchGlobalMetrics, 30000) 
   // Horloge
   updateClock()

@@ -1,6 +1,6 @@
 import { ref, computed, onMounted, onUnmounted } from 'vue'
-
-const BASE_URL = import.meta.env.VITE_API_URL ?? 'http://localhost:8000'
+import axios from 'axios'
+const BASE_URL = import.meta.env.VITE_API_URL ?? 'http://localhost:8001'
 
 export const TASK_LABELS = {
   scrape_boamp:       'Scraping incrémental des marchés publics BOAMP via API',
@@ -262,4 +262,58 @@ export function usePipeline(dagId, externalTaskResources) {
     loadLogs, triggerDag, fetchHistory,
     fetchState,
   }
+}
+
+
+
+
+
+
+export function useMonitoringETL() {
+  const kpi            = ref(null)
+  const dagSuccess     = ref([])
+  const taskDuration   = ref([])
+  const volumeOverTime = ref([])
+  const dataQuality    = ref([])
+  const dataQualityBoamp = ref([])
+  const loading        = ref(true)
+  const error          = ref(null)
+
+  let intervalId = null
+
+  async function fetchAll() {
+    try {
+      const [r1, r2, r3, r4, r5, r6] = await Promise.all([
+        axios.get(`${BASE_URL}/api/monitoring/kpi-summary`),
+        axios.get(`${BASE_URL}/api/monitoring/dag-success-rate`, { params: { days: 30 } }),
+        axios.get(`${BASE_URL}/api/monitoring/task-duration`,    { params: { dag_id: 'sync_boamp', days: 7 } }),
+        axios.get(`${BASE_URL}/api/monitoring/volume-over-time`, { params: { days: 7 } }),
+        axios.get(`${BASE_URL}/api/monitoring/data-quality`),
+        axios.get(`${BASE_URL}/api/monitoring/data-quality-boamp`),
+      ])
+      
+      kpi.value            = r1.data
+      dagSuccess.value     = r2.data
+      taskDuration.value   = r3.data
+      volumeOverTime.value = r4.data
+      dataQuality.value    = r5.data
+      dataQualityBoamp.value = r6.data
+      error.value          = null
+    } catch (e) {
+      error.value = e.message
+    } finally {
+      loading.value = false
+    }
+  }
+
+  onMounted(() => {
+    fetchAll()
+    intervalId = setInterval(fetchAll, 60_000) // refresh auto toutes les 60s
+  })
+
+  onUnmounted(() => {
+    clearInterval(intervalId)
+  })
+
+  return { kpi, dagSuccess, taskDuration, volumeOverTime, dataQuality, dataQualityBoamp, loading, error, fetchAll }
 }

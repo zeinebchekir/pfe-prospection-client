@@ -90,6 +90,12 @@ const routes = [
 
   },
   {
+    path: "/admin/reports",
+    name: "ReportsList",
+    component: () => import("@/pages/admin/ReportsList.vue"),
+    meta: { requiresAuth: true, roles: ["ADMIN"] },
+  },
+  {
     path: "/admin/crm",
     component: () => import("@/pages/DashboardPage.vue"),
     meta: { requiresAuth: true, roles: ["ADMIN"] },
