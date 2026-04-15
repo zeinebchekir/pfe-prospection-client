@@ -3,7 +3,7 @@
  */
 
 import { createRouter, createWebHistory } from "vue-router"
-import { useAuth } from "@/composables/useAuth"
+import {useAuth} from "@/composables/useAuth"
 
 // Timestamp of the last successful session verification
 // Re-validate with backend every SESSION_TTL ms to detect expired tokens
@@ -88,6 +88,12 @@ const routes = [
     component: () => import("@/pages/admin/monitoringETLPipeline.vue"),
     meta: { requiresAuth: true, roles: ["ADMIN"] },
 
+  },
+  {
+    path: "/admin/reports",
+    name: "ReportsList",
+    component: () => import("@/pages/admin/ReportsList.vue"),
+    meta: { requiresAuth: true, roles: ["ADMIN"] },
   },
   {
     path: "/admin/crm",

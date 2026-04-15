@@ -15,6 +15,10 @@
         </div>
 
         <div class="flex items-center gap-3">
+          <Button @click="router.push('/admin/reports')" variant="outline" size="sm" class="hidden sm:flex items-center gap-2 border-border/60 text-tacir-darkblue bg-tacir-lightgray/20 hover:bg-tacir-lightgray/50">
+            <Database class="w-3.5 h-3.5 text-tacir-darkgray" />
+            <span class="text-xs font-semibold">Reports List</span>
+          </Button>
           <div class="hidden sm:flex items-center gap-2 bg-tacir-lightgray/50 border border-border/60 rounded-lg px-3 py-1.5">
             <Clock class="w-3.5 h-3.5 text-tacir-darkgray" />
             <span class="font-mono text-xs font-bold text-tacir-darkblue tabular-nums">{{ liveClock }}</span>
@@ -154,7 +158,31 @@
 
         </div>
 
+        <!-- ── ANALYTICS DASHBOARD ── -->
+        <div class="space-y-4 pt-4">
+          <h3 class="text-xs font-black text-tacir-darkblue uppercase tracking-widest flex items-center gap-2">
+            <svg class="w-4 h-4 text-tacir-blue" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"></path></svg>
+            Analytique Décisionnelle
+          </h3>
+           <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 pb-2">
+               <ChartStatusByDag class="lg:col-span-1" />
+               <ChartBoampQuality class="lg:col-span-1" />
+               <ChartQualityCompleteness class="lg:col-span-1" />
+           </div>
+           <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 pb-2 mt-4">
+               <ChartVolumeTrends class="lg:col-span-1" />
+               <ChartDurationBottlenecks class="lg:col-span-1" />
+           </div>
+        </div>
+        
+
+        <div class="h-px bg-border/60 w-full my-6"></div>
+
         <!-- ── SIDE BY SIDE PIPELINES GRID ── -->
+        <h3 class="text-xs font-black text-tacir-darkblue uppercase tracking-widest flex items-center gap-2 mb-4">
+          <Terminal class="w-4 h-4 text-tacir-blue" />
+          Temps Réel & Contrôle
+        </h3>
         <div class="grid grid-cols-1 xl:grid-cols-2 gap-6 items-start">
 
           <div
@@ -163,13 +191,18 @@
             class="flex flex-col gap-4"
           >
             <!-- Pipeline header label -->
-            <div class="flex items-center gap-2">
-              <span class="text-base">{{ pid === 'sync_boamp' ? '📄' : '🇫🇷' }}</span>
-              <h3 class="text-sm font-black text-tacir-darkblue tracking-tight">{{ pid }}</h3>
-              <Badge :class="pipelineStatusBadgeClass(pipelines[pid].status)" class="ml-1">
-                <component :is="pipelineStatusIcon(pipelines[pid].status)" class="w-2.5 h-2.5 mr-1" :class="pipelines[pid].status === 'run' ? 'animate-spin' : ''" />
-                {{ pipelineStatusLabel(pipelines[pid].status) }}
-              </Badge>
+            <div class="flex items-center justify-between cursor-pointer group" @click="togglePipeline(pid)">
+              <div class="flex items-center gap-2">
+                <span class="text-base">{{ pid === 'sync_boamp' ? '📄' : '🇫🇷' }}</span>
+                <h3 class="text-sm font-black text-tacir-darkblue tracking-tight">{{ pid }}</h3>
+                <Badge :class="pipelineStatusBadgeClass(pipelines[pid].status)" class="ml-1">
+                  <component :is="pipelineStatusIcon(pipelines[pid].status)" class="w-2.5 h-2.5 mr-1" :class="pipelines[pid].status === 'run' ? 'animate-spin' : ''" />
+                  {{ pipelineStatusLabel(pipelines[pid].status) }}
+                </Badge>
+              </div>
+              <Button variant="ghost" size="sm" class="h-8 w-8 p-0 text-tacir-darkgray group-hover:bg-tacir-lightgray/50 rounded-full transition-colors" @click.stop="togglePipeline(pid)">
+                <ChevronDown class="w-4 h-4 transition-transform duration-300" :class="{ 'rotate-180': expandedPipelines.has(pid) }" />
+              </Button>
             </div>
 
             <!-- ── RUN CONTROL CARD ── -->
@@ -246,8 +279,17 @@
             </Card>
 
             <!-- ── PHASE CARDS ── -->
-            <div class="space-y-0">
-              <template v-for="(phase, idx) in pipelines[pid].phases" :key="phase.name">
+            <Transition
+              enter-active-class="transition-all duration-500 ease-in-out origin-top"
+              enter-from-class="grid-rows-[0fr] opacity-0"
+              enter-to-class="grid-rows-[1fr] opacity-100"
+              leave-active-class="transition-all duration-300 ease-in-out origin-top"
+              leave-from-class="grid-rows-[1fr] opacity-100"
+              leave-to-class="grid-rows-[0fr] opacity-0"
+            >
+              <div v-show="expandedPipelines.has(pid)" class="grid">
+                <div class="space-y-0 min-h-0">
+                  <template v-for="(phase, idx) in pipelines[pid].phases" :key="phase.name">
 
                 <Card
                   class="border-border shadow-sm rounded-2xl bg-white overflow-hidden"
@@ -354,7 +396,7 @@
                       >
                         <span class="text-slate-500 flex-shrink-0 tabular-nums text-[9px]">{{ log.ts }}</span>
                         <span :class="logLevelClass(log.lvl)" class="flex-shrink-0 uppercase font-black w-6 text-[8px]">{{ log.lvl }}</span>
-                        <span class="text-slate-300 break-all text-[9px]">{{ log.msg }}</span>
+                        <span class="text-slate-300 break-all text-[9px]">{{ log.text }}</span>
                       </div>
                     </div>
 
@@ -366,8 +408,10 @@
                   <ChevronDown class="w-3.5 h-3.5 text-tacir-darkgray/30" />
                 </div>
 
-              </template>
-            </div>
+                  </template>
+                </div>
+              </div>
+            </Transition>
 
           </div>
         </div>
@@ -378,235 +422,655 @@
 </template>
 
 <script setup>
-import { ref, reactive, computed, onMounted, onUnmounted } from 'vue'
+import { ref, reactive, computed, onMounted, onUnmounted, watch } from 'vue'
+import { useRouter } from 'vue-router'
 import TheSidebar from '@/components/AppSidebar.vue'
-import { Card, CardContent } from '@/components/ui/card'
-import { Badge } from '@/components/ui/badge'
-import { Button } from '@/components/ui/button'
+import { Card, CardContent }  from '@/components/ui/card'
+import { Badge }              from '@/components/ui/badge'
+import { Button }             from '@/components/ui/button'
 import {
   Clock, Play, Square, RotateCcw,
   CheckCircle2, XCircle, Loader2, Circle,
   Terminal, ChevronDown, AlertTriangle,
   RefreshCw, Database, ArrowUpDown, Timer
 } from 'lucide-vue-next'
-
+import { usePipeline } from '@/composables/usePipeline'
+import ChartStatusByDag from '@/components/dashboard/ChartStatusByDag.vue'
+import ChartDurationBottlenecks from '@/components/dashboard/ChartDurationBottlenecks.vue'
+import ChartVolumeTrends from '@/components/dashboard/ChartVolumeTrends.vue'
+import ChartQualityCompleteness from '@/components/dashboard/ChartQualityCompleteness.vue'
+import ChartBoampQuality from '@/components/dashboard/ChartBoampQuality.vue'
 // ─────────────────────────────────────────────
-// MOCK DATA
+// CONFIG
 // ─────────────────────────────────────────────
 
-const BOAMP_PIPELINE = {
-  runId: 'run_boamp_20260411_0600',
-  status: 'err',
-  progress: 28,
-  start: '06:00:01',
-  end: '06:04:52',
-  phases: [
-    {
-      num: 1, name: 'scrape_boamp',
-      sub: 'Scraping incrémental des marchés publics BOAMP via API',
-      st: 'ok', dur: '1m 18s', inp: '—', out: '1 247 marchés',
-      cpu: 38, ram: 42, disk: 22, err: null,
-      logs: [
-        { ts: '06:00:01', lvl: 'info', msg: 'Démarrage du scraping incrémental BOAMP' },
-        { ts: '06:00:05', lvl: 'info', msg: 'Connexion API BOAMP établie (endpoint: api.boamp.fr/avis)' },
-        { ts: '06:00:23', lvl: 'ok',   msg: '623 avis récupérés depuis le dernier curseur' },
-        { ts: '06:01:07', lvl: 'warn', msg: 'Rate-limit détecté — pause 5s automatique' },
-        { ts: '06:01:18', lvl: 'ok',   msg: '1 247 marchés scrappés au total' },
-      ]
-    },
-    {
-      num: 2, name: 'extract_boamp',
-      sub: 'Extraction et parsing JSON des champs normalisés',
-      st: 'err', dur: '0m 32s', inp: '1 247 lignes', out: '0 lignes',
-      cpu: 61, ram: 55, disk: 31,
-      err: `Traceback (most recent call last):
-  File "/opt/airflow/dags/boamp/extract.py", line 87, in process_record
-    siret = record['acheteur'].get('siret')
-AttributeError: 'NoneType' object has no attribute 'get'
+const BASE_URL = import.meta.env.VITE_API_URL ?? 'http://localhost:8001'
 
-Task exited with return code 1
-DAG: sync_boamp | Task: extract_boamp`,
-      logs: [
-        { ts: '06:01:20', lvl: 'info', msg: 'Chargement de /tmp/boamp_raw_20260411.jsonl (1 247 entrées)' },
-        { ts: '06:01:45', lvl: 'warn', msg: 'Enregistrement #412: champ "acheteur" est null — skipping' },
-        { ts: '06:01:51', lvl: 'err',  msg: "AttributeError: 'NoneType' object has no attribute 'get' @ ligne 87" },
-        { ts: '06:01:51', lvl: 'err',  msg: 'Extraction interrompue. Rollback effectué.' },
-      ]
-    },
-    { num: 3, name: 'enrich_boamp',     sub: 'Enrichissement SIRET via API INSEE / Annuaire entreprises', st: 'idle', dur: '—', inp: '—', out: '—', cpu: 0, ram: 0, disk: 0, err: null, logs: [] },
-    { num: 4, name: 'load_raw_boamp',   sub: 'Chargement dans le schéma raw.boamp (PostgreSQL)',          st: 'idle', dur: '—', inp: '—', out: '—', cpu: 0, ram: 0, disk: 0, err: null, logs: [] },
-    { num: 5, name: 'clean_boamp',      sub: 'Déduplication, normalisation et validation des données',    st: 'idle', dur: '—', inp: '—', out: '—', cpu: 0, ram: 0, disk: 0, err: null, logs: [] },
-    { num: 6, name: 'load_clean_boamp', sub: 'Chargement final dans le schéma clean.boamp',               st: 'idle', dur: '—', inp: '—', out: '—', cpu: 0, ram: 0, disk: 0, err: null, logs: [] },
-    { num: 7, name: 'rapport_final',    sub: 'Génération du rapport de synthèse et notifications',        st: 'idle', dur: '—', inp: '—', out: '—', cpu: 0, ram: 0, disk: 0, err: null, logs: [] },
-  ]
+const TASK_LABELS = {
+  scrape_boamp:       'Scraping incrémental des marchés publics BOAMP via API',
+  extract_boamp:      'Extraction et parsing JSON des champs normalisés',
+  enrich_boamp:       'Enrichissement SIRET via API INSEE / Annuaire entreprises',
+  load_raw_boamp:     'Chargement dans le schéma raw.boamp (PostgreSQL)',
+  clean_boamp:        'Déduplication, normalisation et validation des données',
+  load_clean_boamp:   'Chargement final dans le schéma clean.boamp',
+  scrape_sirene:      'Téléchargement du fichier SIRENE (data.gouv.fr) en incrémental',
+  extract_datagouv:   'Parsing CSV et mapping vers le modèle de données interne',
+  load_raw_datagouv:  'Insertion dans le schéma raw.sirene (upsert par SIRET)',
+  clean_datagouv:     'Nettoyage, normalisation des codes NAF et validation LUHN SIREN',
+  load_clean_sirene:  'Chargement final dans clean.sirene — inserts + updates',
+  rapport_final:      'Génération du rapport de synthèse et notifications',
+  cleanup:            'Nettoyage des fichiers temporaires',
 }
 
-const DATAGOUV_PIPELINE = {
-  runId: 'run_datagouv_20260411_1200',
-  status: 'ok',
-  progress: 100,
-  start: '12:00:00',
-  end: '12:14:37',
-  phases: [
-    {
-      num: 1, name: 'scrape_sirene',
-      sub: 'Téléchargement du fichier SIRENE (data.gouv.fr) en incrémental',
-      st: 'ok', dur: '2m 05s', inp: '—', out: '1 240 établissements',
-      cpu: 29, ram: 35, disk: 58, err: null,
-      logs: [
-        { ts: '12:00:00', lvl: 'info', msg: 'Démarrage du scraping SIRENE — delta depuis 2026-04-10' },
-        { ts: '12:00:04', lvl: 'info', msg: 'GET https://files.data.gouv.fr/insee-sirene/... → 200 OK' },
-        { ts: '12:01:12', lvl: 'ok',   msg: '1 240 lignes extraites du fichier CSV delta' },
-        { ts: '12:02:05', lvl: 'ok',   msg: 'Scraping terminé. Fichier: /tmp/sirene_delta_20260411.csv' },
-      ]
-    },
-    {
-      num: 2, name: 'extract_datagouv',
-      sub: 'Parsing CSV et mapping vers le modèle de données interne',
-      st: 'ok', dur: '0m 48s', inp: '1 240 lignes', out: '1 238 lignes',
-      cpu: 44, ram: 39, disk: 26, err: null,
-      logs: [
-        { ts: '12:02:06', lvl: 'info', msg: 'Parsing du CSV SIRENE (1 240 lignes)' },
-        { ts: '12:02:18', lvl: 'warn', msg: '2 lignes ignorées: NIC vide ou format SIREN invalide' },
-        { ts: '12:02:54', lvl: 'ok',   msg: '1 238 enregistrements extraits et mappés avec succès' },
-      ]
-    },
-    {
-      num: 3, name: 'load_raw_datagouv',
-      sub: 'Insertion dans le schéma raw.sirene (upsert par SIRET)',
-      st: 'ok', dur: '1m 12s', inp: '1 238 lignes', out: '1 238 insérées',
-      cpu: 72, ram: 68, disk: 81, err: null,
-      logs: [
-        { ts: '12:02:55', lvl: 'info', msg: 'Connexion PostgreSQL établie (pool=5)' },
-        { ts: '12:02:56', lvl: 'info', msg: 'UPSERT batch de 1 238 enregistrements dans raw.sirene' },
-        { ts: '12:04:07', lvl: 'ok',   msg: 'Load raw terminé: 1 238 lignes insérées / 0 erreurs' },
-      ]
-    },
-    {
-      num: 4, name: 'clean_datagouv',
-      sub: 'Nettoyage, normalisation des codes NAF et validation LUHN SIREN',
-      st: 'ok', dur: '2m 31s', inp: '1 238 lignes', out: '1 201 lignes valides',
-      cpu: 53, ram: 47, disk: 34, err: null,
-      logs: [
-        { ts: '12:04:08', lvl: 'info', msg: 'Démarrage du nettoyage SIRENE' },
-        { ts: '12:04:15', lvl: 'warn', msg: '23 entrées avec code NAF invalide → normalisation forcée' },
-        { ts: '12:04:52', lvl: 'warn', msg: '14 entrées rejetées: SIREN échoue la validation LUHN' },
-        { ts: '12:06:39', lvl: 'ok',   msg: '1 201 lignes validées — 37 rejetées → quarantine.sirene' },
-      ]
-    },
-    {
-      num: 5, name: 'load_clean_sirene',
-      sub: 'Chargement final dans clean.sirene — 980 inserts + 221 updates',
-      st: 'ok', dur: '1m 03s', inp: '1 201 lignes', out: '980 inserts + 221 updates',
-      cpu: 66, ram: 61, disk: 74, err: null,
-      logs: [
-        { ts: '12:06:40', lvl: 'info', msg: 'Début du load dans clean.sirene' },
-        { ts: '12:07:35', lvl: 'info', msg: 'UPDATE clean.sirene — 221 mises à jour' },
-        { ts: '12:07:43', lvl: 'ok',   msg: '980 nouvelles entrées + 221 mises à jour — 0 conflits' },
-      ]
-    },
-    {
-      num: 6, name: 'rapport_final',
-      sub: 'Génération du rapport de qualité et envoi des notifications',
-      st: 'ok', dur: '0m 54s', inp: '—', out: 'Rapport PDF + e-mail',
-      cpu: 18, ram: 22, disk: 12, err: null,
-      logs: [
-        { ts: '12:07:44', lvl: 'info', msg: 'Génération du rapport Jinja2 — template: rapport_sirene.html' },
-        { ts: '12:08:05', lvl: 'ok',   msg: 'Rapport PDF généré: rapport_sirene_20260411.pdf (42 KB)' },
-        { ts: '12:08:21', lvl: 'ok',   msg: 'E-mail envoyé à [data-team@entreprise.fr]' },
-        { ts: '12:08:38', lvl: 'ok',   msg: 'Pipeline sync_datagouv terminé — durée totale: 14m 37s' },
-      ]
-    },
-  ]
+// Ordre attendu des phases par pipeline
+const PIPELINE_PHASE_ORDER = {
+  sync_boamp: [
+    'scrape_boamp','extract_boamp','enrich_boamp',
+    'load_raw_boamp','clean_boamp','load_clean_boamp','rapport_final'
+  ],
+  sync_datagouv: [
+    'scrape_sirene','extract_datagouv','load_raw_datagouv',
+    'clean_datagouv','load_clean_sirene','rapport_final'
+  ],
 }
 
 // ─────────────────────────────────────────────
 // STATE
 // ─────────────────────────────────────────────
+const router = useRouter()
+const globalMetrics = ref({ inserted_today: 0, updated_today: 0 })
+const taskResources = ref({})  // { sync_boamp: { scrape_boamp: {cpu,ram,disk}, ... }, sync_datagouv: {...} }
+const boamp    = usePipeline('sync_boamp',    taskResources)
+const datagouv = usePipeline('sync_datagouv', taskResources)
 
+const todayRuns = reactive({
+  sync_boamp:    { total: 0, success: 0, failed: 0 },
+  sync_datagouv: { total: 0, success: 0, failed: 0 },
+})
 const pipelineIds = ['sync_boamp', 'sync_datagouv']
 
+// Structure réactive alimentée par l'API (même shape que les mock data)
 const pipelines = reactive({
-  sync_boamp:    JSON.parse(JSON.stringify(BOAMP_PIPELINE)),
-  sync_datagouv: JSON.parse(JSON.stringify(DATAGOUV_PIPELINE)),
+  sync_boamp: buildEmptyPipeline('sync_boamp'),
+  sync_datagouv: buildEmptyPipeline('sync_datagouv'),
 })
 
-// Track which pipelines are currently simulating
-const simulatingPipelines = reactive(new Set())
-const simTimers = {}
+const expandedPipelines = ref(new Set())
 
-// Log open state: key = "pid:phaseName"
-const openLogs = ref(new Set())
+const togglePipeline = (pid) => {
+  if (expandedPipelines.value.has(pid)) {
+    expandedPipelines.value.delete(pid)
+  } else {
+    expandedPipelines.value.add(pid)
+  }
+}
 
-const liveClock = ref('')
+const openLogs         = ref(new Set())
+const liveClock        = ref('')
+const connectionStatus = ref({ sync_boamp: false, sync_datagouv: false })
+const loadingLogs      = ref(new Set())
+
+// AbortControllers pour les streams actifs
+const activeStreams = {}
+
+// Timers polling
+let pollTimers   = {}
+let clockTimer   = null
 
 // ─────────────────────────────────────────────
-// GLOBAL KPIs — computed from reactive pipeline data
+// BUILDERS
+// ─────────────────────────────────────────────
+
+function buildEmptyPipeline(dagId) {
+  const phaseNames = PIPELINE_PHASE_ORDER[dagId] ?? []
+  return {
+    runId:    '—',
+    status:   'idle',
+    progress: 0,
+    start:    '—',
+    end:      '—',
+    phases:   phaseNames.map((name, i) => buildEmptyPhase(name, i + 1)),
+  }
+}
+
+function buildEmptyPhase(name, num) {
+  return {
+    num,
+    name,
+    sub:   TASK_LABELS[name] ?? name,
+    st:    'idle',
+    dur:   '—',
+    inp:   '—',
+    out:   '—',
+    cpu:   0,
+    ram:   0,
+    ramMb: 0,   // ← ajoute
+    disk:  0,
+    err:   null,
+    logs:  [],
+  }
+}
+
+// ─────────────────────────────────────────────
+// MAPPERS — Airflow → shape attendue par le template
+// ─────────────────────────────────────────────
+
+function mapState(airflowState) {
+  const MAP = {
+    success:         'ok',
+    failed:          'err',
+    upstream_failed: 'err',
+    running:         'run',
+    queued:          'idle',
+    scheduled:       'idle',
+    skipped:         'idle',
+    none:            'idle',
+  }
+  return MAP[airflowState] ?? 'idle'
+}
+
+function formatDuration(seconds) {
+  if (!seconds || seconds <= 0) return '—'
+  const m = Math.floor(seconds / 60)
+  const s = Math.round(seconds % 60)
+  return `${m}m ${s}s`
+}
+
+function formatTime(isoString) {
+  if (!isoString) return '—'
+  return new Date(isoString).toLocaleTimeString('fr-FR', {
+    hour:   '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+  })
+}
+
+// ─────────────────────────────────────────────
+// API — fetch état du pipeline
+// ─────────────────────────────────────────────
+
+async function fetchPipelineState(dagId) {
+  try {
+    const res  = await fetch(`${BASE_URL}/api/monitoring/state/${dagId}`)
+    if (!res.ok) throw new Error(`HTTP ${res.status}`)
+    const data = await res.json()
+
+    connectionStatus.value[dagId] = true
+    await applyStateToReactive(dagId, data)   // ← await ajouté
+    await fetchTodayRuns(dagId)           // ← ajoute ça
+
+
+  } catch (e) {
+    connectionStatus.value[dagId] = false
+    console.error(`[POLL ${dagId}]`, e.message)
+  }
+}
+
+async function applyStateToReactive(dagId, data) {
+  const pl  = pipelines[dagId]
+  const run = data.run
+  if (!run) return
+
+  pl.runId    = run.run_id ?? '—'
+  pl.status   = mapState(run.state)
+  pl.start    = formatTime(run.start_date)
+  pl.end      = formatTime(run.end_date)
+  pl.progress = data.progress ?? 0
+
+  const xcoms = await fetchRunMetrics(dagId, pl.runId)
+  const taskMap = {}
+  for (const t of (data.tasks ?? [])) taskMap[t.task_id] = t
+
+  // ── Construire les phases depuis taskResources déjà en cache ──
+  pl.phases = (PIPELINE_PHASE_ORDER[dagId] ?? []).map((name, i) => {
+    const task     = taskMap[name]
+    const existing = pl.phases.find(p => p.name === name)
+    const cfg      = TASK_XCOM_MAP[name] ?? {}
+    const taskXcom = xcoms[name] ?? {}
+    const outVal   = cfg.out ? taskXcom[cfg.out] : undefined
+    const inpVal   = resolveInp(name, dagId, xcoms)
+
+    if (!task) return existing ?? buildEmptyPhase(name, i + 1)
+
+    const st  = mapState(task.state)
+    const res = taskResources.value[dagId]?.[name] ?? { cpu: 0, ram: 0, disk: 0 }
+
+    return {
+      num:            i + 1,
+      name:           task.task_id,
+      sub:            TASK_LABELS[task.task_id] ?? task.task_id,
+      st,
+      dur:            formatDuration(task.duration),
+      inp:            st === 'idle' ? '—' : inpVal,
+      out:            st === 'idle' ? '—' : fmtMetric(outVal),
+      cpu:            res.cpu,
+      ram:            res.ram,
+      ram_mb:         res.ram_mb  ?? 0,
+      disk:           res.disk,
+      resourceSource: res.source  ?? null,
+      err:            task.state === 'failed'
+                        ? `Task ${task.task_id} failed\nDAG: ${dagId} | Voir logs`
+                        : null,
+      logs:           existing?.logs ?? [],
+    }
+  })
+
+  // ── Charger les ressources en parallèle APRÈS avoir construit les phases ──
+  const toLoad = (data.tasks ?? []).filter(
+    t => t.state && !['queued', 'scheduled', 'none', null].includes(t.state)
+  )
+
+  await Promise.all(
+    toLoad.map(async t => {
+      const cached = taskResources.value[dagId]?.[t.task_id]
+      // Recharger si : pas en cache, ou valeurs à 0, ou task encore running
+      if (!cached || cached.cpu === 0 || t.state === 'running') {
+        const data = await fetchTaskResources(dagId, run.run_id, t.task_id)
+        if (data) {
+          // Mettre à jour taskResources — Vue détecte le changement
+          taskResources.value = {
+            ...taskResources.value,
+            [dagId]: {
+              ...(taskResources.value[dagId] ?? {}),
+              [t.task_id]: {
+                cpu:    data.cpu    ?? 0,
+                ram:    data.ram    ?? 0,
+                ram_mb: data.ram_mb ?? 0,
+                disk:   data.disk   ?? 0,
+                source: data.source ?? 'estimated',
+              }
+            }
+          }
+          // Mettre à jour la phase directement aussi pour trigger la réactivité
+          const phase = pl.phases.find(p => p.name === t.task_id)
+          if (phase) {
+            phase.cpu            = data.cpu    ?? 0
+            phase.ram            = data.ram    ?? 0
+            phase.ram_mb         = data.ram_mb ?? 0
+            phase.disk           = data.disk   ?? 0
+            phase.resourceSource = data.source ?? 'estimated'
+          }
+        }
+      }
+    })
+  )
+}
+
+async function fetchTaskResources(dagId, runId, taskId) {
+  try {
+    const res  = await fetch(
+      `${BASE_URL}/api/monitoring/resources/task/${dagId}/${runId}/${taskId}`
+    )
+    if (!res.ok) return null
+    return await res.json()
+  } catch {
+    return null
+  }
+}
+
+
+
+async function fetchTodayRuns(dagId) {
+  try {
+    const res  = await fetch(`${BASE_URL}/api/monitoring/runs/today/${dagId}`)
+    const data = await res.json()
+    todayRuns[dagId] = data
+  } catch (e) {
+    console.error(`[TODAY RUNS ${dagId}]`, e.message)
+  }
+}
+// ─────────────────────────────────────────────
+// API — Logs snapshot (task terminée)
+// ─────────────────────────────────────────────
+
+async function fetchLogsSnapshot(dagId, runId, taskId) {
+  try {
+    const res  = await fetch(
+      `${BASE_URL}/api/monitoring/logs/${dagId}/${runId}/${taskId}`
+    )
+    const data = await res.json()
+    return data.lines ?? []
+  } catch {
+    return []
+  }
+}
+
+// ─────────────────────────────────────────────
+// API — Stream logs (task en cours) — tail -f
+// ─────────────────────────────────────────────
+
+function startLogStream(dagId, runId, taskId) {
+  // Stopper un éventuel stream précédent sur cette task
+  stopLogStream(dagId, taskId)
+
+  const key        = `${dagId}:${taskId}`
+  const controller = new AbortController()
+  activeStreams[key] = controller
+
+  const phase = pipelines[dagId].phases.find(p => p.name === taskId)
+  if (phase) phase.logs = []
+
+  const url = `${BASE_URL}/api/monitoring/logs/${dagId}/${runId}/${taskId}/stream`
+
+  fetch(url, { signal: controller.signal })
+    .then(async (response) => {
+      const reader  = response.body.getReader()
+      const decoder = new TextDecoder()
+      let   buffer  = ''
+
+      while (true) {
+        const { done, value } = await reader.read()
+        if (done) break
+
+        buffer += decoder.decode(value, { stream: true })
+        const lines = buffer.split('\n')
+        buffer = lines.pop() ?? ''
+
+        for (const line of lines) {
+          if (!line.trim()) continue
+          try {
+            const parsed = JSON.parse(line)
+            console.log('parsed log line:', parsed)  // ← ajoute ça
+
+            const phase  = pipelines[dagId].phases.find(p => p.name === taskId)
+            if (phase) phase.logs.push(parsed)
+          } catch { /* ligne non-JSON, ignorer */ }
+        }
+      }
+      delete activeStreams[key]
+    })
+    .catch((err) => {
+      if (err.name !== 'AbortError') {
+        console.error(`[STREAM ${key}]`, err.message)
+      }
+    })
+}
+
+function stopLogStream(dagId, taskId) {
+  const key = `${dagId}:${taskId}`
+  if (activeStreams[key]) {
+    activeStreams[key].abort()
+    delete activeStreams[key]
+  }
+}
+
+// ─────────────────────────────────────────────
+// WATCHER — démarre le stream quand une task passe en running
+// ─────────────────────────────────────────────
+
+pipelineIds.forEach(dagId => {
+  watch(
+    () => pipelines[dagId].phases.map(p => p.st),
+    (newStates, oldStates) => {
+      if (!oldStates) return
+      const pl = pipelines[dagId]
+
+      newStates.forEach((newSt, idx) => {
+        const oldSt  = oldStates[idx]
+        const phase  = pl.phases[idx]
+        const runId  = pl.runId
+
+        // Task vient de passer en running → démarrer le stream
+        if (newSt === 'run' && oldSt !== 'run') {
+          startLogStream(dagId, runId, phase.name)
+        }
+
+        // Task vient de terminer → arrêter le stream + snapshot final
+        if ((newSt === 'ok' || newSt === 'err') && oldSt === 'run') {
+          stopLogStream(dagId, phase.name)
+          fetchLogsSnapshot(dagId, runId, phase.name).then(lines => {
+            phase.logs = lines
+          })
+        }
+      })
+    },
+    { deep: false }
+  )
+})
+
+// ─────────────────────────────────────────────
+// LOGS — toggle + chargement à la demande
+// ─────────────────────────────────────────────
+
+async function toggleLog(pid, phaseName) {
+  const key = `${pid}:${phaseName}`
+  const s   = new Set(openLogs.value)
+
+  if (s.has(key)) {
+    s.delete(key)
+    openLogs.value = s
+    return
+  }
+
+  s.add(key)
+  openLogs.value = s
+
+  // Charger les logs si pas encore chargés et task terminée
+  const phase = pipelines[pid].phases.find(p => p.name === phaseName)
+  if (phase && phase.logs.length === 0 && phase.st !== 'idle' && phase.st !== 'run') {
+    const runId = pipelines[pid].runId
+    if (runId && runId !== '—') {
+      loadingLogs.value.add(key)
+      const lines = await fetchLogsSnapshot(pid, runId, phaseName)
+      phase.logs = lines
+      loadingLogs.value.delete(key)
+    }
+  }
+}
+
+// ─────────────────────────────────────────────
+// ACTIONS — Démarrer / Stop / Reset via API Airflow
+// ─────────────────────────────────────────────
+
+const simulatingPipelines = reactive(new Set())
+
+async function handleStart(dagId) {
+  if (simulatingPipelines.has(dagId)) return
+  simulatingPipelines.add(dagId)
+
+  try {
+    const res  = await fetch(`${BASE_URL}/api/monitoring/trigger/${dagId}`, {
+      method:  'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body:    JSON.stringify({}),
+    })
+    const data = await res.json()
+    console.log(`[TRIGGER ${dagId}]`, data)
+
+    // Forcer un poll immédiat après déclenchement
+    setTimeout(() => fetchPipelineState(dagId), 1500)
+    setTimeout(() => fetchPipelineState(dagId), 4000)
+
+  } catch (e) {
+    console.error(`[TRIGGER ${dagId}]`, e.message)
+  } finally {
+    // Retirer après 5s pour éviter double-clic
+    setTimeout(() => simulatingPipelines.delete(dagId), 5000)
+  }
+}
+
+async function handleStop(dagId) {
+  // Appel API Airflow pour marquer le run comme failed
+  try {
+    const pl  = pipelines[dagId]
+    const url = `${import.meta.env.VITE_AIRFLOW_URL ?? 'http://localhost:8080'}`
+            + `/api/v2/dags/${dagId}/dagRuns/${pl.runId}`
+    await fetch(url, {
+      method:  'PATCH',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': 'Basic ' + btoa('ali:ali'),
+      },
+      body: JSON.stringify({ state: 'failed' }),
+    })
+  } catch (e) {
+    console.warn('[STOP] Airflow API non disponible, application locale')
+  }
+
+  // Mise à jour locale immédiate
+  const pl = pipelines[dagId]
+  pl.status = 'err'
+  pl.phases.forEach(p => { if (p.st === 'run') p.st = 'err' })
+
+  // Arrêter tous les streams actifs de ce pipeline
+  pl.phases.forEach(p => stopLogStream(dagId, p.name))
+}
+
+function handleReset(dagId) {
+  // Arrêter les streams
+  pipelines[dagId].phases.forEach(p => stopLogStream(dagId, p.name))
+
+  // Remettre à zéro localement
+  Object.assign(pipelines[dagId], buildEmptyPipeline(dagId))
+
+  // Nettoyer les logs ouverts
+  const s = new Set(openLogs.value)
+  for (const key of s) {
+    if (key.startsWith(`${dagId}:`)) s.delete(key)
+  }
+  openLogs.value = s
+}
+
+// ─────────────────────────────────────────────
+// POLLING — toutes les 2 secondes
+// ─────────────────────────────────────────────
+
+function startPolling(dagId) {
+  fetchPipelineState(dagId)  // poll immédiat au montage
+  pollTimers[dagId] = setInterval(() => fetchPipelineState(dagId), 2000)
+}
+
+function stopPolling(dagId) {
+  if (pollTimers[dagId]) {
+    clearInterval(pollTimers[dagId])
+    delete pollTimers[dagId]
+  }
+}
+
+// ─────────────────────────────────────────────
+// KPIs — computed depuis les données réelles
 // ─────────────────────────────────────────────
 
 const kpis = computed(() => {
-  const allPipelines = Object.values(pipelines)
+  const totalRuns    = pipelineIds.reduce((acc, id) => acc + (todayRuns[id]?.total   ?? 0), 0)
+  const totalSuccess = pipelineIds.reduce((acc, id) => acc + (todayRuns[id]?.success ?? 0), 0)
+  const totalFailed  = pipelineIds.reduce((acc, id) => acc + (todayRuns[id]?.failed  ?? 0), 0)
 
-  // Total runs = number of pipelines that have been started (not idle)
-  const totalRuns = allPipelines.filter(p => p.status !== 'idle').length
-
-  // Successful phases across all pipelines
-  const allPhases   = allPipelines.flatMap(p => p.phases)
-  const okPhases    = allPhases.filter(p => p.st === 'ok')
-  const errPhases   = allPhases.filter(p => p.st === 'err')
-  const successRate = allPhases.length
-    ? Math.round((okPhases.length / allPhases.length) * 100)
+  const successRate = totalRuns
+    ? Math.round((totalSuccess / totalRuns) * 100)
     : 0
 
-  // Count error-status phases as "pipeline errors today"
-  const errorsToday = errPhases.length
+  // ← supprimé : allPhases, loadPhases, extractNum (plus utilisés)
+  const rowsInserted = globalMetrics.value.inserted_today
+  const rowsUpdated  = globalMetrics.value.updated_today
 
-  // Rows inserted: sum numeric values found in 'out' fields of load phases (raw + clean)
-  const extractNum = str => {
-    const nums = (str || '').match(/\d[\d\s]*/g)
-    return nums ? nums.reduce((acc, n) => acc + Number(n.replace(/\s/g, '')), 0) : 0
-  }
-  const loadPhases = allPhases.filter(p => p.name.startsWith('load_') && p.st === 'ok')
-  // Rows inserted = phases whose output does NOT contain 'updates' (pure inserts)
-  const rowsInserted = loadPhases.reduce((acc, p) => {
-    if (!p.out.includes('updates')) return acc + extractNum(p.out)
-    // If output is "980 inserts + 221 updates", take only the first number
-    const m = p.out.match(/^(\d[\d\s]*)/)
-    return acc + (m ? Number(m[1].replace(/\s/g, '')) : 0)
-  }, 0)
-
-  // Rows updated = sum of numbers following 'updates' keyword in all load phase outputs
-  const rowsUpdated = loadPhases.reduce((acc, p) => {
-    const m = p.out.match(/(\d[\d\s]*)\s*updates?/)
-    return acc + (m ? Number(m[1].replace(/\s/g, '')) : 0)
-  }, 0)
-
-  // Average duration: parse "Xm Ys" strings to seconds, average, then format back
-  const parseDur = d => {
+  const allPhases   = Object.values(pipelines).flatMap(p => p.phases)  // ← gardé uniquement pour avgDuration
+  const parseDur    = d => {
     const m = (d || '').match(/(\d+)m\s*(\d+)s/)
     return m ? parseInt(m[1]) * 60 + parseInt(m[2]) : 0
   }
-  const finishedPhases = okPhases.filter(p => p.dur !== '—')
-  const avgSec = finishedPhases.length
-    ? Math.round(finishedPhases.reduce((acc, p) => acc + parseDur(p.dur), 0) / finishedPhases.length)
+  const okPhases    = allPhases.filter(p => p.st === 'ok' && p.dur !== '—')
+  const avgSec      = okPhases.length
+    ? Math.round(okPhases.reduce((acc, p) => acc + parseDur(p.dur), 0) / okPhases.length)
     : 0
   const avgDuration = avgSec >= 60
     ? `${Math.floor(avgSec / 60)}m ${avgSec % 60}s`
-    : `${avgSec}s`
+    : avgSec > 0 ? `${avgSec}s` : '—'
 
   return {
     totalRuns,
-    runsVsYesterday: 33,   // static mock delta vs yesterday
+    runsVsYesterday: 0,
     successRate,
     rowsInserted,
     rowsUpdated,
-    errorsToday,
+    errorsToday: totalFailed,
     avgDuration,
   }
 })
 
 // ─────────────────────────────────────────────
-// STYLE HELPERS
+// CONFIG — mapping XCom par task
+// ─────────────────────────────────────────────
+
+const TASK_XCOM_MAP = {
+  // sync_boamp
+  scrape_boamp:      { inp: null,                  out: 'total_raw' },
+  extract_boamp:     { inp: 'total_raw',            out: 'total_extracted' },
+  enrich_boamp:      { inp: 'total_extracted',      out: 'total_extracted' },
+  load_raw_boamp:    { inp: 'total_extracted',      out: 'total_raw_loaded' },
+  clean_boamp:       { inp: 'total_raw_loaded',     out: 'total_clean' },
+  load_clean_boamp:  { inp: 'total_clean',          out: 'total_clean_loaded' },
+  // sync_datagouv
+  scrape_sirene:     { inp: null,                   out: 'total_raw' },
+  extract_datagouv:  { inp: 'total_raw',            out: 'total_extracted' },
+  load_raw_datagouv: { inp: 'total_extracted',      out: 'total_raw_loaded' },
+  clean_datagouv:    { inp: 'total_raw_loaded',     out: 'total_clean' },
+  load_clean_sirene: { inp: 'total_clean',          out: 'total_clean_loaded' },
+}
+
+// ─────────────────────────────────────────────
+// API — fetch métriques XCom pour un run
+// ─────────────────────────────────────────────
+
+async function fetchRunMetrics(dagId, runId) {
+  if (!runId || runId === '—') return {}
+  try {
+    const res  = await fetch(`${BASE_URL}/api/monitoring/metrics/${dagId}/${runId}`)
+    if (!res.ok) return {}
+    const data = await res.json()
+    return data.metrics ?? {}
+  } catch {
+    return {}
+  }
+}
+
+// ─────────────────────────────────────────────
+// API — fetch métriques des ligns inserees ou modifies dans la table entreprise chaque jour
+// ─────────────────────────────────────────────
+
+
+
+async function fetchGlobalMetrics() {
+  try {
+    const res  = await fetch(`${BASE_URL}/api/monitoring/metrics`)
+    const data = await res.json()
+    globalMetrics.value = {
+      inserted_today: data.inserted_today ?? 0,
+      updated_today:  data.updated_today  ?? 0,
+    }
+  } catch (e) {
+    console.error('[METRICS]', e.message)
+  }
+}
+// ─────────────────────────────────────────────
+// HELPER — formater une valeur XCom en lisible
+// ─────────────────────────────────────────────
+
+function fmtMetric(val) {
+  if (val === null || val === undefined) return '—'
+  return `${Number(val).toLocaleString('fr-FR')} lignes`
+}
+
+// ─────────────────────────────────────────────
+// HELPER — résoudre inp d'une task depuis les XComs voisins
+// ─────────────────────────────────────────────
+
+function resolveInp(taskName, dagId, xcoms) {
+  const cfg = TASK_XCOM_MAP[taskName]
+  if (!cfg || !cfg.inp) return '—'
+
+  // Chercher la clé inp dans toutes les tasks du dag
+  const phaseOrder = PIPELINE_PHASE_ORDER[dagId] ?? []
+  for (const name of phaseOrder) {
+    if (xcoms[name]?.[cfg.inp] !== undefined) {
+      return fmtMetric(xcoms[name][cfg.inp])
+    }
+  }
+  return '—'
+}
+
+// ─────────────────────────────────────────────
+// STYLE HELPERS — identiques à l'original
 // ─────────────────────────────────────────────
 
 function pipelineStatusLabel(st) {
@@ -653,82 +1117,39 @@ function resourceTextClass(val, st) {
 function logLevelClass(lvl) {
   return ({ ok: 'text-emerald-400', warn: 'text-amber-400', err: 'text-red-400', info: 'text-slate-500' })[lvl] ?? 'text-slate-400'
 }
-function isLoadPhase(name) { return name.startsWith('load_') }
+function isLoadPhase(name)  { return name.startsWith('load_') }
 function completionRate(phase) {
   const extract = s => { const m = (s || '').match(/[\d\s]+/); return m ? Number(m[0].replace(/\s/g, '')) : 0 }
   const inp = extract(phase.inp), out = extract(phase.out)
   if (!inp || !out) return 100
   return Math.min(100, Math.round((out / inp) * 100))
 }
-function toggleLog(pid, phaseName) {
-  const key = pid + ':' + phaseName
-  const s = new Set(openLogs.value)
-  s.has(key) ? s.delete(key) : s.add(key)
-  openLogs.value = s
-}
 
 // ─────────────────────────────────────────────
-// SIMULATION (per pipeline)
+// LIFECYCLE
 // ─────────────────────────────────────────────
 
-function handleStart(pid) {
-  if (simulatingPipelines.has(pid)) return
-  const pl = pipelines[pid]
-  simulatingPipelines.add(pid)
-  pl.phases.forEach(p => { p.st = 'idle'; p.cpu = 0; p.ram = 0; p.disk = 0 })
-  pl.status = 'run'; pl.progress = 0; pl.end = ''
-  pl.start = new Date().toLocaleTimeString('fr-FR')
-
-  let idx = 0
-  const step = () => {
-    if (idx >= pl.phases.length) {
-      pl.status = 'ok'; pl.progress = 100
-      pl.end = new Date().toLocaleTimeString('fr-FR')
-      simulatingPipelines.delete(pid); return
-    }
-    const phase = pl.phases[idx]
-    phase.st = 'run'
-    phase.cpu  = Math.floor(Math.random() * 75 + 15)
-    phase.ram  = Math.floor(Math.random() * 70 + 20)
-    phase.disk = Math.floor(Math.random() * 80 + 5)
-    simTimers[pid] = setTimeout(() => {
-      phase.st = 'ok'; idx++
-      pl.progress = Math.round((idx / pl.phases.length) * 100)
-      step()
-    }, 1200)
-  }
-  step()
-}
-
-function handleStop(pid) {
-  if (simTimers[pid]) clearTimeout(simTimers[pid])
-  simulatingPipelines.delete(pid)
-  const pl = pipelines[pid]
-  pl.status = 'err'
-  pl.phases.forEach(p => { if (p.st === 'run') p.st = 'err' })
-}
-
-function handleReset(pid) {
-  if (simTimers[pid]) clearTimeout(simTimers[pid])
-  simulatingPipelines.delete(pid)
-  pipelines[pid] = JSON.parse(JSON.stringify(pid === 'sync_boamp' ? BOAMP_PIPELINE : DATAGOUV_PIPELINE))
-  // Clear logs for this pipeline
-  const s = new Set(openLogs.value)
-  for (const key of s) { if (key.startsWith(pid + ':')) s.delete(key) }
-  openLogs.value = s
-}
-
-// ─────────────────────────────────────────────
-// LIVE CLOCK
-// ─────────────────────────────────────────────
-
-let clockTimer = null
-function updateClock() {
-  liveClock.value = new Date().toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit', second: '2-digit' })
-}
-onMounted(() => { updateClock(); clockTimer = setInterval(updateClock, 1000) })
-onUnmounted(() => {
-  if (clockTimer) clearInterval(clockTimer)
-  Object.values(simTimers).forEach(t => clearTimeout(t))
+onMounted(() => {
+  // Démarrer le polling pour les deux pipelines
+  pipelineIds.forEach(startPolling)
+  fetchGlobalMetrics()
+  setInterval(fetchGlobalMetrics, 30000) 
+  // Horloge
+  updateClock()
+  clockTimer = setInterval(updateClock, 1000)
 })
+
+onUnmounted(() => {
+  pipelineIds.forEach(stopPolling)
+  pipelineIds.forEach(dagId => {
+    pipelines[dagId].phases.forEach(p => stopLogStream(dagId, p.name))
+  })
+  if (clockTimer) clearInterval(clockTimer)
+})
+
+function updateClock() {
+  liveClock.value = new Date().toLocaleTimeString('fr-FR', {
+    hour: '2-digit', minute: '2-digit', second: '2-digit',
+  })
+}
 </script>
