@@ -228,7 +228,7 @@ def _map_data(rec: dict, source: str,date_scraping: date_type | None,dag_run_id:
         date_derniere_modif_site = _to_date(entreprise.get("dateDerniereModification")) if source == "dataGouv" else _to_date(entreprise.get("dateMAJ")),
         date_scraping        = _to_date(date_scraping),
         taux_completude      = entreprise.get("taux_completude"),
-        status="Nouveau"
+        statut="Nouveau"
         
         
     )
