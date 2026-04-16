@@ -6,7 +6,7 @@
       <div class="w-2.5 h-2.5 rounded-full bg-yellow-400" />
       <div class="w-2.5 h-2.5 rounded-full bg-green-400" />
       <div class="flex-1 mx-4 bg-white rounded-md px-3 py-1 text-xs text-tacir-darkgray border border-border">
-        taciriq.internal / dashboard
+        qualifix.com/dashboard
       </div>
     </div>
 

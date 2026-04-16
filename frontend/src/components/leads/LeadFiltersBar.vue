@@ -188,84 +188,108 @@
         <!-- Ville -->
         <div class="space-y-1">
           <label class="text-[11px] font-medium text-muted-foreground">Ville</label>
-          <select
-            :value="filters.villes[0] ?? ''"
-            @change="emit('update:filter', 'villes', $event.target.value ? [$event.target.value] : [])"
-            class="w-full h-8 text-xs rounded-md border border-input bg-background px-2 focus:outline-none focus:ring-1 focus:ring-ring"
-          >
-            <option value="">Toutes</option>
-            <option v-for="v in uniqueVilles.slice(0, 30)" :key="v" :value="v">{{ v }}</option>
-          </select>
+            <Select
+              :model-value="filters.villes[0] ?? 'all'"
+              @update:model-value="(val) => emit('update:filter', 'villes', val === 'all' ? [] : [val])"
+            >
+              <SelectTrigger class="w-full h-8 text-xs bg-background">
+                <SelectValue placeholder="Toutes" />
+              </SelectTrigger>
+              <SelectContent class="max-h-[300px]">
+                <SelectItem value="all">Toutes</SelectItem>
+                <SelectItem v-for="v in uniqueVilles" :key="v" :value="v">{{ v }}</SelectItem>
+              </SelectContent>
+            </Select>
         </div>
 
         <!-- BOAMP -->
         <div class="space-y-1">
           <label class="text-[11px] font-medium text-muted-foreground">BOAMP</label>
-          <select
-            :value="filters.hasBoamp === null ? '' : filters.hasBoamp ? 'true' : 'false'"
-            @change="emit('update:filter', 'hasBoamp', $event.target.value === '' ? null : $event.target.value === 'true')"
-            class="w-full h-8 text-xs rounded-md border border-input bg-background px-2 focus:outline-none focus:ring-1 focus:ring-ring"
-          >
-            <option value="">Tous</option>
-            <option value="true">Oui</option>
-            <option value="false">Non</option>
-          </select>
+            <Select
+              :model-value="filters.hasBoamp === null ? 'all' : filters.hasBoamp ? 'true' : 'false'"
+              @update:model-value="(val) => emit('update:filter', 'hasBoamp', val === 'all' ? null : val === 'true')"
+            >
+              <SelectTrigger class="w-full h-8 text-xs bg-background">
+                <SelectValue placeholder="Tous" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Tous</SelectItem>
+                <SelectItem value="true">Oui</SelectItem>
+                <SelectItem value="false">Non</SelectItem>
+              </SelectContent>
+            </Select>
         </div>
 
         <!-- Email -->
         <div class="space-y-1">
           <label class="text-[11px] font-medium text-muted-foreground">Email</label>
-          <select
-            :value="filters.hasEmail === null ? '' : filters.hasEmail ? 'true' : 'false'"
-            @change="emit('update:filter', 'hasEmail', $event.target.value === '' ? null : $event.target.value === 'true')"
-            class="w-full h-8 text-xs rounded-md border border-input bg-background px-2 focus:outline-none focus:ring-1 focus:ring-ring"
-          >
-            <option value="">Tous</option>
-            <option value="true">Avec</option>
-            <option value="false">Sans</option>
-          </select>
+            <Select
+              :model-value="filters.hasEmail === null ? 'all' : filters.hasEmail ? 'true' : 'false'"
+              @update:model-value="(val) => emit('update:filter', 'hasEmail', val === 'all' ? null : val === 'true')"
+            >
+              <SelectTrigger class="w-full h-8 text-xs bg-background">
+                <SelectValue placeholder="Tous" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Tous</SelectItem>
+                <SelectItem value="true">Avec</SelectItem>
+                <SelectItem value="false">Sans</SelectItem>
+              </SelectContent>
+            </Select>
         </div>
 
         <!-- Téléphone -->
-        <div class="space-y-1">
-          <label class="text-[11px] font-medium text-muted-foreground">Téléphone</label>
-          <select
-            :value="filters.hasTelephone === null ? '' : filters.hasTelephone ? 'true' : 'false'"
-            @change="emit('update:filter', 'hasTelephone', $event.target.value === '' ? null : $event.target.value === 'true')"
-            class="w-full h-8 text-xs rounded-md border border-input bg-background px-2 focus:outline-none focus:ring-1 focus:ring-ring"
-          >
-            <option value="">Tous</option>
-            <option value="true">Avec</option>
-            <option value="false">Sans</option>
-          </select>
+          <div class="space-y-1">
+            <label class="text-[11px] font-medium text-muted-foreground">Téléphone</label>
+            <Select
+              :model-value="filters.hasTelephone === null ? 'all' : filters.hasTelephone ? 'true' : 'false'"
+              @update:model-value="(val) => emit('update:filter', 'hasTelephone', val === 'all' ? null : val === 'true')"
+            >
+              <SelectTrigger class="w-full h-8 text-xs bg-background">
+                <SelectValue placeholder="Tous" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Tous</SelectItem>
+                <SelectItem value="true">Avec</SelectItem>
+                <SelectItem value="false">Sans</SelectItem>
+              </SelectContent>
+            </Select>
         </div>
 
         <!-- LinkedIn dirigeant -->
         <div class="space-y-1">
           <label class="text-[11px] font-medium text-muted-foreground">LinkedIn</label>
-          <select
-            :value="filters.hasLinkedin === null ? '' : filters.hasLinkedin ? 'true' : 'false'"
-            @change="emit('update:filter', 'hasLinkedin', $event.target.value === '' ? null : $event.target.value === 'true')"
-            class="w-full h-8 text-xs rounded-md border border-input bg-background px-2 focus:outline-none focus:ring-1 focus:ring-ring"
-          >
-            <option value="">Tous</option>
-            <option value="true">Avec</option>
-            <option value="false">Sans</option>
-          </select>
+            <Select
+              :model-value="filters.hasLinkedin === null ? 'all' : filters.hasLinkedin ? 'true' : 'false'"
+              @update:model-value="(val) => emit('update:filter', 'hasLinkedin', val === 'all' ? null : val === 'true')"
+            >
+              <SelectTrigger class="w-full h-8 text-xs bg-background">
+                <SelectValue placeholder="Tous" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Tous</SelectItem>
+                <SelectItem value="true">Avec</SelectItem>
+                <SelectItem value="false">Sans</SelectItem>
+              </SelectContent>
+            </Select>
         </div>
 
         <!-- Dirigeants -->
         <div class="space-y-1">
           <label class="text-[11px] font-medium text-muted-foreground">Dirigeants</label>
-          <select
-            :value="filters.hasDirigeants === null ? '' : filters.hasDirigeants ? 'true' : 'false'"
-            @change="emit('update:filter', 'hasDirigeants', $event.target.value === '' ? null : $event.target.value === 'true')"
-            class="w-full h-8 text-xs rounded-md border border-input bg-background px-2 focus:outline-none focus:ring-1 focus:ring-ring"
-          >
-            <option value="">Tous</option>
-            <option value="true">Avec</option>
-            <option value="false">Sans</option>
-          </select>
+            <Select
+              :model-value="filters.hasDirigeants === null ? 'all' : filters.hasDirigeants ? 'true' : 'false'"
+              @update:model-value="(val) => emit('update:filter', 'hasDirigeants', val === 'all' ? null : val === 'true')"
+            >
+              <SelectTrigger class="w-full h-8 text-xs bg-background">
+                <SelectValue placeholder="Tous" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Tous</SelectItem>
+                <SelectItem value="true">Avec</SelectItem>
+                <SelectItem value="false">Sans</SelectItem>
+              </SelectContent>
+            </Select>
         </div>
 
         <!-- Score min -->
@@ -303,6 +327,7 @@
 <script setup>
 import { ref } from 'vue'
 import { Search, SlidersHorizontal, X, RotateCcw } from 'lucide-vue-next'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 
 const props = defineProps({
   filters: { type: Object, required: true },
