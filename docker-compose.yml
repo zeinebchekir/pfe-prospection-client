@@ -70,7 +70,22 @@ services:
       - web
     networks:
       - crmpfe_network
-
+  ia-ml:
+    build:
+      context: ./IA-ML_service
+      dockerfile: dockerfile
+    ports:
+      - "8002:8002"
+    volumes:
+      - ./IA-ML_service:/app              # ← ton code
+    env_file: .env 
+    depends_on:
+      db:
+        condition: service_healthy
+    networks:
+      - crmpfe_network
+    dns:
+      - 8.8.8.8
 volumes:
   postgres_data:
   static_volume:

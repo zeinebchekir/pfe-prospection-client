@@ -36,3 +36,4 @@ dist/
 *.swo
 .DS_Store
 Thumbs.db
+IA-ML_service/.env

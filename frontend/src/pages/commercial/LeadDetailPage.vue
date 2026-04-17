@@ -265,10 +265,23 @@
             <button class="inline-flex items-center gap-2 h-9 px-4 text-sm rounded-md border border-input hover:bg-accent transition-colors">
               <RefreshCw class="w-3.5 h-3.5" /> Prospects similaires
             </button>
-            <button class="inline-flex items-center gap-2 h-9 px-4 text-sm font-medium rounded-md bg-tacir-blue text-white hover:opacity-90 transition-opacity">
-              <TrendingUp class="w-3.5 h-3.5" /> Analyser le potentiel
-            </button>
+            <Button 
+              @click="showAnalysis = true"
+              class="gap-2 bg-tacir-blue text-white hover:opacity-90"
+            >
+              <Sparkles class="w-4 h-4" />
+              Analyser le potentiel
+            </Button>
           </div>
+
+  <LinkedInAnalysisFlow 
+    v-if="showAnalysis"
+    :is-open="showAnalysis"
+    :company-name="displayLead.nom" 
+    :company-id="displayLead.id"
+    @update:is-open="showAnalysis = $event"
+    @analysis-complete="onAnalysisComplete"
+  />
 
         </div>
       </main>
@@ -287,13 +300,14 @@
 </template>
 
 <script setup>
-import { ref, computed } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import {
   ArrowLeft, Pencil, Trash2, MapPin, Phone, Mail, Linkedin,
   Users, FileText, BarChart3, Target, TrendingUp, Activity,
-  Clock, Database, RefreshCw, Loader2,
+  Clock, Database, RefreshCw, Loader2, Sparkles
 } from 'lucide-vue-next'
+import { Button } from '@/components/ui/button'
 
 import TheSidebar    from '@/components/AppSidebar.vue'
 import SegmentBadge  from '@/components/leads/SegmentBadge.vue'
@@ -302,6 +316,7 @@ import ScoreRing     from '@/components/leads/ScoreRing.vue'
 import InfoRow       from '@/components/leads/InfoRow.vue'
 import MetricCard    from '@/components/leads/MetricCard.vue'
 import LeadEditModal from '@/components/leads/LeadEditModal.vue'
+import LinkedInAnalysisFlow from '@/components/leads/LinkedInAnalysisFlow.vue'
 
 import axios from 'axios'
 import { adaptLead, formatDateFR } from '@/lib/leadAdapter'
@@ -331,7 +346,6 @@ async function fetchLeadDetails() {
   }
 }
 
-import { onMounted } from 'vue'
 
 onMounted(() => {
   fetchLeadDetails()
@@ -370,6 +384,20 @@ const AVATAR_COLORS = [
   'bg-blue-50 text-blue-700',
   'bg-rose-50 text-rose-700',
 ]
+
+// ---- Analysis Handlers ----
+const showAnalysis = ref(false)
+
+const onAnalysisComplete = (data) => {
+  showAnalysis.value = false
+  // TODO: send data to backend or update local lead implicitly
+  console.log('Analysis result:', data)
+}
+
+function onAnalysisSkip() {
+  console.log('Analyse ignorée')
+  showAnalysis.value = false
+}
 
 // ---- Handlers ----
 function handleSave(id, updates) {
