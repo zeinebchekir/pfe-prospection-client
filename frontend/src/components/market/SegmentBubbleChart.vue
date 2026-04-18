@@ -1,58 +1,340 @@
 <template>
-  <div class="relative w-full" style="aspect-ratio: 16/9">
-    <!-- SVG bubbles -->
-    <svg viewBox="0 0 100 56" class="w-full h-full" preserveAspectRatio="xMidYMid meet">
-      <g v-for="b in bubbles" :key="b.cluster">
-        <circle
-          :cx="b.cx" :cy="b.cy * 0.56" :r="b.r"
-          :fill="b.color" fill-opacity="0.18"
-          :stroke="b.color" stroke-width="0.3"
-        />
-        <circle :cx="b.cx" :cy="b.cy * 0.56" :r="b.r * 0.5" :fill="b.color" fill-opacity="0.35" />
-      </g>
-    </svg>
-    <!-- Text overlay -->
-    <div class="absolute inset-0 pointer-events-none">
-      <div
-        v-for="b in bubbles"
-        :key="b.cluster"
-        class="absolute -translate-x-1/2 -translate-y-1/2 text-center"
-        :style="{ left: `${b.cx}%`, top: `${(b.cy * 0.56 / 56) * 100}%`, maxWidth: `${b.r * 2.2}%` }"
+  <div class="space-y-3">
+
+    <!-- ── Main Bubble Chart ─────────────────────────────────── -->
+    <div class="relative w-full" style="aspect-ratio: 16/7; min-height: 180px;">
+      <svg
+        :viewBox="`0 0 ${W} ${H}`"
+        class="w-full h-full"
+        preserveAspectRatio="xMidYMid meet"
+        style="cursor: default;"
       >
-        <div class="text-[11px] font-semibold leading-tight" :style="{ color: b.color }">{{ b.shortName }}</div>
-        <div class="text-[10px] font-bold text-gray-800 mt-0.5">{{ b.percent }}%</div>
-        <div class="text-[9px] text-gray-500">{{ b.n }} leads</div>
-      </div>
+        <defs>
+          <filter
+            v-for="b in mainBubbles"
+            :key="`f${b.key}`"
+            :id="`shadow-${b.key}`"
+            x="-30%" y="-30%" width="160%" height="160%"
+          >
+            <feDropShadow
+              dx="0" dy="1.5" stdDeviation="2"
+              :flood-color="b.color" flood-opacity="0.22"
+            />
+          </filter>
+        </defs>
+
+        <!-- ── Main segment bubbles ────────────────────────── -->
+        <g
+          v-for="b in mainBubbles"
+          :key="b.key"
+          style="cursor: pointer;"
+          @click="toggleGroup(b.key)"
+        >
+          <!-- Outer pulse ring (animated when selected) -->
+          <circle
+            :cx="b.cx" :cy="b.cy"
+            :r="b.r + (selectedGroup === b.key ? 2 : 0)"
+            :fill="b.color"
+            :fill-opacity="selectedGroup === b.key ? 0.08 : 0"
+            :stroke="b.color"
+            :stroke-width="selectedGroup === b.key ? 1.2 : 0.5"
+            :stroke-opacity="selectedGroup === b.key ? 0.9 : 0.55"
+            :filter="`url(#shadow-${b.key})`"
+            style="transition: all 0.25s ease;"
+          />
+          <!-- Inner fill -->
+          <circle
+            :cx="b.cx" :cy="b.cy" :r="b.r * 0.6"
+            :fill="b.color" :fill-opacity="selectedGroup === b.key ? 0.35 : 0.22"
+            style="transition: fill-opacity 0.2s;"
+          />
+          <!-- Centre dot -->
+          <circle
+            :cx="b.cx" :cy="b.cy" :r="b.r * 0.12"
+            :fill="b.color" fill-opacity="0.85"
+          />
+
+          <!-- Expand indicator ("+N" sub-segments) -->
+          <text
+            v-if="b.subCount > 1"
+            :x="b.cx + b.r * 0.72"
+            :y="b.cy - b.r * 0.72"
+            text-anchor="middle" dominant-baseline="middle"
+            :font-size="Math.max(2.2, b.r * 0.2)"
+            :fill="b.color" font-weight="700" opacity="0.75"
+          >+{{ b.subCount }}</text>
+
+          <!-- Label: % inside if large, outside if small -->
+          <text
+            v-if="b.r >= 10"
+            :x="b.cx" :y="b.cy - b.r * 0.18"
+            text-anchor="middle" dominant-baseline="middle"
+            :font-size="Math.max(3.5, b.r * 0.33)"
+            font-weight="700" :fill="b.color"
+          >{{ b.percent }}%</text>
+          <text
+            v-if="b.r >= 10"
+            :x="b.cx" :y="b.cy + b.r * 0.28"
+            text-anchor="middle" dominant-baseline="middle"
+            :font-size="Math.max(2.2, b.r * 0.22)"
+            fill="#6b7280"
+          >{{ b.n }} leads</text>
+        </g>
+
+        <!-- Labels for all bubbles -->
+        <g v-for="b in mainBubbles" :key="`lbl-${b.key}`" style="pointer-events:none;">
+          <!-- Connector line for small bubbles -->
+          <line
+            v-if="b.r < 10"
+            :x1="b.cx + (b.lx > b.cx ? 1 : -1) * b.r * 0.92"
+            :y1="b.cy"
+            :x2="b.lx" :y2="b.ly"
+            :stroke="b.color" stroke-width="0.35" stroke-opacity="0.45"
+            stroke-dasharray="1.2,0.8"
+          />
+          <foreignObject
+            :x="b.lx - b.lw / 2" :y="b.ly - 8"
+            :width="b.lw" height="18"
+            overflow="visible"
+          >
+            <div
+              xmlns="http://www.w3.org/1999/xhtml"
+              style="display:flex;flex-direction:column;align-items:center;gap:1px;user-select:none;"
+            >
+              <div
+                :style="{ fontSize: `${Math.max(3, b.r * 0.3)}px`, fontWeight: 700, color: b.color, whiteSpace:'nowrap', lineHeight: 1.1 }"
+              >{{ b.key }}</div>
+              <div
+                v-if="b.r < 10"
+                :style="{ fontSize: '2.4px', color: '#374151', whiteSpace:'nowrap', lineHeight: 1 }"
+              >{{ b.percent }}% · {{ b.n }} leads</div>
+            </div>
+          </foreignObject>
+        </g>
+      </svg>
     </div>
+
+    <!-- ── Sub-segment drill-down panel ─────────────────────── -->
+    <Transition name="slide-down">
+      <div
+        v-if="selectedGroup"
+        class="rounded-xl border border-border bg-gray-50 p-4"
+      >
+        <!-- Panel header -->
+        <div class="flex items-center justify-between mb-3">
+          <div class="flex items-center gap-2">
+            <span
+              class="w-2.5 h-2.5 rounded-full inline-block"
+              :style="{ backgroundColor: activeColor }"
+            />
+            <span class="text-sm font-semibold text-tacir-darkblue">{{ selectedGroup }}</span>
+            <span class="text-xs text-tacir-darkgray ml-1">
+              — {{ activeTotal }} leads · cliquez sur un sous-segment pour explorer
+            </span>
+          </div>
+          <button
+            @click="selectedGroup = null"
+            class="text-[11px] text-tacir-darkgray hover:text-tacir-darkblue flex items-center gap-1 px-2 py-1 rounded-lg border border-border hover:bg-white transition"
+          >
+            <X class="w-3 h-3" /> Fermer
+          </button>
+        </div>
+
+        <!-- Sub-bubble mini-chart -->
+        <div class="relative w-full" style="height: 80px;">
+          <svg viewBox="0 0 200 56" class="w-full h-full" preserveAspectRatio="xMidYMid meet">
+            <g v-for="sb in subBubbles" :key="sb.cluster">
+              <circle
+                :cx="sb.cx" :cy="sb.cy" :r="sb.r"
+                :fill="sb.color" fill-opacity="0.15"
+                :stroke="sb.color" stroke-width="0.5" stroke-opacity="0.6"
+              />
+              <circle :cx="sb.cx" :cy="sb.cy" :r="sb.r * 0.55" :fill="sb.color" fill-opacity="0.3" />
+              <text
+                :x="sb.cx" :y="sb.cy - 1"
+                text-anchor="middle" dominant-baseline="middle"
+                :font-size="Math.max(3, sb.r * 0.35)"
+                font-weight="700" :fill="sb.color"
+              >{{ sb.percent }}%</text>
+              <text
+                :x="sb.cx" :y="sb.cy + sb.r * 0.45"
+                text-anchor="middle" dominant-baseline="middle"
+                :font-size="Math.max(2, sb.r * 0.22)"
+                fill="#6b7280"
+              >{{ sb.n }}</text>
+              <!-- label outside if small -->
+              <text
+                :x="sb.cx" :y="sb.r < 8 ? sb.cy - sb.r - 2 : sb.cy - sb.r * 0.7"
+                text-anchor="middle" dominant-baseline="auto"
+                :font-size="Math.max(2.5, sb.r * 0.28)"
+                :fill="sb.color" font-weight="600"
+              >{{ sb.label_sub || 'Sous-segment' }}</text>
+            </g>
+          </svg>
+        </div>
+
+        <!-- Sub-segment stat pills -->
+        <div class="flex flex-wrap gap-2 mt-2">
+          <div
+            v-for="sb in activeSubSegments"
+            :key="sb.cluster"
+            class="flex items-center gap-1.5 text-[11px] px-2 py-1 rounded-lg border bg-white"
+            :style="{ borderColor: activeColor + '40' }"
+          >
+            <span class="w-1.5 h-1.5 rounded-full" :style="{ backgroundColor: activeColor, opacity: 0.7 - 0.15 * activeSubSegments.indexOf(sb) }" />
+            <span class="font-medium text-tacir-darkblue">{{ sb.label_sub || 'Sous-segment' }}</span>
+            <span class="text-tacir-darkgray">{{ sb.n }} leads · {{ Math.round((sb.n / totalLeads) * 100) }}%</span>
+          </div>
+        </div>
+      </div>
+    </Transition>
+
+    <!-- ── Hint text ─────────────────────────────────────────── -->
+    <p class="text-[10px] text-tacir-darkgray/60 text-center">
+      Cliquez sur un segment pour explorer ses sous-groupes
+    </p>
   </div>
 </template>
 
 <script setup>
-import { computed } from "vue";
-import { SEGMENT_META } from "@/services/segmentation.js";
+import { ref, computed } from "vue";
+import { X } from "lucide-vue-next";
 
-const POSITIONS = [
-  { x: 50, y: 50 }, { x: 22, y: 38 }, { x: 78, y: 40 }, { x: 32, y: 75 }, { x: 72, y: 75 },
-];
+const W = 200;
+const H = 76;
 
 const props = defineProps({
   segments:   { type: Array,  default: () => [] },
   totalLeads: { type: Number, default: 0 },
 });
 
-const bubbles = computed(() => {
-  const sorted   = [...props.segments].sort((a, b) => b.n - a.n);
-  const maxCount = sorted[0]?.n ?? 1;
-  return sorted.map((s, i) => {
-    const ratio = s.n / maxCount;
+// ── State: which main group is expanded ───────────────────────────────────────
+const selectedGroup = ref(null);
+
+function toggleGroup(key) {
+  selectedGroup.value = selectedGroup.value === key ? null : key;
+}
+
+// ── Compute MERGED main-segment bubbles (by label_short) ─────────────────────
+// Groups all clusters sharing the same label_short into one bubble.
+const mainBubbles = computed(() => {
+  if (!props.segments.length) return [];
+
+  // 1. Aggregate by label_short
+  const groupMap = new Map();
+  for (const seg of props.segments) {
+    const key = seg.label_short || seg.label;
+    if (!groupMap.has(key)) {
+      groupMap.set(key, { key, n: 0, color: seg.color, clusters: [] });
+    }
+    const g = groupMap.get(key);
+    g.n += seg.n;
+    g.clusters.push(seg);
+  }
+
+  const groups  = [...groupMap.values()].sort((a, b) => b.n - a.n);
+  const maxN    = groups[0].n;
+  const total   = props.totalLeads || groups.reduce((s, g) => s + g.n, 0);
+
+  const RAW_MIN = 9, RAW_MAX = 26, GAP = 2;
+  const items = groups.map((g) => ({
+    ...g,
+    r:        RAW_MIN + (g.n / maxN) * (RAW_MAX - RAW_MIN),
+    percent:  Math.round((g.n / total) * 100),
+    subCount: g.clusters.length,
+  }));
+
+  // 2. Spiral placement (same algorithm as before)
+  const placed = [];
+  for (let i = 0; i < items.length; i++) {
+    const b = items[i];
+    if (i === 0) {
+      b.cx = W / 2; b.cy = H / 2;
+    } else {
+      let ok = false;
+      outer:
+      for (let dist = items[0].r + b.r + GAP; dist < W; dist += 1.5) {
+        for (let a = 0; a < Math.PI * 2; a += Math.PI / 12) {
+          const cx = W / 2 + dist * Math.cos(a);
+          const cy = H / 2 + dist * Math.sin(a);
+          if (cx - b.r < 2 || cx + b.r > W - 2) continue;
+          if (cy - b.r < 2 || cy + b.r > H - 2) continue;
+          let clear = true;
+          for (const p of placed) {
+            const d2 = (cx-p.cx)**2 + (cy-p.cy)**2;
+            if (d2 < (p.r + b.r + GAP)**2) { clear = false; break; }
+          }
+          if (clear) { b.cx = cx; b.cy = cy; ok = true; break outer; }
+        }
+      }
+      if (!ok) {
+        b.cx = Math.min(W - b.r - 2, (placed.at(-1)?.cx ?? W/2) + b.r * 2 + 4);
+        b.cy = H / 2;
+      }
+    }
+    placed.push(b);
+  }
+
+  // 3. Label positions
+  return placed.map((b) => {
+    const dx   = b.cx - W/2, dy = b.cy - H/2;
+    const dist = Math.sqrt(dx*dx + dy*dy) || 1;
+    const norm = { x: dx/dist, y: dy/dist };
+    const out  = b.r < 10;
+    return {
+      ...b,
+      lx: out ? b.cx + norm.x * (b.r + 9) : b.cx,
+      ly: out ? b.cy + norm.y * (b.r + 9) : b.cy,
+      lw: Math.max(30, b.key.length * 2.5),
+    };
+  });
+});
+
+// ── Active group metadata ────────────────────────────────────────────────────
+const activeSubSegments = computed(() => {
+  if (!selectedGroup.value) return [];
+  return props.segments.filter(
+    (s) => (s.label_short || s.label) === selectedGroup.value
+  ).sort((a, b) => b.n - a.n);
+});
+
+const activeTotal = computed(() =>
+  activeSubSegments.value.reduce((s, x) => s + x.n, 0)
+);
+
+const activeColor = computed(
+  () => activeSubSegments.value[0]?.color ?? "#303E8C"
+);
+
+// ── Sub-segment mini bubbles (linear layout, simple) ─────────────────────────
+const subBubbles = computed(() => {
+  const subs = activeSubSegments.value;
+  if (!subs.length) return [];
+  const total  = props.totalLeads || 1;
+  const maxN   = subs[0].n;
+  const step   = 200 / (subs.length + 1);
+
+  return subs.map((s, i) => {
+    const r = 6 + (s.n / maxN) * 10;
     return {
       ...s,
-      shortName: SEGMENT_META[s.cluster]?.shortName || s.label,
-      cx:        POSITIONS[i]?.x ?? 50,
-      cy:        POSITIONS[i]?.y ?? 50,
-      r:         6 + ratio * 12,
-      percent:   Math.round((s.n / props.totalLeads) * 100),
+      cx: step * (i + 1),
+      cy: 28,
+      r,
+      percent: Math.round((s.n / total) * 100),
     };
   });
 });
 </script>
+
+<style scoped>
+.slide-down-enter-active,
+.slide-down-leave-active {
+  transition: all 0.25s ease;
+}
+.slide-down-enter-from,
+.slide-down-leave-to {
+  opacity: 0;
+  transform: translateY(-6px);
+}
+</style>
