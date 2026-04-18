@@ -339,6 +339,8 @@ services:
       dockerfile: dockerfile.apis
     ports:
       - "8001:8000"
+    env_file:
+      - .env
     volumes:
       - ./ETL_pipeline:/app              # ← ton code
       - ./exports:/opt/airflow/exports   # ← fichiers xlsx
@@ -349,6 +351,7 @@ services:
       AIRFLOW_USER: airflow
       AIRFLOW_PASSWORD: airflow
       AIRFLOW__CORE__FERNET_KEY: 097a1o3NNpZrDZgFJY3GhZOYDk9alwSLybr_qtLnLEw=
+      GEMINI_API_KEY: ${GEMINI_API_KEY:-}
     depends_on:
       - postgres
     restart: always

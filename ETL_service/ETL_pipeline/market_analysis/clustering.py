@@ -1,11 +1,16 @@
 """
-market_analysis/clustering.py
-=============================
-Refactored from lead_clustering.py.
-- Input  : SQLAlchemy Session (reads from `entreprise` table directly)
-- Output : cluster_summary.json + clustered_leads.json in EXPORT_DIR
-- Returns: summary list for inline API response
+market_analysis/clustering.py  (v2 — production upgrade)
+=========================================================
+Full KMeans pipeline with:
+  - Data-driven labeling          (labeling.py)
+  - Model validation              (validation.py)
+  - Cluster explainability        (explainability.py)
+  - Gemini LLM insights           (llm_service.py)
+  - Versioned JSON output
+  - Backward-compatible JSON schema
 """
+
+from __future__ import annotations
 
 import os
 import json
@@ -19,6 +24,11 @@ from sklearn.preprocessing import StandardScaler
 from sklearn.cluster import KMeans
 from sqlalchemy.orm import Session
 
+from market_analysis.labeling        import assign_labels
+from market_analysis.validation      import compute_validation
+from market_analysis.explainability  import compute_explainability
+from market_analysis.llm_service     import generate_insights, load_insights
+
 warnings.filterwarnings("ignore")
 
 # ── Config ────────────────────────────────────────────────────────────────────
@@ -27,20 +37,11 @@ DEFAULT_EXPORT_DIR = os.environ.get(
     "SEGMENTATION_EXPORT_DIR", "/opt/airflow/exports/segmentation"
 )
 
-# Business labels: map cluster int → human label (stable with random_state=42)
-SEGMENT_LABELS = {
-    0: {"name": "PME énergie & retail",               "color": "#F29F05", "recommendation": "Vertical niche"},
-    1: {"name": "Grands groupes matures",              "color": "#303E8C", "recommendation": "Enterprise focus"},
-    2: {"name": "ETI établies diversifiées",           "color": "#04ADBF", "recommendation": "Relationship selling"},
-    3: {"name": "Petites structures jeunes",           "color": "#56A632", "recommendation": "Self-serve"},
-    4: {"name": "ETI historiques – commerce de gros",  "color": "#2D3773", "recommendation": "Scalable offers"},
-}
-
-# Employee midpoint mapping (same as original script)
+# Employee midpoint table
 EFFECTIF_MAP = {
     "Unité non employeuse (0 salarié)": 0, "0 salarié": 0,
-    "1 à 2 salariés": 1, "3 à 5 salariés": 4, "6 à 9 salariés": 7,
-    "10 à 19 salariés": 14, "20 à 49 salariés": 34, "50 à 99 salariés": 74,
+    "1 à 2 salariés": 1,   "3 à 5 salariés": 4,   "6 à 9 salariés": 7,
+    "10 à 19 salariés": 14,"20 à 49 salariés": 34, "50 à 99 salariés": 74,
     "100 à 199 salariés": 149, "200 à 249 salariés": 224,
     "250 à 499 salariés": 374, "500 à 999 salariés": 749,
     "1 000 à 1 999 salariés": 1499, "2 000 à 4 999 salariés": 3499,
@@ -48,7 +49,7 @@ EFFECTIF_MAP = {
 }
 
 
-def _get_region(cp):
+def _get_region(cp) -> str:
     try:
         dept = int(str(cp)) // 1000
         if 75 <= dept <= 95: return "Ile-de-France"
@@ -60,36 +61,42 @@ def _get_region(cp):
         return "Inconnu"
 
 
+# ── Main entry point ──────────────────────────────────────────────────────────
+
 def run_clustering(db: Session, export_dir: str = DEFAULT_EXPORT_DIR) -> dict:
     """
-    Fetch all entreprises, run KMeans K=5, persist JSON, return summary.
-    Returns: { run_at, total_rows, segments: [ {cluster, label, ...} ] }
-    """
-    from db.models import Entreprise  # local import to avoid circular
+    Full pipeline: fetch → clean → engineer → cluster → validate →
+    explain → label → LLM insights → version & save → return summary.
 
-    # ── 1. Load from DB ───────────────────────────────────────────────────────
+    Returns the same structure as v1 for backward compatibility,
+    extended with: validation, insights, and per-segment explainability.
+    """
+    from db.models import Entreprise
+
+    timestamp = datetime.utcnow().strftime("%Y%m%d_%H%M")
+
+    # ── 1. Load ───────────────────────────────────────────────────────────────
     rows = db.query(Entreprise).all()
     if not rows:
         raise ValueError("No data in entreprise table. Run the ETL pipeline first.")
 
     df = pd.DataFrame([{
-        "siren":               r.siren,
-        "nom_entreprise":      r.nom,
-        "ville":               r.ville,
-        "code_postal":         r.code_postal,
-        "secteur_activite":    r.secteur_activite,
+        "siren":                r.siren,
+        "nom_entreprise":       r.nom,
+        "ville":                r.ville,
+        "code_postal":          r.code_postal,
+        "secteur_activite":     r.secteur_activite,
         "categorie_entreprise": r.categorie_entreprise or "PME",
-        "tranche_effectif":    r.taille_entrep,
-        "nb_locaux":           r.nb_locaux,
-        "chiffre_affaires":    r.ca,
-        "date_creation":       r.date_creation_entreprise,
+        "tranche_effectif":     r.taille_entrep,
+        "nb_locaux":            r.nb_locaux,
+        "chiffre_affaires":     r.ca,
+        "date_creation":        r.date_creation_entreprise,
     } for r in rows])
     print(f"[clustering] Loaded {len(df)} rows from DB")
 
     # ── 2. Clean ──────────────────────────────────────────────────────────────
     for col in ["nb_locaux", "chiffre_affaires"]:
         df[col] = pd.to_numeric(df[col], errors="coerce")
-
     df = df.drop_duplicates(subset=["siren"])
     df["categorie_entreprise"] = df["categorie_entreprise"].fillna("PME")
 
@@ -104,7 +111,9 @@ def run_clustering(db: Session, export_dir: str = DEFAULT_EXPORT_DIR) -> dict:
     df["nb_locaux_log"] = np.log1p(df["nb_locaux"].fillna(1))
 
     df["date_creation"] = pd.to_datetime(df["date_creation"], errors="coerce")
-    df["age_entreprise"] = (pd.Timestamp("2026-04-15") - df["date_creation"]).dt.days / 365.25
+    df["age_entreprise"] = (
+        pd.Timestamp("today") - df["date_creation"]
+    ).dt.days / 365.25
     df["age_entreprise"] = df["age_entreprise"].fillna(df["age_entreprise"].median())
 
     df["region"] = df["code_postal"].apply(_get_region)
@@ -125,11 +134,17 @@ def run_clustering(db: Session, export_dir: str = DEFAULT_EXPORT_DIR) -> dict:
     scaler = StandardScaler()
     X = scaler.fit_transform(X_raw)
 
-    # ── 5. KMeans K=5 ─────────────────────────────────────────────────────────
+    # ── 5. KMeans ─────────────────────────────────────────────────────────────
     km = KMeans(n_clusters=K_FINAL, random_state=42, n_init=20)
-    df["cluster"] = km.fit_predict(X)
+    labels_arr = km.fit_predict(X)
+    df["cluster"] = labels_arr
+    print(f"[clustering] KMeans K={K_FINAL} fitted. Inertia={km.inertia_:.0f}")
 
-    # ── 6. Cluster Summary ────────────────────────────────────────────────────
+    # ── 6. Model Validation ───────────────────────────────────────────────────
+    validation = compute_validation(X, labels_arr, K_FINAL)
+    print(f"[clustering] Silhouette={validation['silhouette']} | Best K={validation['elbow']['best_k']}")
+
+    # ── 7. Cluster Summary (raw stats) ────────────────────────────────────────
     summary_df = df.groupby("cluster").agg(
         n=("cluster", "count"),
         employes_moyen=("nb_employes_mid", "mean"),
@@ -141,58 +156,106 @@ def run_clustering(db: Session, export_dir: str = DEFAULT_EXPORT_DIR) -> dict:
         region_dominante=("region", lambda x: x.mode()[0]),
     ).reset_index()
 
-    summary_df["employes_moyen"]  = summary_df["employes_moyen"].round(0).astype(int)
-    summary_df["ca_moyen"]        = summary_df["ca_moyen"].round(0)
-    summary_df["nb_locaux_moyen"] = summary_df["nb_locaux_moyen"].round(1)
-    summary_df["age_moyen"]       = summary_df["age_moyen"].round(1)
+    for col in ["employes_moyen", "ca_moyen", "nb_locaux_moyen", "age_moyen"]:
+        summary_df[col] = summary_df[col].round(
+            0 if col == "employes_moyen" else 1
+        )
 
-    run_at = datetime.utcnow().isoformat() + "Z"
-    total  = len(df)
+    # ── 8. Explainability ────────────────────────────────────────────────────
+    explain_map = compute_explainability(df)
 
-    # Enrich with business labels
-    segments = []
+    # ── 9. Dynamic Labeling ───────────────────────────────────────────────────
+    raw_segments = []
     for _, row in summary_df.iterrows():
         c = int(row["cluster"])
-        label_info = SEGMENT_LABELS.get(c, {"name": f"Cluster {c}", "color": "#888", "recommendation": "-"})
-        segments.append({
-            "cluster":              c,
-            "label":                label_info["name"],
-            "color":                label_info["color"],
-            "recommendation":       label_info["recommendation"],
-            "n":                    int(row["n"]),
-            "employes_moyen":       int(row["employes_moyen"]),
-            "ca_moyen":             float(row["ca_moyen"]) if not pd.isna(row["ca_moyen"]) else None,
-            "nb_locaux_moyen":      float(row["nb_locaux_moyen"]) if not pd.isna(row["nb_locaux_moyen"]) else None,
-            "age_moyen":            float(row["age_moyen"]),
-            "categorie_dominante":  row["categorie_dominante"],
-            "secteur_dominant":     row["secteur_dominant"],
-            "region_dominante":     row["region_dominante"],
+        raw_segments.append({
+            "cluster":             c,
+            "n":                   int(row["n"]),
+            "employes_moyen":      int(row["employes_moyen"]),
+            "ca_moyen":            float(row["ca_moyen"]) if not pd.isna(row["ca_moyen"]) else None,
+            "nb_locaux_moyen":     float(row["nb_locaux_moyen"]) if not pd.isna(row["nb_locaux_moyen"]) else None,
+            "age_moyen":           float(row["age_moyen"]),
+            "categorie_dominante": row["categorie_dominante"],
+            "secteur_dominant":    row["secteur_dominant"],
+            "region_dominante":    row["region_dominante"],
         })
 
-    result_summary = {"run_at": run_at, "total_leads": total, "segments": segments}
+    # assign_labels injects label / color / recommendation
+    segments = assign_labels(raw_segments, df)
 
-    # ── 7. Clustered Leads ────────────────────────────────────────────────────
+    # Attach explainability per segment
+    for seg in segments:
+        seg["explainability"] = explain_map.get(seg["cluster"], {})
+
+    # ── 10. LLM Insights (Gemini) ─────────────────────────────────────────────
+    insights = generate_insights(segments, validation, export_dir, timestamp)
+
+    # ── 11. Build Final Summary ───────────────────────────────────────────────
+    run_at = datetime.utcnow().isoformat() + "Z"
+    result_summary = {
+        "run_at":      run_at,
+        "k_used":      K_FINAL,
+        "total_leads": len(df),
+        "validation":  validation,
+        "segments":    segments,
+        "insights":    insights,
+    }
+
+    # ── 12. Export Clustered Leads ────────────────────────────────────────────
+    # Build label map from dynamic assignment
+    label_map = {s["cluster"]: s["label"] for s in segments}
+    color_map = {s["cluster"]: s["color"] for s in segments}
+
     clustered_df = df[[
         "siren", "nom_entreprise", "ville", "secteur_activite",
         "categorie_entreprise", "tranche_effectif", "chiffre_affaires",
         "age_entreprise", "region", "cluster",
     ]].copy()
     clustered_df["cluster_label"] = clustered_df["cluster"].map(
-        lambda c: SEGMENT_LABELS.get(int(c), {}).get("name", f"Cluster {c}")
+        lambda c: label_map.get(int(c), f"Cluster {c}")
+    )
+    clustered_df["cluster_color"] = clustered_df["cluster"].map(
+        lambda c: color_map.get(int(c), "#888")
     )
     clustered_df["age_entreprise"] = clustered_df["age_entreprise"].round(1)
 
-    # ── 8. Export JSON ────────────────────────────────────────────────────────
-    export_path = Path(export_dir)
-    export_path.mkdir(parents=True, exist_ok=True)
+    # ── 13. Versioned Save ────────────────────────────────────────────────────
+    _save_versioned(result_summary, clustered_df, export_dir, timestamp)
 
-    summary_path = export_path / "cluster_summary.json"
-    leads_path   = export_path / "clustered_leads.json"
-
-    with open(summary_path, "w", encoding="utf-8") as f:
-        json.dump(result_summary, f, ensure_ascii=False, default=str)
-
-    clustered_df.to_json(leads_path, orient="records", force_ascii=False)
-
-    print(f"[clustering] Done. Summary → {summary_path} | Leads → {leads_path}")
+    print(f"[clustering] Done ✓ — timestamp={timestamp}")
     return result_summary
+
+
+# ── File I/O helpers ──────────────────────────────────────────────────────────
+
+def _save_versioned(
+    summary: dict,
+    leads_df: pd.DataFrame,
+    export_dir: str,
+    timestamp: str,
+) -> None:
+    """
+    Save:
+      cluster_summary_YYYYMMDD_HHMM.json   (versioned)
+      clustered_leads_YYYYMMDD_HHMM.json   (versioned)
+      cluster_summary.json                  (latest, overwritten)
+      clustered_leads.json                  (latest, overwritten)
+    """
+    path = Path(export_dir)
+    path.mkdir(parents=True, exist_ok=True)
+
+    leads_records = json.loads(
+        leads_df.to_json(orient="records", force_ascii=False, default_handler=str)
+    )
+
+    # Summary
+    for fname in (f"cluster_summary_{timestamp}.json", "cluster_summary.json"):
+        with open(path / fname, "w", encoding="utf-8") as f:
+            json.dump(summary, f, ensure_ascii=False, default=str)
+
+    # Leads
+    for fname in (f"clustered_leads_{timestamp}.json", "clustered_leads.json"):
+        with open(path / fname, "w", encoding="utf-8") as f:
+            json.dump(leads_records, f, ensure_ascii=False, default=str)
+
+    print(f"[clustering] Saved versioned files (ts={timestamp})")
