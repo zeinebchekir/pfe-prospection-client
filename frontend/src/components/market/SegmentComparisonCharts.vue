@@ -4,53 +4,116 @@
     <div class="bg-white border border-border rounded-xl p-5 shadow-sm">
       <h3 class="font-semibold text-tacir-darkblue text-sm mb-1">CA moyen par segment</h3>
       <p class="text-xs text-tacir-darkgray mb-3">Chiffre d'affaires moyen (€)</p>
-      <v-chart class="h-56" :option="caOption" autoresize />
+      <div v-if="ready" class="w-full">
+        <apexchart
+          type="bar"
+          height="220"
+          :options="caOptions"
+          :series="caSeries"
+        />
+      </div>
     </div>
 
-    <!-- Effectif bar chart -->
+    <!-- Effectif moyen bar chart -->
     <div class="bg-white border border-border rounded-xl p-5 shadow-sm">
       <h3 class="font-semibold text-tacir-darkblue text-sm mb-1">Effectif moyen par segment</h3>
       <p class="text-xs text-tacir-darkgray mb-3">Nombre d'employés (moyenne)</p>
-      <v-chart class="h-56" :option="empOption" autoresize />
+      <div v-if="ready" class="w-full">
+        <apexchart
+          type="bar"
+          height="220"
+          :options="empOptions"
+          :series="empSeries"
+        />
+      </div>
     </div>
   </div>
 </template>
 
 <script setup>
 import { computed } from "vue";
-import VChart from "vue-echarts";
-import { use } from "echarts/core";
-import { BarChart } from "echarts/charts";
-import { GridComponent, TooltipComponent } from "echarts/components";
-import { CanvasRenderer } from "echarts/renderers";
-import { formatRevenue } from "@/services/segmentation.js";
-
-use([BarChart, GridComponent, TooltipComponent, CanvasRenderer]);
+import VueApexCharts from "vue3-apexcharts";
+const apexchart = VueApexCharts;
 
 const props = defineProps({ segments: { type: Array, default: () => [] } });
 
-const labels  = computed(() => props.segments.map(s => s.label.split(" ").slice(0,2).join(" ")));
-const colors  = computed(() => props.segments.map(s => s.color));
+const ready = computed(() => props.segments.length > 0);
 
-const caOption = computed(() => ({
-  tooltip: { trigger: "axis", formatter: (p) => `${p[0].name}<br/>${formatRevenue(p[0].value)}` },
-  grid:    { left: 8, right: 8, top: 4, bottom: 32, containLabel: true },
-  xAxis:   { type: "category", data: labels.value, axisLabel: { fontSize: 10 } },
-  yAxis:   { type: "value",    axisLabel: { formatter: v => formatRevenue(v), fontSize: 10 } },
-  series:  [{
-    type: "bar", barMaxWidth: 32,
-    data: props.segments.map((s, i) => ({ value: s.ca_moyen ?? 0, itemStyle: { color: colors.value[i], borderRadius: [4,4,0,0] } })),
-  }],
+const labels = computed(() => props.segments.map(s => s.label.split(" ").slice(0, 2).join(" ")));
+const colors = computed(() => props.segments.map(s => s.color));
+
+function formatRevenue(v) {
+  if (v == null || isNaN(v)) return "0";
+  if (v >= 1e9) return `${(v / 1e9).toFixed(1)} Md€`;
+  if (v >= 1e6) return `${(v / 1e6).toFixed(1)} M€`;
+  if (v >= 1e3) return `${(v / 1e3).toFixed(0)} k€`;
+  return `${v.toFixed(0)} €`;
+}
+
+const baseBarOptions = computed(() => ({
+  chart: {
+    toolbar: { show: false },
+    animations: { enabled: true },
+    parentHeightOffset: 0,
+  },
+  plotOptions: {
+    bar: {
+      borderRadius: 4,
+      distributed: true,
+      columnWidth: "55%",
+    },
+  },
+  dataLabels: { enabled: false },
+  legend: { show: false },
+  xaxis: {
+    categories: labels.value,
+    labels: {
+      style: { fontSize: "11px", colors: "#6b7280" },
+      trim: true,
+      maxHeight: 60,
+    },
+    axisBorder: { show: false },
+    axisTicks: { show: false },
+  },
+  yaxis: {
+    labels: { style: { fontSize: "10px", colors: "#6b7280" } },
+  },
+  grid: {
+    borderColor: "#f3f4f6",
+    strokeDashArray: 4,
+    padding: { top: 0, right: 8, bottom: 0, left: 8 },
+  },
+  tooltip: { shared: false, intersect: true },
+  colors: colors.value,
 }));
 
-const empOption = computed(() => ({
-  tooltip: { trigger: "axis", formatter: (p) => `${p[0].name}<br/>${p[0].value.toLocaleString("fr-FR")} emp.` },
-  grid:    { left: 8, right: 8, top: 4, bottom: 32, containLabel: true },
-  xAxis:   { type: "category", data: labels.value, axisLabel: { fontSize: 10 } },
-  yAxis:   { type: "value",    axisLabel: { fontSize: 10 } },
-  series:  [{
-    type: "bar", barMaxWidth: 32,
-    data: props.segments.map((s, i) => ({ value: s.employes_moyen, itemStyle: { color: colors.value[i], borderRadius: [4,4,0,0] } })),
-  }],
+const caOptions = computed(() => ({
+  ...baseBarOptions.value,
+  yaxis: {
+    labels: {
+      style: { fontSize: "10px", colors: "#6b7280" },
+      formatter: val => formatRevenue(val),
+    },
+  },
+  tooltip: {
+    y: { formatter: val => formatRevenue(val) },
+  },
 }));
+
+const caSeries = computed(() => [{
+  name: "CA moyen",
+  data: props.segments.map(s => Math.round(s.ca_moyen ?? 0)),
+}]);
+
+const empOptions = computed(() => ({
+  ...baseBarOptions.value,
+  tooltip: {
+    y: { formatter: val => `${val.toLocaleString("fr-FR")} emp.` },
+  },
+}));
+
+const empSeries = computed(() => [{
+  name: "Effectif moyen",
+  data: props.segments.map(s => s.employes_moyen ?? 0),
+}]);
 </script>
