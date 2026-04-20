@@ -71,6 +71,61 @@
       >
         {{ segment.recommendation }}
       </span>
+
+      <!-- ── Digital Maturity block ──────────────────────────────────── -->
+      <div
+        v-if="segment.digital_maturity_score != null"
+        class="mt-3 pt-2 border-t border-border"
+      >
+        <button
+          @click="maturityOpen = !maturityOpen"
+          class="w-full flex items-center justify-between py-1 mb-1 focus:outline-none"
+          :class="maturityReasons.length ? 'hover:opacity-80 cursor-pointer' : 'cursor-default'"
+          :disabled="!maturityReasons.length"
+        >
+          <!-- Level badge -->
+          <div class="flex items-center gap-2">
+            <BarChart2 class="w-3 h-3 text-tacir-darkgray flex-shrink-0" />
+            <span class="text-[10px] text-tacir-darkgray">Maturité</span>
+            <span
+              class="text-[10px] font-semibold px-1.5 py-0.5 rounded-full border"
+              :class="maturityBadgeClass"
+            >{{ segment.digital_maturity_level }}</span>
+          </div>
+          <!-- Score + Gap -->
+          <div class="flex items-center gap-2 text-[11px]">
+            <span class="font-mono font-semibold" :style="{ color: segment.color }">
+              {{ segment.digital_maturity_score?.toFixed(1) }}/10
+            </span>
+            <span class="text-tacir-darkgray">· Écart</span>
+            <span class="font-semibold" :class="gapTextClass">
+              {{ segment.digital_gap?.toFixed(1) }}
+            </span>
+            <ChevronDown
+              v-if="maturityReasons.length"
+              class="w-3.5 h-3.5 text-tacir-darkgray transition-transform duration-200 ml-0.5"
+              :class="maturityOpen ? 'rotate-180' : ''"
+            />
+          </div>
+        </button>
+
+        <!-- Adjustment reasons (top 3) -->
+        <Transition name="expand">
+          <div v-if="maturityOpen && maturityReasons.length" class="space-y-1 mt-1 pb-1">
+            <div
+              v-for="reason in maturityReasons"
+              :key="reason"
+              class="flex items-start gap-1.5 text-[10px] text-tacir-darkgray/80"
+            >
+              <span
+                class="w-3 h-3 rounded-full flex items-center justify-center flex-shrink-0 text-[8px] font-bold mt-0.5"
+                :style="{ backgroundColor: segment.color + '20', color: segment.color }"
+              >→</span>
+              <span class="leading-snug">{{ reason }}</span>
+            </div>
+          </div>
+        </Transition>
+      </div>
     </div>
 
     <!-- ── Explainability section ───────────────────────────── -->
@@ -123,7 +178,7 @@
 
 <script setup>
 import { ref, computed } from "vue";
-import { Building2, Briefcase, MapPin, Lightbulb, ChevronDown } from "lucide-vue-next";
+import { Building2, Briefcase, MapPin, Lightbulb, ChevronDown, BarChart2 } from "lucide-vue-next";
 import { formatRevenue } from "@/services/segmentation.js";
 
 const props = defineProps({
@@ -132,6 +187,7 @@ const props = defineProps({
 });
 
 const explainOpen = ref(false);
+const maturityOpen = ref(false);
 const share = computed(() => Math.round((props.segment.n / props.totalLeads) * 100));
 
 // ── Feature name → CEO-friendly French label ─────────────────────────────────
@@ -175,6 +231,30 @@ const topFeatures = computed(() => {
     ...feat,
     ui_text: toReadableText(feat),
   }));
+});
+
+// ── Digital Maturity helpers ──────────────────────────────────────────────────
+const MATURITY_BADGE = {
+  "Faible": "bg-amber-50 text-amber-700 border-amber-200",
+  "Moyen":  "bg-blue-50 text-blue-600 border-blue-200",
+  "Élevé":  "bg-green-50 text-green-700 border-green-200",
+};
+
+const maturityBadgeClass = computed(() =>
+  MATURITY_BADGE[props.segment.digital_maturity_level] || "bg-gray-100 text-gray-500 border-gray-200"
+);
+
+const gapTextClass = computed(() => {
+  const gap = props.segment.digital_gap ?? 5;
+  if (gap >= 7) return "text-amber-600";
+  if (gap >= 4) return "text-tacir-lightblue";
+  return "text-green-600";
+});
+
+// Top 3 adjustment reasons (truncated for card readability)
+const maturityReasons = computed(() => {
+  const reasons = props.segment.maturity_details?.adjustment_reasons ?? [];
+  return reasons.slice(0, 3);
 });
 </script>
 

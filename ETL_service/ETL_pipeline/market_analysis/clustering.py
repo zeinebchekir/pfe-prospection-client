@@ -24,10 +24,12 @@ from sklearn.preprocessing import StandardScaler
 from sklearn.cluster import KMeans
 from sqlalchemy.orm import Session
 
-from market_analysis.labeling        import assign_labels
-from market_analysis.validation      import compute_validation
-from market_analysis.explainability  import compute_explainability
-from market_analysis.llm_service     import generate_insights, load_insights
+from market_analysis.labeling              import assign_labels
+from market_analysis.validation            import compute_validation
+from market_analysis.explainability        import compute_explainability
+from market_analysis.llm_service           import generate_insights, load_insights
+from market_analysis.digital_maturity      import compute_maturity, compute_lead_maturity, build_maturity_overview
+from market_analysis.digital_maturity_llm  import generate_all_maturity_analyses
 
 warnings.filterwarnings("ignore")
 
@@ -187,24 +189,42 @@ def run_clustering(db: Session, export_dir: str = DEFAULT_EXPORT_DIR) -> dict:
     for seg in segments:
         seg["explainability"] = explain_map.get(seg["cluster"], {})
 
-    # ── 10. LLM Insights (Gemini) ─────────────────────────────────────────────
+    # ── 10. Digital Maturity (Hybrid model) ───────────────────────────────────
+    print("[clustering] Computing digital maturity scores…")
+    for seg in segments:
+        compute_maturity(seg)   # enriches seg in-place
+
+    # LLM maturity explanations (textual only, Gemini never sets the score)
+    maturity_llm_map = generate_all_maturity_analyses(segments, export_dir, timestamp)
+    for seg in segments:
+        cid = int(seg.get("cluster", 0))
+        seg["llm_analysis"] = maturity_llm_map.get(cid, {})
+
+    # Portfolio-level maturity overview
+    maturity_overview = build_maturity_overview(segments)
+    print(f"[clustering] Maturity overview: avg={maturity_overview['avg_maturity']} gap={maturity_overview['avg_gap']}")
+
+    # ── 11. LLM Insights (Gemini — strategic panel) ───────────────────────────
     insights = generate_insights(segments, validation, export_dir, timestamp)
 
-    # ── 11. Build Final Summary ───────────────────────────────────────────────
+    # ── 12. Build Final Summary ───────────────────────────────────────────────
     run_at = datetime.utcnow().isoformat() + "Z"
     result_summary = {
-        "run_at":      run_at,
-        "k_used":      K_FINAL,
-        "total_leads": len(df),
-        "validation":  validation,
-        "segments":    segments,
-        "insights":    insights,
+        "run_at":           run_at,
+        "k_used":           K_FINAL,
+        "total_leads":      len(df),
+        "validation":       validation,
+        "segments":         segments,
+        "insights":         insights,
+        "maturity_overview": maturity_overview,
     }
 
-    # ── 12. Export Clustered Leads ────────────────────────────────────────────
-    # Build label map from dynamic assignment
-    label_map = {s["cluster"]: s["label"] for s in segments}
-    color_map = {s["cluster"]: s["color"] for s in segments}
+    # ── 13. Export Clustered Leads (with per-lead maturity) ─────────────────
+    # Build lookup maps from dynamic assignment
+    label_map    = {s["cluster"]: s["label"]                  for s in segments}
+    color_map    = {s["cluster"]: s["color"]                   for s in segments}
+    mat_score_map = {s["cluster"]: s["digital_maturity_score"] for s in segments}
+    mat_level_map = {s["cluster"]: s["digital_maturity_level"] for s in segments}
 
     clustered_df = df[[
         "siren", "nom_entreprise", "ville", "secteur_activite",
@@ -219,8 +239,26 @@ def run_clustering(db: Session, export_dir: str = DEFAULT_EXPORT_DIR) -> dict:
     )
     clustered_df["age_entreprise"] = clustered_df["age_entreprise"].round(1)
 
-    # ── 13. Versioned Save ────────────────────────────────────────────────────
-    _save_versioned(result_summary, clustered_df, export_dir, timestamp)
+    # Enrich leads with per-lead maturity (propagated + jittered from segment)
+    seg_score_list = clustered_df["cluster"].map(
+        lambda c: mat_score_map.get(int(c), 5.0)
+    ).tolist()
+    seg_level_list = clustered_df["cluster"].map(
+        lambda c: mat_level_map.get(int(c), "Moyen")
+    ).tolist()
+    clustered_df["digital_maturity_score"] = None
+    clustered_df["digital_maturity_level"] = None
+    clustered_df["digital_gap"]            = None
+
+    # Apply per-lead maturity jitter (done on records for speed)
+    leads_records = json.loads(
+        clustered_df.to_json(orient="records", force_ascii=False, default_handler=str)
+    )
+    for i, lead in enumerate(leads_records):
+        compute_lead_maturity(lead, seg_score_list[i], seg_level_list[i])
+
+    # ── 14. Versioned Save ────────────────────────────────────────────────────
+    _save_versioned(result_summary, leads_records, export_dir, timestamp)
 
     print(f"[clustering] Done ✓ — timestamp={timestamp}")
     return result_summary
@@ -230,7 +268,7 @@ def run_clustering(db: Session, export_dir: str = DEFAULT_EXPORT_DIR) -> dict:
 
 def _save_versioned(
     summary: dict,
-    leads_df: pd.DataFrame,
+    leads_records: list,
     export_dir: str,
     timestamp: str,
 ) -> None:
@@ -244,16 +282,12 @@ def _save_versioned(
     path = Path(export_dir)
     path.mkdir(parents=True, exist_ok=True)
 
-    leads_records = json.loads(
-        leads_df.to_json(orient="records", force_ascii=False, default_handler=str)
-    )
-
     # Summary
     for fname in (f"cluster_summary_{timestamp}.json", "cluster_summary.json"):
         with open(path / fname, "w", encoding="utf-8") as f:
             json.dump(summary, f, ensure_ascii=False, default=str)
 
-    # Leads
+    # Leads (already a list of dicts — passed directly)
     for fname in (f"clustered_leads_{timestamp}.json", "clustered_leads.json"):
         with open(path / fname, "w", encoding="utf-8") as f:
             json.dump(leads_records, f, ensure_ascii=False, default=str)

@@ -56,34 +56,18 @@
 
           <!-- Expand indicator ("+N" sub-segments) -->
           <text
-            v-if="b.subCount > 1"
-            :x="b.cx + b.r * 0.72"
-            :y="b.cy - b.r * 0.72"
+            v-if="b.subCount > 1 && b.r >= 10"
+            :x="b.cx + b.r * 0.75"
+            :y="b.cy - b.r * 0.75"
             text-anchor="middle" dominant-baseline="middle"
-            :font-size="Math.max(2.2, b.r * 0.2)"
-            :fill="b.color" font-weight="700" opacity="0.75"
+            :font-size="Math.max(2.5, b.r * 0.20)"
+            :fill="b.color" font-weight="700" opacity="0.85"
           >+{{ b.subCount }}</text>
-
-          <!-- Label: % inside if large, outside if small -->
-          <text
-            v-if="b.r >= 10"
-            :x="b.cx" :y="b.cy - b.r * 0.18"
-            text-anchor="middle" dominant-baseline="middle"
-            :font-size="Math.max(3.5, b.r * 0.33)"
-            font-weight="700" :fill="b.color"
-          >{{ b.percent }}%</text>
-          <text
-            v-if="b.r >= 10"
-            :x="b.cx" :y="b.cy + b.r * 0.28"
-            text-anchor="middle" dominant-baseline="middle"
-            :font-size="Math.max(2.2, b.r * 0.22)"
-            fill="#6b7280"
-          >{{ b.n }} leads</text>
         </g>
 
-        <!-- Labels for all bubbles -->
+        <!-- Labels for all bubbles (using foreignObject for perfect flex stack) -->
         <g v-for="b in mainBubbles" :key="`lbl-${b.key}`" style="pointer-events:none;">
-          <!-- Connector line for small bubbles -->
+          <!-- Connector line for small bubbles (label outside) -->
           <line
             v-if="b.r < 10"
             :x1="b.cx + (b.lx > b.cx ? 1 : -1) * b.r * 0.92"
@@ -92,22 +76,38 @@
             :stroke="b.color" stroke-width="0.35" stroke-opacity="0.45"
             stroke-dasharray="1.2,0.8"
           />
+          
+          <!-- Label container -->
+          <!-- If large bubble (r>=10), text is centered INSIDE the bubble -->
           <foreignObject
-            :x="b.lx - b.lw / 2" :y="b.ly - 8"
-            :width="b.lw" height="18"
+            v-if="b.r >= 10"
+            :x="b.cx - b.r" :y="b.cy - b.r"
+            :width="b.r * 2" :height="b.r * 2"
             overflow="visible"
           >
             <div
               xmlns="http://www.w3.org/1999/xhtml"
-              style="display:flex;flex-direction:column;align-items:center;gap:1px;user-select:none;"
+              style="display:flex;flex-direction:column;justify-content:center;align-items:center;height:100%;text-align:center;user-select:none;"
             >
-              <div
-                :style="{ fontSize: `${Math.max(3, b.r * 0.3)}px`, fontWeight: 700, color: b.color, whiteSpace:'nowrap', lineHeight: 1.1 }"
-              >{{ b.key }}</div>
-              <div
-                v-if="b.r < 10"
-                :style="{ fontSize: '2.4px', color: '#374151', whiteSpace:'nowrap', lineHeight: 1 }"
-              >{{ b.percent }}% · {{ b.n }} leads</div>
+              <div :style="{ fontSize: `${Math.max(3, b.r * 0.22)}px`, fontWeight: 700, color: b.color, lineHeight: 1.1 }">{{ b.key }}</div>
+              <div :style="{ fontSize: `${Math.max(4, b.r * 0.3)}px`, fontWeight: 800, color: b.color, opacity: 0.85, marginTop: '1px', lineHeight: 1 }">{{ b.percent }}%</div>
+              <div :style="{ fontSize: `${Math.max(2, b.r * 0.15)}px`, color: '#6b7280', marginTop: '1px', lineHeight: 1 }">{{ b.n }} leads</div>
+            </div>
+          </foreignObject>
+
+          <!-- If small bubble (r<10), text is placed OUTSIDE via lx,ly -->
+          <foreignObject
+            v-else
+            :x="b.lx - b.lw / 2" :y="b.ly - 5"
+            :width="b.lw" height="15"
+            overflow="visible"
+          >
+            <div
+              xmlns="http://www.w3.org/1999/xhtml"
+              style="display:flex;flex-direction:column;align-items:center;gap:0.5px;user-select:none;"
+            >
+              <div :style="{ fontSize: '3px', fontWeight: 700, color: b.color, whiteSpace:'nowrap', lineHeight: 1 }">{{ b.key }}</div>
+              <div :style="{ fontSize: '2.5px', color: '#6b7280', whiteSpace:'nowrap', lineHeight: 1 }">{{ b.percent }}% · {{ b.n }} leads</div>
             </div>
           </foreignObject>
         </g>
@@ -141,8 +141,8 @@
         </div>
 
         <!-- Sub-bubble mini-chart -->
-        <div class="relative w-full" style="height: 80px;">
-          <svg viewBox="0 0 200 56" class="w-full h-full" preserveAspectRatio="xMidYMid meet">
+        <div class="relative w-full" style="height: 160px;">
+          <svg :viewBox="`0 0 ${subViewBoxWidth} 100`" class="w-full h-full" preserveAspectRatio="xMidYMid meet">
             <g v-for="sb in subBubbles" :key="sb.cluster">
               <circle
                 :cx="sb.cx" :cy="sb.cy" :r="sb.r"
@@ -150,25 +150,33 @@
                 :stroke="sb.color" stroke-width="0.5" stroke-opacity="0.6"
               />
               <circle :cx="sb.cx" :cy="sb.cy" :r="sb.r * 0.55" :fill="sb.color" fill-opacity="0.3" />
+              <!-- Stats inside the bubble -->
               <text
-                :x="sb.cx" :y="sb.cy - 1"
+                :x="sb.cx" :y="sb.cy - Math.min(2, sb.r * 0.1)"
                 text-anchor="middle" dominant-baseline="middle"
-                :font-size="Math.max(3, sb.r * 0.35)"
+                :font-size="Math.max(5, sb.r * 0.35)"
                 font-weight="700" :fill="sb.color"
               >{{ sb.percent }}%</text>
               <text
-                :x="sb.cx" :y="sb.cy + sb.r * 0.45"
+                :x="sb.cx" :y="sb.cy + Math.max(4.5, sb.r * 0.3)"
                 text-anchor="middle" dominant-baseline="middle"
-                :font-size="Math.max(2, sb.r * 0.22)"
-                fill="#6b7280"
+                :font-size="Math.max(3.5, sb.r * 0.22)"
+                fill="#4b5563" font-weight="500"
               >{{ sb.n }}</text>
-              <!-- label outside if small -->
-              <text
-                :x="sb.cx" :y="sb.r < 8 ? sb.cy - sb.r - 2 : sb.cy - sb.r * 0.7"
-                text-anchor="middle" dominant-baseline="auto"
-                :font-size="Math.max(2.5, sb.r * 0.28)"
-                :fill="sb.color" font-weight="600"
-              >{{ sb.label_sub || 'Sous-segment' }}</text>
+              
+              <!-- Label BELOW the bubble to prevent overlap -->
+              <foreignObject
+                :x="sb.cx - 38" :y="sb.cy + sb.r + 4"
+                width="76" height="30"
+                overflow="visible"
+              >
+                <div
+                  xmlns="http://www.w3.org/1999/xhtml"
+                  style="display:flex;justify-content:center;text-align:center;user-select:none;"
+                >
+                  <span :style="{ fontSize: '6.5px', fontWeight: 600, color: sb.color, lineHeight: 1.15 }">{{ sb.label_sub || 'Sous-segment' }}</span>
+                </div>
+              </foreignObject>
             </g>
           </svg>
         </div>
@@ -307,19 +315,25 @@ const activeColor = computed(
 );
 
 // ── Sub-segment mini bubbles (linear layout, simple) ─────────────────────────
+const subViewBoxWidth = computed(() => {
+  const count = activeSubSegments.value.length;
+  if (!count) return 300;
+  return Math.max(300, count * 90);
+});
+
 const subBubbles = computed(() => {
   const subs = activeSubSegments.value;
   if (!subs.length) return [];
   const total  = props.totalLeads || 1;
   const maxN   = subs[0].n;
-  const step   = 200 / (subs.length + 1);
+  const step   = subViewBoxWidth.value / (subs.length + 1);
 
   return subs.map((s, i) => {
-    const r = 6 + (s.n / maxN) * 10;
+    const r = 14 + (s.n / maxN) * 18;
     return {
       ...s,
       cx: step * (i + 1),
-      cy: 28,
+      cy: 40,
       r,
       percent: Math.round((s.n / total) * 100),
     };

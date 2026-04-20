@@ -50,8 +50,20 @@ const scatterOptions = computed(() => ({
       const max = Math.max(...props.segments.map(x => x.n), 1);
       return 8 + Math.round((s.n / max) * 20);
     }),
-    strokeWidth: 0,
-    fillOpacity: 0.85,
+    // Border width scales with digital_gap — thick border = high transformation opportunity
+    strokeWidth: props.segments.map(s => {
+      const gap = s.digital_gap ?? 5;
+      if (gap >= 7) return 4;
+      if (gap >= 4) return 2;
+      return 1;
+    }),
+    strokeColors: props.segments.map(s => {
+      const gap = s.digital_gap ?? 5;
+      if (gap >= 7) return "#F29F05";   // amber = high gap
+      if (gap >= 4) return "#04ADBF";   // blue  = medium gap
+      return "#56A632";                  // green = low gap (already mature)
+    }),
+    fillOpacity: 0.82,
   },
   xaxis: {
     title: {
@@ -93,12 +105,27 @@ const scatterOptions = computed(() => ({
     custom: ({ seriesIndex }) => {
       const s = props.segments[seriesIndex];
       if (!s) return "";
+      const gap      = s.digital_gap ?? null;
+      const matScore = s.digital_maturity_score ?? null;
+      const matLevel = s.digital_maturity_level ?? null;
+      const gapColor = gap == null ? '#9ca3af' : gap >= 7 ? '#F29F05' : gap >= 4 ? '#04ADBF' : '#56A632';
+      const matHTML  = matScore != null
+        ? `<div style="margin-top:4px;padding-top:4px;border-top:1px solid #f3f4f6">
+             Maturité: <b style="color:${s.color}">${matScore.toFixed(1)}/10</b>
+             &nbsp;·&nbsp;
+             Écart: <b style="color:${gapColor}">${gap?.toFixed(1) ?? '—'}</b>
+             <span style="color:${gapColor};margin-left:4px">${
+               matLevel === 'Élevé' ? '↑ Déjà mature' : gap >= 7 ? '● Fort potentiel' : gap >= 4 ? '○ Potentiel modéré' : '↓ Faible écart'
+             }</span>
+           </div>`
+        : "";
       return `
         <div style="padding:8px 12px;font-size:12px;line-height:1.6">
           <b style="color:${s.color}">${s.label}</b><br/>
           Leads: <b>${s.n}</b><br/>
           CA moy: <b>${formatRevenue(s.ca_moyen)}</b><br/>
           Âge: <b>${s.age_moyen} ans</b>
+          ${matHTML}
         </div>`;
     },
   },

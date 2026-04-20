@@ -21,14 +21,14 @@
     </div>
 
     <!-- Loading -->
-    <div v-if="!insights.length" class="grid grid-cols-1 md:grid-cols-2 gap-3">
+    <div v-if="!allInsights.length" class="grid grid-cols-1 md:grid-cols-2 gap-3">
       <div v-for="i in 6" :key="i" class="h-20 bg-gray-100 rounded-lg animate-pulse" />
     </div>
 
     <!-- Insight cards -->
     <div v-else class="grid grid-cols-1 md:grid-cols-2 gap-3">
       <div
-        v-for="insight in insights"
+        v-for="insight in allInsights"
         :key="insight.title"
         class="flex gap-3 p-3.5 rounded-xl border transition-all hover:shadow-sm"
         :class="priorityBorder(insight.priority)"
@@ -61,22 +61,81 @@
 <script setup>
 import {
   Lightbulb, TrendingUp, Target, Zap, AlertTriangle,
-  Users, BarChart3, RefreshCw, MapPin, Clock, Info,
+  Users, BarChart3, RefreshCw, MapPin, Clock, Info, Cpu,
 } from "lucide-vue-next";
+import { computed } from "vue";
 
 const props = defineProps({
   insights: { type: Array,  default: () => [] },
   source:   { type: String, default: "" },
+  segments: { type: Array,  default: () => [] },
 });
 
-// ── Icon resolver ──────────────────────────────────────────────────────────
+// ── Icon resolver ───────────────────────────────────────────────────────
 const ICON_MAP = {
   TrendingUp, Target, Zap, AlertTriangle, Users,
-  BarChart3, RefreshCw, MapPin, Clock, Info, Lightbulb,
+  BarChart3, RefreshCw, MapPin, Clock, Info, Lightbulb, Cpu,
 };
 function resolveIcon(name) {
   return ICON_MAP[name] || Info;
 }
+
+// ── Maturity insights (computed client-side from segments) ─────────────────
+const maturityInsights = computed(() => {
+  const segs = (props.segments || []).filter(
+    (s) => s.digital_maturity_score != null
+  );
+  if (!segs.length) return [];
+
+  const sorted    = [...segs].sort((a, b) => (a.digital_maturity_score ?? 5) - (b.digital_maturity_score ?? 5));
+  const leastMat  = sorted[0];
+  const mostMat   = sorted[sorted.length - 1];
+  const highestGap = [...segs].sort((a, b) => (b.digital_gap ?? 0) - (a.digital_gap ?? 0))[0];
+
+  const ins = [];
+
+  // 1. Segment le moins mature
+  if (leastMat) {
+    ins.push({
+      title:       `Segment le moins mature : ${leastMat.label_short || leastMat.label}`,
+      description: `Ce segment affiche un score de maturité de ${ (leastMat.digital_maturity_score ?? 0).toFixed(1) }/10 — le niveau le plus bas du portefeuille. Un accompagnement digital ciblé peut générer un ROI significatif.`,
+      priority:    "high",
+      icon:        "AlertTriangle",
+    });
+  }
+
+  // 2. Segment avec le plus grand gap
+  if (highestGap && highestGap.cluster !== leastMat?.cluster) {
+    ins.push({
+      title:       `Plus grand potentiel de transformation : ${highestGap.label_short || highestGap.label}`,
+      description: `Écart numérique de ${ (highestGap.digital_gap ?? 0).toFixed(1) }/10 — combinant un volume de leads élevé et une maturité encore faible. Priorité d’investissement commercial immédiate.`,
+      priority:    "high",
+      icon:        "TrendingUp",
+    });
+  }
+
+  // 3. Segment déjà mature
+  if (mostMat) {
+    ins.push({
+      title:       `Segment déjà mature : ${mostMat.label_short || mostMat.label}`,
+      description: `Score de maturité de ${ (mostMat.digital_maturity_score ?? 0).toFixed(1) }/10 — faible écart (${ (mostMat.digital_gap ?? 0).toFixed(1) }). Potentiel de transformation limité. Repositionner l'effort commercial vers des offres d'optimisation avancée.`,
+      priority:    "low",
+      icon:        "Cpu",
+    });
+  }
+
+  return ins;
+});
+
+// ── Merged insights list (API insights first, then maturity insights) ──────
+const allInsights = computed(() => {
+  // Avoid duplicating if backend already injected maturity insights
+  const base = props.insights || [];
+  const hasMat = base.some(
+    (i) => (i.title || "").toLowerCase().includes("maturit")
+  );
+  return hasMat ? base : [...base, ...maturityInsights.value];
+});
 
 // ── Priority styling ───────────────────────────────────────────────────────
 function priorityBorder(p) {

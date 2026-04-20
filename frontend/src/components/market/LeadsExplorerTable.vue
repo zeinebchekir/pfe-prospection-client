@@ -57,6 +57,8 @@
             <th class="px-4 py-3 text-left font-semibold text-tacir-darkgray uppercase tracking-wider hidden md:table-cell">Secteur</th>
             <th class="px-4 py-3 text-left font-semibold text-tacir-darkgray uppercase tracking-wider hidden lg:table-cell">Ville</th>
             <th class="px-4 py-3 text-right font-semibold text-tacir-darkgray uppercase tracking-wider">CA</th>
+            <th class="px-4 py-3 text-left font-semibold text-tacir-darkgray uppercase tracking-wider hidden lg:table-cell">Maturité</th>
+            <th class="px-4 py-3 text-right font-semibold text-tacir-darkgray uppercase tracking-wider hidden lg:table-cell">Écart</th>
             <th class="px-4 py-3 text-left font-semibold text-tacir-darkgray uppercase tracking-wider hidden xl:table-cell">Région</th>
           </tr>
         </thead>
@@ -116,12 +118,37 @@
             <td class="px-4 py-3 text-right font-medium text-tacir-darkblue whitespace-nowrap">
               {{ formatRevenue(lead.chiffre_affaires) }}
             </td>
+            <!-- Maturité (lg+) -->
+            <td class="px-4 py-3 hidden lg:table-cell">
+              <span
+                v-if="lead.digital_maturity_level"
+                class="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold border"
+                :class="maturityBadgeClass(lead.digital_maturity_level)"
+              >
+                {{ lead.digital_maturity_level }}
+              </span>
+              <span v-else class="text-tacir-darkgray/40">—</span>
+            </td>
+            <!-- Écart (lg+) -->
+            <td class="px-4 py-3 hidden lg:table-cell">
+              <div v-if="lead.digital_gap != null" class="flex items-center gap-1.5">
+                <span
+                  class="w-2 h-2 rounded-full flex-shrink-0"
+                  :style="{ backgroundColor: gapDotColor(lead.digital_gap) }"
+                />
+                <span class="font-mono text-[11px] font-semibold" :style="{ color: gapDotColor(lead.digital_gap) }">
+                  {{ lead.digital_gap?.toFixed(1) }}
+                </span>
+              </div>
+              <span v-else class="text-tacir-darkgray/40">—</span>
+            </td>
             <!-- Région (xl+) -->
-            <td class="px-4 py-3 hidden xl:table-cell text-tacir-darkgray">{{ lead.region || "—" }}</td>
+            <td class="px-4 py-3 hidden xl:table-cell text-tacir-darkgray">{{ lead.region || '—' }}</td>
           </tr>
+
           <!-- Empty -->
           <tr v-if="!loading && !leads.length">
-            <td colspan="7" class="px-4 py-10 text-center text-tacir-darkgray">
+            <td colspan="9" class="px-4 py-10 text-center text-tacir-darkgray">
               Aucun résultat pour cette recherche.
             </td>
           </tr>
@@ -210,6 +237,24 @@ import { Search, ChevronLeft, ChevronRight } from "lucide-vue-next";
 import { getLeads, formatRevenue, SEGMENT_META } from "@/services/segmentation.js";
 
 const props = defineProps({ segments: { type: Array, default: () => [] } });
+
+// ── Maturity helpers added for per-lead badge/gap display ──────────────────────
+const MATURITY_BADGE_CLASSES = {
+  "Faible": "bg-amber-50 text-amber-700 border-amber-200",
+  "Moyen":  "bg-blue-50 text-blue-600 border-blue-200",
+  "Élevé":  "bg-green-50 text-green-700 border-green-200",
+};
+
+function maturityBadgeClass(level) {
+  return MATURITY_BADGE_CLASSES[level] || "bg-gray-100 text-gray-500 border-gray-200";
+}
+
+function gapDotColor(gap) {
+  if (gap == null) return "#9ca3af";
+  if (gap >= 7)    return "#F29F05";
+  if (gap >= 4)    return "#04ADBF";
+  return "#56A632";
+}
 
 // ── State ─────────────────────────────────────────────────────────────────────
 const leads           = ref([]);

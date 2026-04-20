@@ -113,6 +113,9 @@
             </div>
 
             <!-- Comparison bar charts — stack on mobile, side by side desktop -->
+            <!-- Digital Maturity Analysis (between segment cards and charts) -->
+            <MaturityAnalysisSection :segments="summary.segments" />
+
             <SegmentComparisonCharts :segments="summary.segments" />
 
             <!-- Radar + Opportunity matrix — stack on mobile, side by side desktop -->
@@ -125,6 +128,7 @@
             <InsightsPanel
               :insights="summary.insights || []"
               :source="summary.insights_source || ''"
+              :segments="summary.segments || []"
             />
 
             <!-- Leads explorer with full pagination -->
@@ -173,6 +177,7 @@ import SegmentRadarChart        from "@/components/market/SegmentRadarChart.vue"
 import OpportunityMatrix        from "@/components/market/OpportunityMatrix.vue";
 import InsightsPanel            from "@/components/market/InsightsPanel.vue";
 import LeadsExplorerTable       from "@/components/market/LeadsExplorerTable.vue";
+import MaturityAnalysisSection  from "@/components/market/MaturityAnalysisSection.vue";
 
 const summary = ref(null);
 const loading = ref(false);
