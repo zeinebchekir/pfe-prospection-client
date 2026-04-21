@@ -146,6 +146,12 @@ const routes = [
     meta: { requiresAuth: true, roles: ["COMMERCIAL"] },
   },
   {
+    path: "/commercial/opportunities",
+    name: "OpportunityLeadsPage",
+    component: () => import("@/pages/commercial/OpportunityLeadsPage.vue"),
+    meta: { requiresAuth: true, roles: ["COMMERCIAL"] },
+  },
+  {
     path: "/commercial/leads/:id",
     name: "LeadDetail",
     component: () => import("@/pages/commercial/LeadDetailPage.vue"),

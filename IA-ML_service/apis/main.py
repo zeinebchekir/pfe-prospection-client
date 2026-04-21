@@ -1,6 +1,6 @@
 # main.py
 from fastapi import FastAPI
-from .routers import linkedin_url, linkedin_posts
+from .routers import lead_scoring, linkedin_posts, linkedin_url
 from fastapi.middleware.cors import CORSMiddleware
 
 app = FastAPI(title="Prospection LinkedIn API")
@@ -13,6 +13,7 @@ app.add_middleware(
 )
 app.include_router(linkedin_url.router, prefix="/linkedin", tags=["LinkedIn URL"])
 app.include_router(linkedin_posts.router, prefix="/linkedin", tags=["LinkedIn Posts"])
+app.include_router(lead_scoring.router, prefix="/lead-scoring", tags=["Lead Scoring"])
 
 @app.get("/health")
 async def health():
