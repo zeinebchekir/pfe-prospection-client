@@ -19,7 +19,6 @@ class Settings(BaseSettings):
     lead_scoring_model_name: str = "lead-scoring-catboost"
     lead_scoring_artifacts_dir: str = str(BASE_DIR / "artifacts" / "lead_scoring")
     lead_scoring_min_train_rows: int = 100
-    lead_scoring_text_components: int = 0
     lead_scoring_optuna_trials: int = 3
     lead_scoring_optuna_folds: int = 2
     lead_scoring_auto_train_on_missing: bool = True

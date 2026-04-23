@@ -1,17 +1,21 @@
 from __future__ import annotations
 
 import re
+import unicodedata
 from dataclasses import dataclass
 from typing import Any
 
 import numpy as np
 import pandas as pd
 
-from core.config import get_settings
-
 
 TARGET_COLUMN = "lead_score"
 TEXT_COLUMN = "interaction_history"
+MISSING_CATEGORY_VALUE = "missing"
+MISSING_TEXT_VALUE = "pas historique"
+NULL_LIKE_VALUES = {"", "n/a", "na", "nan", "none", "null"}
+NUMERIC_QUANTILE_LOW = 0.01
+NUMERIC_QUANTILE_HIGH = 0.99
 
 RAW_NUMERIC_COLUMNS = [
     "total_visits",
@@ -74,70 +78,68 @@ DISPLAY_TO_DB_COLUMNS = {
     "Interaction History": TEXT_COLUMN,
 }
 
-INFLUENTIAL_COLUMNS = {
-    "job_title",
-    "industry",
-    "company_size",
-    "annual_revenue",
-    "country",
-    "city",
-    "lead_source",
-    "total_visits",
-    "time_on_website_sec",
-    "avg_page_views",
-    "last_activity",
-    "last_notable_activity",
-    TEXT_COLUMN,
-}
+LEAK_PATTERN = re.compile(r"\b(signe|refuse|devis|accepte|fructueux|contrat)\b")
 
-LEAK_PATTERN = re.compile(
-    r"\b(signé|signe|refusé|refuse|devis|accepté|accepte|fructueux|contrat)\b",
-    flags=re.IGNORECASE,
-)
-
-POSITIVE_WORDS = [
+POSITIVE_WORDS = {
     "interesse",
-    "intéressé",
     "rappeler",
     "demo",
-    "réunion",
     "reunion",
     "positif",
     "suite",
     "projet",
-]
+}
 
-NEGATIVE_WORDS = [
+NEGATIVE_WORDS = {
     "pas",
     "jamais",
     "non",
     "annule",
-    "annulé",
     "reporte",
-    "reporté",
     "indisponible",
-]
+}
 
 
 @dataclass
 class PreparedFrames:
     feature_store: pd.DataFrame
-    gbm_frame: pd.DataFrame
     cat_frame: pd.DataFrame
     transformed_source: pd.DataFrame
 
 
-def _import_text_stack():
-    try:
-        from sklearn.decomposition import TruncatedSVD
-        from sklearn.feature_extraction.text import TfidfVectorizer
-    except ImportError as exc:
-        raise RuntimeError(
-            "Les dépendances ML ne sont pas installées. "
-            "Rebuild le service ia-ml après mise à jour des requirements."
-        ) from exc
+def _normalize_spaces(value: str) -> str:
+    return re.sub(r"\s+", " ", value).strip()
 
-    return TfidfVectorizer, TruncatedSVD
+
+def _strip_accents(value: str) -> str:
+    normalized = unicodedata.normalize("NFKD", value)
+    return "".join(character for character in normalized if not unicodedata.combining(character))
+
+
+def _is_missing_value(value: Any) -> bool:
+    if value is None:
+        return True
+    if pd.isna(value):
+        return True
+    normalized = _normalize_spaces(str(value)).casefold()
+    return normalized in NULL_LIKE_VALUES
+
+
+def _normalize_text(value: str) -> str:
+    normalized = _strip_accents(value.casefold())
+    normalized = re.sub(r"[^\w\s]", " ", normalized)
+    return _normalize_spaces(normalized)
+
+
+def _normalize_category_value(value: Any) -> str:
+    if _is_missing_value(value):
+        return MISSING_CATEGORY_VALUE
+    normalized = _normalize_spaces(str(value)).casefold()
+    return normalized or MISSING_CATEGORY_VALUE
+
+
+def _tokenize_text(value: str) -> list[str]:
+    return re.findall(r"[a-z0-9]+", value)
 
 
 def normalize_dataframe(data: pd.DataFrame | list[dict[str, Any]]) -> pd.DataFrame:
@@ -152,10 +154,13 @@ def normalize_dataframe(data: pd.DataFrame | list[dict[str, Any]]) -> pd.DataFra
 
 
 def clean_text(value: Any) -> str:
-    text = str(value or "pas historique").strip()
-    text = LEAK_PATTERN.sub("", text)
-    text = re.sub(r"\s+", " ", text).strip()
-    return text or "pas historique"
+    if _is_missing_value(value):
+        return MISSING_TEXT_VALUE
+
+    text = _normalize_text(str(value))
+    text = LEAK_PATTERN.sub(" ", text)
+    text = _normalize_spaces(text)
+    return text or MISSING_TEXT_VALUE
 
 
 def _safe_to_numeric(series: pd.Series) -> pd.Series:
@@ -163,7 +168,6 @@ def _safe_to_numeric(series: pd.Series) -> pd.Series:
 
 
 def build_preprocessing_state(dataframe: pd.DataFrame) -> dict[str, Any]:
-    settings = get_settings()
     frame = normalize_dataframe(dataframe)
 
     numeric_frame = frame[RAW_NUMERIC_COLUMNS].apply(_safe_to_numeric)
@@ -174,99 +178,55 @@ def build_preprocessing_state(dataframe: pd.DataFrame) -> dict[str, Any]:
         for column in RAW_NUMERIC_COLUMNS
     }
 
-    filled_numeric = numeric_frame.fillna(numeric_medians)
-    cleaned_text = frame[TEXT_COLUMN].map(clean_text)
+    numeric_bounds = {}
+    filled_numeric = numeric_frame.fillna(numeric_medians).clip(lower=0)
+    for column in RAW_NUMERIC_COLUMNS:
+        column_frame = filled_numeric[column]
+        lower_bound = float(column_frame.quantile(NUMERIC_QUANTILE_LOW)) if len(column_frame) else 0.0
+        upper_bound = float(column_frame.quantile(NUMERIC_QUANTILE_HIGH)) if len(column_frame) else 0.0
+
+        if np.isnan(lower_bound):
+            lower_bound = 0.0
+        if np.isnan(upper_bound):
+            upper_bound = lower_bound
+        if upper_bound < lower_bound:
+            upper_bound = lower_bound
+
+        numeric_bounds[column] = {
+            "lower": max(0.0, lower_bound),
+            "upper": max(lower_bound, upper_bound),
+        }
+        filled_numeric[column] = column_frame.clip(
+            lower=numeric_bounds[column]["lower"],
+            upper=numeric_bounds[column]["upper"],
+        )
+
     engagement_score = filled_numeric["total_visits"] * filled_numeric["avg_page_views"]
     high_engagement_threshold = float(engagement_score.median()) if len(engagement_score) else 0.0
 
-    category_encoders: dict[str, dict[str, int]] = {}
-    for column in CATEGORICAL_COLUMNS:
-        categories = (
-            frame[column]
-            .fillna("Missing")
-            .astype(str)
-            .str.strip()
-            .replace("", "Missing")
-            .sort_values()
-            .unique()
-            .tolist()
-        )
-        category_encoders[column] = {value: index for index, value in enumerate(categories)}
-
-    vectorizer = None
-    svd_model = None
-    component_count = 0
-
-    if settings.lead_scoring_text_components > 0:
-        TfidfVectorizer, TruncatedSVD = _import_text_stack()
-        vectorizer = TfidfVectorizer(
-            max_features=500,
-            ngram_range=(1, 2),
-            sublinear_tf=True,
-            min_df=2,
-        )
-        tfidf_matrix = vectorizer.fit_transform(cleaned_text)
-
-        max_components = min(
-            settings.lead_scoring_text_components,
-            max(0, tfidf_matrix.shape[0] - 1),
-            max(0, tfidf_matrix.shape[1] - 1),
-        )
-
-        if max_components >= 1:
-            svd_model = TruncatedSVD(n_components=max_components, random_state=42)
-            svd_model.fit(tfidf_matrix)
-            component_count = max_components
-
     return {
         "numeric_medians": numeric_medians,
+        "numeric_bounds": numeric_bounds,
         "high_engagement_threshold": high_engagement_threshold,
-        "category_encoders": category_encoders,
-        "vectorizer": vectorizer,
-        "svd_model": svd_model,
-        "text_component_count": component_count,
-        "text_component_columns": [f"txt_{index}" for index in range(component_count)],
-        "feature_count": len(ALL_NUMERIC_COLUMNS) + len(CATEGORICAL_COLUMNS) + component_count,
     }
-
-
-def _build_text_features(frame: pd.DataFrame, state: dict[str, Any]) -> tuple[pd.Series, pd.DataFrame]:
-    cleaned_text = frame[TEXT_COLUMN].map(clean_text)
-    vectorizer = state["vectorizer"]
-    svd_model = state["svd_model"]
-    component_columns = state["text_component_columns"]
-
-    if svd_model is None or not component_columns:
-        text_components = pd.DataFrame(index=frame.index)
-    else:
-        tfidf_matrix = vectorizer.transform(cleaned_text)
-        dense_components = svd_model.transform(tfidf_matrix)
-        text_components = pd.DataFrame(
-            dense_components,
-            columns=component_columns,
-            index=frame.index,
-        )
-
-    return cleaned_text, text_components
 
 
 def transform_dataframe(dataframe: pd.DataFrame | list[dict[str, Any]], state: dict[str, Any]) -> PreparedFrames:
     frame = normalize_dataframe(dataframe)
+    numeric_bounds = state.get("numeric_bounds", {})
 
     for column in RAW_NUMERIC_COLUMNS:
-        frame[column] = _safe_to_numeric(frame[column]).fillna(state["numeric_medians"][column])
+        numeric_series = _safe_to_numeric(frame[column]).fillna(state["numeric_medians"][column]).clip(lower=0)
+        bounds = numeric_bounds.get(column)
+        if bounds is not None:
+            numeric_series = numeric_series.clip(lower=bounds["lower"], upper=bounds["upper"])
+        frame[column] = numeric_series
 
     for column in CATEGORICAL_COLUMNS:
-        frame[column] = (
-            frame[column]
-            .fillna("Missing")
-            .astype(str)
-            .str.strip()
-            .replace("", "Missing")
-        )
+        frame[column] = frame[column].map(_normalize_category_value)
 
-    cleaned_text, text_components = _build_text_features(frame, state)
-    frame[TEXT_COLUMN] = cleaned_text
+    frame[TEXT_COLUMN] = frame[TEXT_COLUMN].map(clean_text)
+    text_tokens = frame[TEXT_COLUMN].map(_tokenize_text)
 
     frame["engagement_score"] = frame["total_visits"] * frame["avg_page_views"]
     frame["time_per_visit"] = frame["time_on_website_sec"] / (frame["total_visits"] + 1)
@@ -276,43 +236,20 @@ def transform_dataframe(dataframe: pd.DataFrame | list[dict[str, Any]], state: d
     frame["visits_x_time"] = frame["total_visits"] * frame["time_on_website_sec"]
     frame["high_engagement"] = frame["engagement_score"] > state["high_engagement_threshold"]
     frame["text_length"] = frame[TEXT_COLUMN].str.len()
-    frame["word_count"] = frame[TEXT_COLUMN].map(lambda value: len(value.split()))
-    frame["unique_words"] = frame[TEXT_COLUMN].map(lambda value: len(set(value.lower().split())))
-    frame["avg_word_length"] = frame[TEXT_COLUMN].map(
-        lambda value: float(np.mean([len(word) for word in value.split()])) if value.split() else 0.0
+    frame["word_count"] = text_tokens.map(len)
+    frame["unique_words"] = text_tokens.map(lambda value: len(set(value)))
+    frame["avg_word_length"] = text_tokens.map(
+        lambda value: float(np.mean([len(word) for word in value])) if value else 0.0
     )
-    frame["positive_word_count"] = frame[TEXT_COLUMN].map(
-        lambda value: sum(word in value.lower() for word in POSITIVE_WORDS)
-    )
-    frame["negative_word_count"] = frame[TEXT_COLUMN].map(
-        lambda value: sum(word in value.lower() for word in NEGATIVE_WORDS)
-    )
+    frame["positive_word_count"] = text_tokens.map(lambda value: sum(word in POSITIVE_WORDS for word in value))
+    frame["negative_word_count"] = text_tokens.map(lambda value: sum(word in NEGATIVE_WORDS for word in value))
     frame["sentiment_ratio"] = (frame["positive_word_count"] + 1) / (frame["negative_word_count"] + 1)
 
-    encoded_categories = {}
-    for column in CATEGORICAL_COLUMNS:
-        encoder = state["category_encoders"][column]
-        encoded_categories[f"{column}_enc"] = frame[column].map(lambda value: encoder.get(value, -1))
-
-    encoded_categories_frame = pd.DataFrame(encoded_categories, index=frame.index)
-
-    gbm_frame = pd.concat(
-        [
-            frame[ALL_NUMERIC_COLUMNS].reset_index(drop=True),
-            encoded_categories_frame.reset_index(drop=True),
-            text_components.reset_index(drop=True),
-        ],
-        axis=1,
-    )
-    gbm_frame.index = frame.index
-
     cat_frame = frame[ALL_NUMERIC_COLUMNS + CATEGORICAL_COLUMNS + [TEXT_COLUMN]].copy()
-
     feature_store = frame[ENGINEERED_COLUMNS].copy()
 
     return PreparedFrames(
         feature_store=feature_store,
-        gbm_frame=gbm_frame,
         cat_frame=cat_frame,
         transformed_source=frame,
     )
