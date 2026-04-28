@@ -375,7 +375,10 @@ const generateEmail = async () => {
 
     // Init chat history with the first generated email
     const fullEmail = `Objet : ${subject}\n\n${body}`
-    chatHistory.value = [{ role: 'assistant', content: fullEmail }]
+    chatHistory.value = [{ 
+    role: 'assistant', 
+    content: JSON.stringify({ objet: subject, corps: body })
+    }]
     originalEmail.value = { subject, body }
     chatInput.value = ''
     
@@ -397,17 +400,13 @@ const sendAdjustment = async () => {
   isAdjusting.value = true
   emailError.value = ''
 
-  const messagesWithNew = [
-    ...chatHistory.value,
-    { role: 'user', content: userMsg }
-  ]
-
   try {
     result.value["nom"] = lead.value.nom
     const payload = {
       rapport: result.value,
       remarques: '',
-      messages: messagesWithNew
+      messages: chatHistory.value,  // ✅ historique SANS le nouveau message
+      ajustement: userMsg            // ✅ instruction d'ajustement séparée
     }
 
     const baseUrl = import.meta.env.VITE_IA_SERVICE_URL || 'http://localhost:8002'
@@ -419,10 +418,11 @@ const sendAdjustment = async () => {
     generatedEmailSubject.value = newSubject
     generatedEmailBody.value = newBody
 
-    const assistantContent = `Objet : ${newSubject}\n\n${newBody}`
+    // ✅ Stocker user + assistant pour les prochains ajustements
     chatHistory.value = [
-      ...messagesWithNew,
-      { role: 'assistant', content: assistantContent }
+      ...chatHistory.value,
+      { role: 'user',      content: response.data.nouveau_message_user },
+      { role: 'assistant', content: response.data.nouveau_message_assistant }
     ]
     chatInput.value = ''
   } catch (err) {
