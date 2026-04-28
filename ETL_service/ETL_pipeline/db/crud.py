@@ -208,6 +208,7 @@ def _map_data(rec: dict, source: str,date_scraping: date_type | None,dag_run_id:
         siren                = entreprise.get("siren"),
         siret                = entreprise.get("siret"),
         nom                  = entreprise.get("nom"),
+        description          = " -",
         ville                = entreprise.get("ville"),
         code_postal          = str(entreprise.get("code_postal")).strip() if entreprise.get("code_postal") else None,
         pays                 = entreprise.get("pays", "France"),
@@ -215,6 +216,8 @@ def _map_data(rec: dict, source: str,date_scraping: date_type | None,dag_run_id:
         forme_juridique      = entreprise.get("forme_juridique"),
         taille_entrep        = entreprise.get("taille_entrep"),
         categorie_entreprise = entreprise.get("categorie_entreprise"),
+        website_url          = "-",
+        linkedin_url         = "-",
         nb_locaux            = _to_int(entreprise.get("nb_locaux")),
         ca                   = _to_float(entreprise.get("ca")),
         date_creation_entreprise = _to_date(entreprise.get("dateCreation")),
@@ -499,3 +502,25 @@ def query_clean_leads(
     if status_lead:
         q = q.filter(Entreprise.status_lead == status_lead)
     return q.order_by(Entreprise.created_at.desc()).limit(limit).all()
+
+def update_clean_lead(db: Session, lead_id: int, **kwargs) -> bool:
+    try:
+        lead = db.query(Entreprise).filter(Entreprise.id == lead_id).first()
+        if not lead:
+            logger.warning(f"[UPDATE] Lead with ID {lead_id} not found.")
+            return False
+        
+        for key, value in kwargs.items():
+            setattr(lead, key, value)
+            
+        db.commit()
+        logger.info(f"[UPDATE] Lead with ID {lead_id} updated successfully.")
+        return True
+    except SQLAlchemyError as e:
+        db.rollback()
+        logger.error(f"[UPDATE] DB error — {e}")
+        return False
+    except Exception as e:
+        db.rollback()
+        logger.error(f"[UPDATE] Unexpected error — {e}")
+        return False

@@ -136,6 +136,12 @@ const routes = [
     component: () => import("@/pages/DashboardPage.vue"),
     meta: { requiresAuth: true, roles: ["COMMERCIAL"] },
   },
+  {
+    path: "/commercial/analyse-results",
+    name: "AnalyseResults",
+    component: () => import("@/pages/commercial/AnalyseResultsPage.vue"),
+    meta: { requiresAuth: true, roles: ["COMMERCIAL"] },
+  },
 
   // ───────────── LEADS MODULE ─────────────
 

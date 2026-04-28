@@ -320,6 +320,11 @@ class EntrepriseUpdate(BaseModel):
     telephone: str | None = None
     email: str | None = None
     dirigeants: list | None = None
+    description: str | None = None
+    website_url: str | None = None
+    linkedin_url: str | None = None
+    date_creation_entreprise: date | None = None
+    nb_locaux: int | None = None
 
     class Config:
         extra = "forbid"
@@ -365,7 +370,12 @@ def update_entreprise(identifiant: str, payload: EntrepriseUpdate, db: Session =
         "pays": "pays",
         "telephone": "telephone",
         "email": "adresse_email",
-        "dirigeants": "dirigeants"
+        "dirigeants": "dirigeants",
+        "description": "description",
+        "website_url": "website_url",
+        "linkedin_url": "linkedin_url",
+        "date_creation_entreprise": "date_creation_entreprise",
+        "nb_locaux": "nb_locaux"
     }
 
     mutated = False

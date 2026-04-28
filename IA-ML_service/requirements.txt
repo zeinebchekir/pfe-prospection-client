@@ -13,3 +13,7 @@ scikit-learn==1.5.2
 catboost==1.2.7
 scipy==1.11.4
 optuna==3.6.1
+ollama
+openai
+pydantic
+groq

@@ -85,7 +85,7 @@ class Entreprise(Base):
     """
     __tablename__ = "entreprise"
 
-    identifiant    = Column(String(25), primary_key=True,autoincrement=True)
+    identifiant    = Column(Integer, primary_key=True,autoincrement=True)
 
     # Link back to the raw staging row (nullable — bulk loads may skip it)
     raw_lead_id    = Column(Integer, ForeignKey("raw_leads.id"), nullable=True, index=True)
@@ -93,6 +93,7 @@ class Entreprise(Base):
     siren          = Column(String(9),  nullable=True, index=True, unique=True)   # DataGouv always; BOAMP: siret[:9]
     siret          = Column(String(14), nullable=True, index=True, unique=True)   # BOAMP when available
     nom            = Column(String,     nullable=True)
+    description    = Column(String,     nullable=True,default="-")
 
     # ── Address ──────────────────────────────────────────────
     ville          = Column(String,  nullable=True)
@@ -115,6 +116,8 @@ class Entreprise(Base):
     info_boamp  = Column(JSONB, nullable=True)
     dirigeants = Column(JSONB, nullable=True)
     statut         = Column(String, nullable=True, default="Nouveau")
+    website_url   = Column(String, nullable=True,default="")
+    linkedin_url   = Column(String, nullable=True,default="")
     # ── Lead / Tender (BOAMP only) ────────────────────────────
     # ── Source provenance (field-level, already produced by extractors) ──
     sources        = Column(JSONB, nullable=True)
