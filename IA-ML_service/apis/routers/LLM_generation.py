@@ -5,7 +5,7 @@ from typing import Optional,List
 from services.mail_needs_generation import analyze_company
 import json
 import re
-from services.mail_needs_generation import call_ollama, clean_post
+from services.mail_needs_generation import call_ollama, call_ollama_email, clean_post
 router = APIRouter()
 
 # ----------------------------------------------------------------
@@ -102,40 +102,37 @@ async def analyze_lead(request: CompanyRequest):
 async def generate_email(request: EmailRequest):
     print(f"DEBUG messages count: {len(request.messages)}")
     print(f"DEBUG ajustement: '{request.ajustement}'")
+
     if not request.messages:
-        # ── 1er appel : génération from scratch ──────────────
-        payload = build_email_payload(request.rapport, request.remarques)
-        user_message = payload
+        user_message = build_email_payload(request.rapport, request.remarques)
         messages = [
             {"role": "system", "content": system_prompt_email},
             {"role": "user",   "content": user_message},
         ]
-
     else:
-        # ── Appels suivants : ajustement ──────────────────────
-        # Récupérer le dernier email généré
-        last_email_json = next(
+        last_assistant = next(
             (m.content for m in reversed(request.messages) if m.role == "assistant"),
             "{}"
         )
+    
         user_message = (
-            f"Voici l'email actuel :\n{last_email_json}\n\n"
+            f"Voici l'email actuel en JSON :\n{last_assistant}\n\n"
             f"Modification demandée : {request.ajustement.strip()}\n\n"
-            f"Retourne le JSON complet avec les deux champs 'objet' et 'corps'. "
+            f"RÈGLE ABSOLUE : garde le corps de l'email IDENTIQUE mot pour mot, "
+            f"modifie UNIQUEMENT ce qui est explicitement demandé.\n"
+            f"Retourne le JSON complet avec 'objet' et 'corps'. "
             f"Aucun markdown. Aucun texte avant ou après le JSON."
         )
-        # Contexte minimal : system prompt + user message uniquement
-        # On évite de repasser le gros payload du 1er appel (économise ~1500 tokens)
         messages = [
             {"role": "system", "content": system_prompt_email},
-            {"role": "user",   "content": user_message},
+            *[{"role": m.role, "content": m.content} for m in request.messages],
+            {"role": "user", "content": user_message},
         ]
 
-    raw = call_ollama(messages, temperature=0.2)
+    raw = call_ollama_email(messages)
 
     try:
-        clean = re.sub(r'```json|```', '', raw).strip()
-        result = json.loads(clean)
+        result = extract_first_json(raw)  # ← remplace les 4 lignes de parsing
 
         if not result.get("corps") or not result.get("objet"):
             raise HTTPException(
@@ -147,10 +144,12 @@ async def generate_email(request: EmailRequest):
             objet=result.get("objet", "Sans objet"),
             corps=result.get("corps", "Contenu manquant."),
             nouveau_message_user=user_message,
-            nouveau_message_assistant=clean,
+            nouveau_message_assistant=json.dumps(result, ensure_ascii=False),
         )
     except json.JSONDecodeError as e:
         raise HTTPException(status_code=500, detail=f"JSON invalide : {e} — raw: {raw[:300]}")
+    except ValueError as e:
+        raise HTTPException(status_code=500, detail=f"Extraction JSON échouée : {e} — raw: {raw[:300]}")
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Parsing email échoué : {e}")
 def build_email_payload(report: dict, remarques: str = "") -> str:
@@ -164,7 +163,42 @@ def build_email_payload(report: dict, remarques: str = "") -> str:
         "remarques_commercial": remarques.strip() if remarques else None,
     }
     return json.dumps(payload, ensure_ascii=False) + "\n\nRetourne uniquement l'objet JSON demandé."
-
+def extract_first_json(raw: str) -> dict:
+    clean = re.sub(r'```json|```', '', raw).strip()
+    
+    start = clean.find('{')
+    if start == -1:
+        raise ValueError("Aucun JSON trouvé dans la réponse")
+    
+    depth = 0
+    end = -1
+    in_string = False
+    escape_next = False
+    
+    for i, ch in enumerate(clean[start:], start):
+        if escape_next:
+            escape_next = False
+            continue
+        if ch == '\\' and in_string:
+            escape_next = True
+            continue
+        if ch == '"':
+            in_string = not in_string
+            continue
+        if in_string:
+            continue
+        if ch == '{':
+            depth += 1
+        elif ch == '}':
+            depth -= 1
+            if depth == 0:
+                end = i + 1
+                break
+    
+    if end == -1:
+        raise ValueError("JSON incomplet — accolade fermante manquante")
+    
+    return json.loads(clean[start:end])
 system_prompt_email = """You are an AI agent specialized in B2B copywriting for NUMERYX, an IT services company.
 Your only task: generate a personalized B2B prospection email in FRENCH from a structured lead report.
 Output: a single valid JSON object. Nothing else. No markdown. No preamble. No explanation.

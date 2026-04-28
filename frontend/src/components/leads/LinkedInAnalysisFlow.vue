@@ -251,19 +251,18 @@
                 <!-- Enrich CTA -->
                 <div v-if="companyInfo && !infoError" class="flex flex-col items-center mt-2 mb-6">
                   <Button 
-                    @click="enrichCompany"
-                    :disabled="isEnriching || enrichSuccess"
+                    @click="openEnrichModal"
+                    :disabled="enrichSuccess"
                     :class="[
                       'w-full max-w-sm h-11 shadow-sm transition-all duration-300',
                       enrichSuccess 
                         ? 'bg-emerald-600 hover:bg-emerald-700 text-white opacity-100 disabled:opacity-100' 
-                        : (isEnriching ? 'bg-primary/80 text-white' : 'bg-primary hover:bg-primary/90 text-white')
+                        : 'bg-primary hover:bg-primary/90 text-white'
                     ]"
                   >
-                    <Loader2 v-if="isEnriching" class="w-4 h-4 mr-2 animate-spin" />
-                    <CheckCircle2 v-else-if="enrichSuccess" class="w-4 h-4 mr-2" />
-                    <span v-else-if="!isEnriching && !enrichSuccess" class="mr-2">✚</span>
-                    {{ enrichSuccess ? '✔ Entreprise enrichie' : (isEnriching ? 'Enrichissement en cours...' : 'Enrichir cette entreprise') }}
+                    <CheckCircle2 v-if="enrichSuccess" class="w-4 h-4 mr-2" />
+                    <span v-else class="mr-2">✚</span>
+                    {{ enrichSuccess ? '✔ Entreprise enrichie' : 'Enrichir cette entreprise' }}
                   </Button>
                 </div>
               </div>
@@ -316,6 +315,80 @@
       </DialogFooter>
     </DialogContent>
   </Dialog>
+
+  <!-- Enrichment Modal -->
+  <Dialog :open="showEnrichModal" @update:open="showEnrichModal = $event">
+    <DialogContent class="max-w-4xl max-h-[90vh] overflow-hidden flex flex-col">
+      <DialogHeader class="px-6 py-4 border-b">
+        <DialogTitle class="flex items-center gap-2">
+          Enrichissement des données
+        </DialogTitle>
+        <DialogDescription>
+          Comparez les données existantes avec les nouvelles informations extraites de LinkedIn. Sélectionnez les champs que vous souhaitez mettre à jour.
+        </DialogDescription>
+      </DialogHeader>
+
+      <div class="flex-1 overflow-y-auto p-6 bg-muted/10 relative">
+        <div v-if="isLoadingExisting" class="absolute inset-0 flex flex-col items-center justify-center bg-background/80 z-10 backdrop-blur-sm">
+          <Loader2 class="w-8 h-8 animate-spin text-primary mb-2" />
+          <span class="text-sm text-muted-foreground">Récupération des données existantes...</span>
+        </div>
+
+        <div class="border rounded-lg bg-background overflow-hidden shadow-sm">
+          <table class="w-full text-sm text-left">
+            <thead class="bg-muted/50 border-b">
+              <tr>
+                <th class="w-10 px-4 py-3 text-center"></th>
+                <th class="px-4 py-3 font-semibold text-muted-foreground w-1/4">Champ</th>
+                <th class="px-4 py-3 font-semibold text-muted-foreground w-1/3 border-l">Données actuelles</th>
+                <th class="px-4 py-3 font-semibold text-primary w-1/3 border-l">Nouvelles données</th>
+              </tr>
+            </thead>
+            <tbody class="divide-y">
+              <tr v-for="field in enrichmentFields" :key="field.key" class="hover:bg-muted/20 transition-colors">
+                <td class="px-4 py-3 text-center">
+                  <Checkbox 
+                    :id="`chk-${field.key}`"
+                    :checked="selectedFields.includes(field.key)"
+                    @update:checked="val => toggleFieldSelection(field.key, val)"
+                    :disabled="!isDifferent(field.key)"
+                  />
+                </td>
+                <td class="px-4 py-3 font-medium">
+                  <label :for="`chk-${field.key}`" :class="{ 'cursor-pointer': isDifferent(field.key) }">{{ field.label }}</label>
+                </td>
+                <td class="px-4 py-3 text-muted-foreground border-l align-top break-words whitespace-pre-wrap max-w-xs">
+                  {{ formatValue(existingCompanyData[field.dbKey || field.key]) }}
+                </td>
+                <td class="px-4 py-3 border-l align-top break-words whitespace-pre-wrap max-w-xs"
+                    :class="[
+                      isDifferent(field.key) ? 'bg-amber-50/50 text-amber-900 border-l-amber-200' : 'text-muted-foreground',
+                      !getNewValue(field.key) ? 'italic opacity-60' : ''
+                    ]">
+                  {{ formatValue(getNewValue(field.key)) || 'Non disponible' }}
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <DialogFooter class="px-6 py-4 border-t bg-background flex flex-row justify-end gap-3 z-10">
+        <Button variant="outline" @click="showEnrichModal = false" :disabled="isEnriching">
+          Annuler
+        </Button>
+        <Button 
+          variant="default" 
+          @click="submitEnrichment" 
+          :disabled="selectedFields.length === 0 || isEnriching"
+          class="bg-blue-600 hover:bg-blue-700 text-white"
+        >
+          <Loader2 v-if="isEnriching" class="w-4 h-4 mr-2 animate-spin" />
+          {{ isEnriching ? 'Mise à jour...' : 'Enrichir les champs sélectionnés' }}
+        </Button>
+      </DialogFooter>
+    </DialogContent>
+  </Dialog>
 </template>
 
 <script setup lang="ts">
@@ -335,6 +408,7 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { Checkbox } from '@/components/ui/checkbox'
 import axios from 'axios'
 import { useRouter } from 'vue-router'
 import { toast } from 'vue-sonner'
@@ -378,6 +452,22 @@ const isEnriching = ref<boolean>(false)
 const enrichSuccess = ref<boolean>(false)
 const enrichError = ref<string | null>(null)
 const showFullDescription = ref<boolean>(false)
+
+// Enrichment Modal State
+const showEnrichModal = ref<boolean>(false)
+const isLoadingExisting = ref<boolean>(false)
+const existingCompanyData = ref<any>({})
+const selectedFields = ref<string[]>([])
+
+const enrichmentFields = [
+  { key: 'linkedin_url', dbKey: 'linkedin_url', patchKey: 'linkedin_url', label: 'URL LinkedIn' },
+  { key: 'description', dbKey: 'description', patchKey: 'description', label: 'Description' },
+  { key: 'phone', dbKey: 'telephone', patchKey: 'telephone', label: 'Téléphone' },
+  { key: 'website', dbKey: 'website_url', patchKey: 'website_url', label: 'Site web' },
+  { key: 'taille', dbKey: 'taille_entrep', patchKey: 'taille_entreprise', label: 'Taille' },
+  { key: 'date_creation_entreprise', dbKey: 'date_creation_entreprise', patchKey: 'date_creation_entreprise', label: 'Date de création' },
+  { key: 'nb_locaux', dbKey: 'nb_locaux', patchKey: 'nb_locaux', label: 'Nb locaux' }
+]
 
 // --- Computed ---
 const modalTitle = computed(() => {
@@ -566,35 +656,93 @@ const fetchLinkedInInfo = async (url: string) => {
   return response.data?.infos || null
 }
 
-const enrichCompany = async () => {
-  if (!companyInfo.value) return
+// --- Enrichment Modal Logic ---
+const getNewValue = (key: string) => {
+  if (key === 'linkedin_url') return foundUrl.value || ''
+  if (!companyInfo.value) return ''
+  return companyInfo.value[key]
+}
+
+const formatValue = (val: any) => {
+  if (val === null || val === undefined || val === '') return ''
+  if (typeof val === 'object') return JSON.stringify(val)
+  return String(val)
+}
+
+const isDifferent = (key: string) => {
+  const field = enrichmentFields.find(f => f.key === key)
+  const dbKey = field?.dbKey || key
+  const oldVal = formatValue(existingCompanyData.value[dbKey])
+  const newVal = formatValue(getNewValue(key))
+  
+  return newVal && newVal !== oldVal
+}
+
+const toggleFieldSelection = (key: string, checked: boolean) => {
+  if (checked) {
+    if (!selectedFields.value.includes(key)) selectedFields.value.push(key)
+  } else {
+    selectedFields.value = selectedFields.value.filter(f => f !== key)
+  }
+}
+
+const openEnrichModal = async () => {
+  showEnrichModal.value = true
+  isLoadingExisting.value = true
+  existingCompanyData.value = {}
+  selectedFields.value = []
+  
+  try {
+    const baseUrl = import.meta.env.VITE_FASTAPI_URL || 'http://localhost:8001'
+    const response = await axios.get(`${baseUrl}/entreprises/${props.companyId}`)
+    existingCompanyData.value = response.data || {}
+    
+    // Auto-select differing fields
+    enrichmentFields.forEach(field => {
+      if (isDifferent(field.key)) {
+        selectedFields.value.push(field.key)
+      }
+    })
+  } catch (err) {
+    console.error("Erreur de récupération des données existantes", err)
+    toast.error("Impossible de récupérer les données actuelles de l'entreprise.")
+  } finally {
+    isLoadingExisting.value = false
+  }
+}
+
+const submitEnrichment = async () => {
+  if (selectedFields.value.length === 0) return
   
   isEnriching.value = true
   enrichError.value = null
   
   try {
-    const baseUrl = import.meta.env.VITE_IA_SERVICE_URL || 'http://localhost:8002'
-    const identifiant = props.lead?.identifiant || props.lead?.id || ""
-    const phoneObj = companyInfo.value.phone ? { number: companyInfo.value.phone, extension: null } : null
+    const baseUrl = import.meta.env.VITE_FASTAPI_URL || 'http://localhost:8001'
     
-    const payload = {
-      identifiant: identifiant.toString(),
-      linkedin_url: foundUrl.value || "",
-      description: companyInfo.value.description || null,
-      phone: phoneObj,
-      website: companyInfo.value.website || null,
-      specialities: companyInfo.value.specialities || null,
-      taille: companyInfo.value.taille || null,
-      date_creation_entreprise: companyInfo.value.date_creation_entreprise || null,
-      nb_locaux: companyInfo.value.nb_locaux || null
-    }
+    const patchPayload: any = {}
+    
+    // Map selected fields to DB schema keys
+    selectedFields.value.forEach(key => {
+      const field = enrichmentFields.find(f => f.key === key)
+      const patchKey = field?.patchKey || field?.dbKey || key
+      let newVal = getNewValue(key)
+      
+      patchPayload[patchKey] = newVal
+    })
 
-    await axios.post(`${baseUrl}/enrich`, payload)
+    // Notice we use patch on FastAPI instead of post on IA service
+    await axios.patch(`${baseUrl}/entreprises/${props.companyId}`, patchPayload)
+    
     enrichSuccess.value = true
+    showEnrichModal.value = false
     toast.success("✅ Entreprise enrichie avec succès", { duration: 3000 })
+    
+    // Inform the parent component to refresh the view
+    emit('analysisComplete', getAnalysisPayload()) 
   } catch (error: any) {
     console.error('Erreur enrichissement:', error)
-    enrichError.value = error.response?.data?.detail || "Erreur lors de l'ajout de l'entreprise."
+    enrichError.value = error.response?.data?.detail || "Erreur lors de la mise à jour de l'entreprise."
     toast.error(enrichError.value, { duration: 5000 })
   } finally {
     isEnriching.value = false

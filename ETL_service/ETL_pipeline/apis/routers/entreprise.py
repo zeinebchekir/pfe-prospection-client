@@ -326,6 +326,13 @@ class EntrepriseUpdate(BaseModel):
     date_creation_entreprise: date | None = None
     nb_locaux: int | None = None
 
+    @field_validator("date_creation_entreprise", mode="before")
+    @classmethod
+    def validate_date_creation(cls, v):
+        if isinstance(v, int):
+            return date(v, 1, 1)
+        return v
+
     class Config:
         extra = "forbid"
 

@@ -196,6 +196,46 @@ def clean_post(text: str) -> str:
 # ================================================================
 # Fonction utilitaire — appel Ollama
 # ================================================================
+def call_ollama_email(messages: list[dict], max_tokens: int = 2000) -> str:
+    """
+    Dedicated Ollama caller for email generation / adjustment.
+    Deliberately omits 'format: json' — Ollama's JSON mode forces structural
+    compliance but causes small models (gemma3:4b) to ignore adjustment
+    instructions and regenerate from scratch instead of editing the existing email.
+    The system prompt already instructs the model to output plain JSON.
+    """
+    print(f"DEBUG EMAIL OLLAMA: {OLLAMA_URL} | model={MODEL_NAME} | msgs={len(messages)}")
+    try:
+        response = requests.post(
+            f"{OLLAMA_URL}/api/chat",
+            json={
+                "model": MODEL_NAME,
+                "messages": messages,
+                "stream": False,
+                # No "format": "json" here — intentional, see docstring
+                "options": {
+                    "temperature": 0.1,
+                    "num_predict": max_tokens,
+                    "num_ctx": 8192,
+                    "repeat_penalty": 1.1,
+                    "top_p": 0.9
+                }
+            },
+            timeout=1800
+        )
+        response.raise_for_status()
+        return response.json()["message"]["content"].strip()
+    except requests.exceptions.ConnectionError:
+        logger.error(f"❌ Ollama inaccessible à {OLLAMA_URL}")
+        raise Exception(f"Ollama inaccessible à {OLLAMA_URL}")
+    except requests.exceptions.Timeout:
+        logger.error("❌ Timeout Ollama — modèle trop lent")
+        raise Exception("Timeout Ollama après 1800s")
+    except Exception as e:
+        logger.error(f"❌ Erreur Ollama email : {e}")
+        raise
+
+
 def call_ollama(messages: list[dict], temperature: float = 0.1, max_tokens: int = 2000) -> str:
     print(f"DEBUG: L'URL utilisée est : {os.getenv('OLLAMA_URL')}")
     try:
