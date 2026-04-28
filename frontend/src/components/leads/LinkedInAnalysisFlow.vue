@@ -112,29 +112,62 @@
             </div>
 
             <!-- ============================================== -->
-            <!-- STEP 3: Fetching Posts                         -->
+            <!-- STEP 3: Fetching Posts & Info                  -->
             <!-- ============================================== -->
             <div v-else-if="currentStep === 3" key="step3" class="flex flex-col items-center justify-center space-y-8 pt-4">
               <div class="text-center space-y-2 max-w-md">
                 <h3 class="text-xl font-bold tracking-tight text-foreground flex items-center justify-center gap-2">
-                  Extraction des publications <span class="typing-dots"></span>
+                  Extraction des données <span class="typing-dots"></span>
                 </h3>
                 <p class="text-muted-foreground text-sm">
-                  Analyse des axes stratégiques et projets actifs...
+                  Analyse des axes stratégiques, informations de l'entreprise et projets actifs...
                 </p>
               </div>
-              <div class="w-full max-w-lg space-y-4">
-                <Card v-for="i in 3" :key="i" class="border-border shadow-sm overflow-hidden relative">
-                  <div class="absolute left-0 top-0 bottom-0 w-1 bg-primary/40 animate-pulse"></div>
-                  <CardContent class="p-5 flex gap-4">
-                    <Skeleton class="w-10 h-10 rounded-full shrink-0" />
-                    <div class="space-y-2 flex-1">
-                      <Skeleton class="h-4 w-[80%]" />
+              <div class="w-full max-w-lg flex flex-col md:flex-row gap-6 items-start justify-center">
+                <!-- Info Skeleton -->
+                <div class="w-full flex-1 space-y-4">
+                  <h4 class="text-xs font-semibold text-muted-foreground uppercase text-center">Informations</h4>
+                  <Card class="border-border shadow-sm">
+                    <CardContent class="p-5 space-y-3">
+                      <Skeleton class="h-5 w-1/2" />
                       <Skeleton class="h-4 w-full" />
-                      <Skeleton class="h-4 w-[60%]" />
-                    </div>
-                  </CardContent>
-                </Card>
+                      <Skeleton class="h-4 w-[80%]" />
+                      <div class="flex gap-2 pt-2">
+                        <Skeleton class="h-6 w-16 rounded-full" />
+                        <Skeleton class="h-6 w-20 rounded-full" />
+                      </div>
+                    </CardContent>
+                  </Card>
+                </div>
+                <!-- Posts Skeleton -->
+                <div class="w-full flex-1 space-y-4">
+                  <h4 class="text-xs font-semibold text-muted-foreground uppercase text-center">Publications</h4>
+                  <Card v-for="i in 2" :key="i" class="border-border shadow-sm overflow-hidden relative">
+                    <div class="absolute left-0 top-0 bottom-0 w-1 bg-primary/40 animate-pulse"></div>
+                    <CardContent class="p-4 flex gap-3">
+                      <Skeleton class="w-8 h-8 rounded-full shrink-0" />
+                      <div class="space-y-2 flex-1">
+                        <Skeleton class="h-3 w-[80%]" />
+                        <Skeleton class="h-3 w-full" />
+                        <Skeleton class="h-3 w-[60%]" />
+                      </div>
+                    </CardContent>
+                  </Card>
+                </div>
+              </div>
+            </div>
+
+            <!-- ============================================== -->
+            <!-- STEP 5: Generating Analysis (Loading)          -->
+            <!-- ============================================== -->
+            <div v-else-if="isAnalyzing" key="step5" class="flex flex-col items-center justify-center space-y-6 pt-12 pb-12">
+              <Loader2 class="w-12 h-12 animate-spin text-primary" />
+              <div class="text-center space-y-2">
+                <h3 class="text-xl font-bold tracking-tight text-foreground">Analyse en cours...</h3>
+                <p class="text-muted-foreground text-sm">
+                  Notre IA analyse les données et publications pour <strong class="text-foreground">{{ companyName }}</strong>.
+                  <br>Cela peut prendre quelques instants.
+                </p>
               </div>
             </div>
 
@@ -147,26 +180,108 @@
                   <div class="flex items-center gap-3 mb-1">
                     <h2 class="text-2xl font-bold tracking-tight">{{ companyName }}</h2>
                     <Badge class="bg-green-100 text-green-700 border-green-200">
-                      <CheckCircle2 class="w-3.5 h-3.5 mr-1" /> Analyse terminée
+                      <CheckCircle2 class="w-3.5 h-3.5 mr-1" /> Extraction terminée
                     </Badge>
                   </div>
                   <a v-if="foundUrl" :href="foundUrl" target="_blank" class="text-sm text-blue-600 hover:underline flex items-center gap-1">
                     <Linkedin class="w-3.5 h-3.5" /> Voir sur LinkedIn
                   </a>
                 </div>
-                <Button variant="default" @click="emit('analysisComplete', getAnalysisPayload())">
-                  Valider et fermer
-                </Button>
+                <div class="flex flex-col sm:flex-row gap-3">
+                  <Button variant="outline" @click="emit('analysisComplete', getAnalysisPayload())">
+                    Valider et fermer
+                  </Button>
+                  <Button variant="default" @click="generateAnalysis" class="bg-blue-600 hover:bg-blue-700 text-white shadow-md">
+                    <Sparkles class="w-4 h-4 mr-2" />
+                    Générer l'analyse
+                  </Button>
+                </div>
               </div>
 
-              <div v-if="finalPosts.length === 0" class="flex flex-col items-center justify-center p-12 text-center border rounded-xl bg-card border-dashed">
-                <SearchX class="w-12 h-12 text-muted-foreground mb-4" />
-                <h3 class="text-lg font-semibold">Aucune publication disponible</h3>
-                <p class="text-sm text-muted-foreground">L'étape a été ignorée ou aucune donnée n'a été trouvée.</p>
+              <!-- Company Info Card & Enrich -->
+              <div class="flex flex-col gap-4">
+                <div v-if="infoError" class="p-4 bg-red-50 text-red-700 border border-red-200 rounded-lg text-sm flex items-center">
+                  <AlertCircle class="w-4 h-4 mr-2 shrink-0" /> {{ infoError }}
+                </div>
+                <Card v-if="companyInfo && !infoError" class="border-border shadow-sm">
+                  <CardContent class="p-6 space-y-4">
+                    <h3 class="font-semibold text-lg flex items-center gap-2 text-foreground">
+                      <Building2 class="w-5 h-5 text-primary" /> Informations Entreprise
+                    </h3>
+                    
+                    <p class="text-sm text-muted-foreground whitespace-pre-wrap leading-relaxed">
+                      {{ showFullDescription ? companyInfo.description : (companyInfo.description?.slice(0, 150) || '') + (companyInfo.description?.length > 150 && !showFullDescription ? '...' : '') }}
+                      <button 
+                        v-if="companyInfo.description?.length > 150" 
+                        @click="showFullDescription = !showFullDescription"
+                        class="text-primary hover:underline ml-1 font-medium"
+                      >
+                        {{ showFullDescription ? 'Voir moins' : 'Voir plus' }}
+                      </button>
+                    </p>
+
+                    <div class="flex flex-wrap gap-x-6 gap-y-3 text-sm mt-4">
+                      <div v-if="companyInfo.website" class="flex items-center gap-1.5 text-muted-foreground">
+                        <Globe class="w-4 h-4 shrink-0" /> 
+                        <a :href="companyInfo.website" target="_blank" class="text-blue-600 hover:underline truncate max-w-[200px]">{{ companyInfo.website }}</a>
+                      </div>
+                      <div v-if="companyInfo.taille" class="flex items-center gap-1.5 text-muted-foreground">
+                        <Users class="w-4 h-4 shrink-0" /> {{ companyInfo.taille }} employés
+                      </div>
+                      <div v-if="companyInfo.nb_locaux" class="flex items-center gap-1.5 text-muted-foreground">
+                        <Building2 class="w-4 h-4 shrink-0" /> Nombre de locaux : {{ companyInfo.nb_locaux }}
+                      </div>
+                      <div v-if="companyInfo.date_creation_entreprise" class="flex items-center gap-1.5 text-muted-foreground">
+                        <Calendar class="w-4 h-4 shrink-0" /> Fondée en {{ companyInfo.date_creation_entreprise }}
+                      </div>
+                      <div v-if="companyInfo.phone" class="flex items-center gap-1.5 text-muted-foreground">
+                        <Phone class="w-4 h-4 shrink-0" /> {{ companyInfo.phone }}
+                      </div>
+                    </div>
+
+
+                    <div v-if="companyInfo.specialities?.length" class="flex flex-wrap gap-2 mt-4 pt-4 border-t">
+                      <Badge v-for="spec in companyInfo.specialities" :key="spec" variant="secondary" class="bg-primary/10 text-primary hover:bg-primary/20">
+                        {{ spec }}
+                      </Badge>
+                    </div>
+                  </CardContent>
+                </Card>
+                
+                <!-- Enrich CTA -->
+                <div v-if="companyInfo && !infoError" class="flex flex-col items-center mt-2 mb-6">
+                  <Button 
+                    @click="enrichCompany"
+                    :disabled="isEnriching || enrichSuccess"
+                    :class="[
+                      'w-full max-w-sm h-11 shadow-sm transition-all duration-300',
+                      enrichSuccess 
+                        ? 'bg-emerald-600 hover:bg-emerald-700 text-white opacity-100 disabled:opacity-100' 
+                        : (isEnriching ? 'bg-primary/80 text-white' : 'bg-primary hover:bg-primary/90 text-white')
+                    ]"
+                  >
+                    <Loader2 v-if="isEnriching" class="w-4 h-4 mr-2 animate-spin" />
+                    <CheckCircle2 v-else-if="enrichSuccess" class="w-4 h-4 mr-2" />
+                    <span v-else-if="!isEnriching && !enrichSuccess" class="mr-2">✚</span>
+                    {{ enrichSuccess ? '✔ Entreprise enrichie' : (isEnriching ? 'Enrichissement en cours...' : 'Enrichir cette entreprise') }}
+                  </Button>
+                </div>
               </div>
-              <div v-else class="space-y-4">
+
+              <div class="space-y-4">
                 <h3 class="text-sm font-semibold text-muted-foreground uppercase tracking-wider">Publications récentes</h3>
-                <Card v-for="(post, index) in finalPosts" :key="index" class="border-border overflow-hidden relative">
+                
+                <div v-if="postsError" class="p-4 bg-red-50 text-red-700 border border-red-200 rounded-lg text-sm flex items-center">
+                  <AlertCircle class="w-4 h-4 mr-2 shrink-0" /> {{ postsError }}
+                </div>
+                
+                <div v-else-if="finalPosts.length === 0" class="flex flex-col items-center justify-center p-12 text-center border rounded-xl bg-card border-dashed">
+                  <SearchX class="w-12 h-12 text-muted-foreground mb-4" />
+                  <h3 class="text-lg font-semibold">Aucune publication disponible</h3>
+                  <p class="text-sm text-muted-foreground">L'étape a été ignorée ou aucune donnée n'a été trouvée.</p>
+                </div>
+                
+                <Card v-else v-for="(post, index) in finalPosts" :key="index" class="border-border overflow-hidden relative shadow-sm">
                   <div class="absolute left-0 top-0 bottom-0 w-1 bg-primary"></div>
                   <CardContent class="p-5">
                     <p class="text-sm text-foreground whitespace-pre-wrap line-clamp-3">{{ post }}</p>
@@ -207,7 +322,7 @@
 import { ref, computed, onMounted } from 'vue'
 import { 
   Search, CheckCircle2, Linkedin, AlertCircle, Loader2, 
-  ExternalLink, SearchX
+  ExternalLink, SearchX, Sparkles, Building2, Globe, Users, Phone, Plus, Calendar
 } from 'lucide-vue-next'
 import { 
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter 
@@ -221,12 +336,15 @@ import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import axios from 'axios'
+import { useRouter } from 'vue-router'
+import { toast } from 'vue-sonner'
 
 // --- Interfaces & Props ---
 interface Props {
   companyName: string
   companyId: string | number
   isOpen: boolean
+  lead?: any
 }
 
 interface AnalysisResult {
@@ -243,13 +361,23 @@ const emit = defineEmits<{
   (e: 'update:isOpen', value: boolean): void
 }>()
 
+const router = useRouter()
+
 // --- State ---
 const currentStep = ref<number>(1)
 const progressValue = ref<number>(0)
 const foundUrl = ref<string | null>(null)
 const manualUrlInput = ref<string>('')
 const finalPosts = ref<string[]>([])
+const companyInfo = ref<any>(null)
+const postsError = ref<string | null>(null)
+const infoError = ref<string | null>(null)
 const isSkipped = ref<boolean>(false)
+const isAnalyzing = ref<boolean>(false)
+const isEnriching = ref<boolean>(false)
+const enrichSuccess = ref<boolean>(false)
+const enrichError = ref<string | null>(null)
+const showFullDescription = ref<boolean>(false)
 
 // --- Computed ---
 const modalTitle = computed(() => {
@@ -264,6 +392,7 @@ const modalTitle = computed(() => {
 
 const hideCloseButton = computed(() => {
   // Visible only on step 4 and step 2B (currentStep 2 and !foundUrl)
+  if (isAnalyzing.value) return true
   if (currentStep.value === 4) return false
   if (currentStep.value === 2 && !foundUrl.value) return false
   return true
@@ -306,7 +435,7 @@ const startAnalysisFlow = () => {
         foundUrl.value = url
         progressValue.value = 75
         currentStep.value = 2
-        setTimeout(() => { startFetchingPosts() }, 1500)
+        setTimeout(() => { startFetchingData() }, 1500)
       } else {
         foundUrl.value = null
         currentStep.value = 2
@@ -320,7 +449,7 @@ const startAnalysisFlow = () => {
 const submitManualUrl = () => {
   if (!isValidLinkedinUrl.value) return
   foundUrl.value = manualUrlInput.value.trim()
-  startFetchingPosts()
+  startFetchingData()
 }
 
 const skipAnalysis = () => {
@@ -328,13 +457,18 @@ const skipAnalysis = () => {
   progressValue.value = 100
   foundUrl.value = null
   finalPosts.value = []
+  companyInfo.value = null
   currentStep.value = 4
   emit('skip')
 }
 
-const startFetchingPosts = () => {
+const startFetchingData = () => {
   currentStep.value = 3
   progressValue.value = 75
+  postsError.value = null
+  infoError.value = null
+  companyInfo.value = null
+  finalPosts.value = []
   
   let simProgress = 75
   const interval = setInterval(() => {
@@ -347,18 +481,25 @@ const startFetchingPosts = () => {
   }, 300)
 
   setTimeout(async () => {
-    try {
-      if (foundUrl.value) {
-        const postsResponse = await fetchLinkedInPosts(foundUrl.value)
-        finalPosts.value = postsResponse
-      }
-    } catch(e) {
-      finalPosts.value = []
-    } finally {
-      clearInterval(interval)
-      progressValue.value = 100
-      setTimeout(() => { currentStep.value = 4 }, 500)
+    if (foundUrl.value) {
+      const pPosts = fetchLinkedInPosts(foundUrl.value).catch(err => {
+        postsError.value = "Impossible de récupérer les publications."
+        return []
+      })
+      
+      const pInfo = fetchLinkedInInfo(foundUrl.value).catch(err => {
+        infoError.value = "Impossible de récupérer les informations de l'entreprise."
+        return null
+      })
+
+      const [postsRes, infoRes] = await Promise.all([pPosts, pInfo])
+      finalPosts.value = postsRes
+      companyInfo.value = infoRes
     }
+    
+    clearInterval(interval)
+    progressValue.value = 100
+    setTimeout(() => { currentStep.value = 4 }, 500)
   }, 500)
 }
 
@@ -367,6 +508,35 @@ const getAnalysisPayload = (): AnalysisResult => {
     linkedinUrl: foundUrl.value,
     posts: finalPosts.value,
     skipped: isSkipped.value
+  }
+}
+
+const generateAnalysis = async () => {
+  isAnalyzing.value = true
+  const payload = {
+    nom: props.companyName,
+    secteur: props.lead?.secteurActivite || '',
+    chiffre_affaires: props.lead?.ca ||null,
+    taille: props.lead?.tailleEntreprise || '',
+    nb_employes: '', 
+    nb_locales: props.lead?.nbLocaux || 1,
+    posts: finalPosts.value.slice(0, 10),
+    specialities: companyInfo.value?.specialities || [],
+    description: companyInfo.value?.description || '',
+
+  }
+
+  try {
+    const response = await axios.post('http://localhost:8002/ia/analyze', payload)
+    sessionStorage.setItem('analysisResult', JSON.stringify(response.data))
+    sessionStorage.setItem('analysisLead', JSON.stringify(props.lead || { nom: props.companyName }))
+    emit('update:isOpen', false)
+    router.push({ name: 'AnalyseResults' })
+  } catch (error) {
+    console.error('Error generating analysis', error)
+    alert("Erreur lors de la génération de l'analyse.")
+  } finally {
+    isAnalyzing.value = false
   }
 }
 
@@ -383,13 +553,51 @@ const fetchLinkedInUrl = async (name: string) => {
 }
 
 const fetchLinkedInPosts = async (url: string) => {
+  const response = await axios.post('http://localhost:8002/linkedin/posts', {
+    linkedin_url: url, max_posts: 10
+  })
+  return response.data.posts || []
+}
+
+const fetchLinkedInInfo = async (url: string) => {
+  const response = await axios.post('http://localhost:8002/linkedin/informations', {
+    linkedin_url: url
+  })
+  return response.data?.infos || null
+}
+
+const enrichCompany = async () => {
+  if (!companyInfo.value) return
+  
+  isEnriching.value = true
+  enrichError.value = null
+  
   try {
-    const response = await axios.post('http://localhost:8002/linkedin/posts', {
-      linkedin_url: url, max_posts: 10
-    })
-    return response.data.posts || []
-  } catch (error) {
-    return []
+    const baseUrl = import.meta.env.VITE_IA_SERVICE_URL || 'http://localhost:8002'
+    const identifiant = props.lead?.identifiant || props.lead?.id || ""
+    const phoneObj = companyInfo.value.phone ? { number: companyInfo.value.phone, extension: null } : null
+    
+    const payload = {
+      identifiant: identifiant.toString(),
+      linkedin_url: foundUrl.value || "",
+      description: companyInfo.value.description || null,
+      phone: phoneObj,
+      website: companyInfo.value.website || null,
+      specialities: companyInfo.value.specialities || null,
+      taille: companyInfo.value.taille || null,
+      date_creation_entreprise: companyInfo.value.date_creation_entreprise || null,
+      nb_locaux: companyInfo.value.nb_locaux || null
+    }
+
+    await axios.post(`${baseUrl}/enrich`, payload)
+    enrichSuccess.value = true
+    toast.success("✅ Entreprise enrichie avec succès", { duration: 3000 })
+  } catch (error: any) {
+    console.error('Erreur enrichissement:', error)
+    enrichError.value = error.response?.data?.detail || "Erreur lors de l'ajout de l'entreprise."
+    toast.error(enrichError.value, { duration: 5000 })
+  } finally {
+    isEnriching.value = false
   }
 }
 </script>

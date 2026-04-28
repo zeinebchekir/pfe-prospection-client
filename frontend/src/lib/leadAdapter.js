@@ -186,6 +186,8 @@ export function adaptLead(raw, index) {
     dateScrapingFormatted: formatDateFR(raw.date_scraping),
     telephone: safeStr(raw.telephone),
     email: safeStr(raw.adresse_email),
+    linkedin_url: raw.linkedin_url ?? null,
+    website_url: raw.website_url ?? null,
     hasBoamp: raw.info_boamp != null,
     infoBoamp: raw.info_boamp ?? null,
     createdAt: raw.created_at ?? null,
