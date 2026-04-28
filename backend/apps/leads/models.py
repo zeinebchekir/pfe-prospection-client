@@ -45,6 +45,7 @@ class LeadOpportunity(models.Model):
     model_version = models.CharField(max_length=100, blank=True, null=True)
     scored_at = models.DateTimeField(blank=True, null=True)
     imported_at = models.DateTimeField(blank=True, null=True)
+    is_commercial_created = models.BooleanField(default=False)
 
     class Meta:
         managed = False

@@ -34,6 +34,7 @@ class LeadOpportunitySerializer(serializers.ModelSerializer):
             "model_version",
             "scored_at",
             "imported_at",
+            "is_commercial_created",
         ]
 
 
@@ -87,6 +88,7 @@ class LeadOpportunityWriteSerializer(serializers.ModelSerializer):
         now = timezone.now()
         validated_data.setdefault("last_modified_date", now)
         validated_data.setdefault("imported_at", now)
+        validated_data["is_commercial_created"] = True
         return LeadOpportunity.objects.create(**validated_data)
 
     def update(self, instance, validated_data):

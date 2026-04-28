@@ -234,3 +234,117 @@ Test coverage:
 - [ ] Set `DEBUG=False`
 - [ ] Configure proper logging aggregation
 - [ ] Set up database backups
+
+---
+
+## Lead Scoring - Mise en route pour les membres Git
+
+Cette partie explique comment lancer correctement la fonctionnalite **Lead Scoring** apres avoir recupere la branche Git.
+
+### 1. Recuperer le code
+
+```bash
+git pull origin ia-ml-service
+```
+
+### 2. Verifier le fichier `.env`
+
+Le fichier `.env` doit exister a la racine du projet. Il doit contenir au minimum les variables suivantes :
+
+```env
+SECRET_KEY=your-secret-key
+DB_NAME=crmpfe_db
+DB_USER=crmpfe_user
+DB_PASSWORD=crmpfe_password
+DB_HOST=db
+DB_PORT=5432
+LEAD_SCORING_SERVICE_URL=http://ia-ml:8002
+```
+
+### 3. Base vide ou base deja chargee
+
+Le service de scoring utilise la table PostgreSQL suivante :
+
+```sql
+public.lead_opportunity
+```
+
+Si la base contient deja cette table avec des donnees, passer directement a l'etape Docker.
+
+Si la base est totalement vide, il faut d'abord creer ou importer la table `lead_opportunity`, puis charger les donnees. La migration actuelle ajoute les colonnes de scoring avec `ALTER TABLE`, donc elle suppose que `lead_opportunity` existe deja.
+
+Ordre conseille pour une nouvelle base :
+
+```bash
+docker compose up -d db
+```
+
+Ensuite, creer/importer la table `lead_opportunity` et charger les donnees via pgAdmin, psql, un dump SQL, ou le script utilise par l'equipe.
+
+### 4. Lancer le projet
+
+```bash
+docker compose up -d --build
+```
+
+Cette commande construit les services, lance PostgreSQL, lance le backend Django, applique les migrations, lance le frontend, et lance le service IA/ML `ia-ml`.
+
+Verifier ensuite que les services sont actifs :
+
+```bash
+docker compose ps
+```
+
+Les services importants sont :
+
+- `db`
+- `web`
+- `frontend`
+- `ia-ml`
+
+### 5. Conditions pour entrainer le modele
+
+Avant de lancer l'entrainement, la table `lead_opportunity` doit contenir assez de donnees exploitables :
+
+- au moins `100` lignes ;
+- la colonne cible `lead_score` remplie ;
+- au moins deux classes dans `lead_score`, par exemple des lignes avec `0` et des lignes avec `1`.
+
+Si ces conditions ne sont pas respectees, l'entrainement du modele echouera.
+
+### 6. Entrainer le modele Lead Scoring
+
+L'entrainement peut etre lance depuis la page **Opportunites** dans l'application, ou via l'API backend :
+
+```http
+POST /api/leads/opportunities/train/
+```
+
+Apres l'entrainement, le service IA/ML cree automatiquement les artefacts du modele dans :
+
+```text
+IA-ML_service/artifacts/lead_scoring/
+```
+
+Ce dossier est ignore par Git. Chaque membre doit donc generer son modele localement.
+
+### 7. Verifier que tout marche
+
+Pour verifier le bon fonctionnement :
+
+- ouvrir la page **Opportunites** ;
+- verifier que les leads sont affiches ;
+- lancer l'entrainement si aucun modele n'existe ;
+- verifier que les champs de scoring sont remplis : `lead_score_predicted`, `lead_temperature`, `model_version`, `scored_at` ;
+- creer ou modifier un lead et verifier qu'il est score automatiquement.
+
+### Resume rapide
+
+```bash
+git pull origin ia-ml-service
+docker compose up -d db
+# creer/importer lead_opportunity + charger les donnees si la base est vide
+docker compose up -d --build
+# lancer l'entrainement du modele depuis Opportunites
+```
+

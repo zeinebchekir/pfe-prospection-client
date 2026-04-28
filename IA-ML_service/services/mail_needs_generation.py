@@ -6,8 +6,8 @@ import os
 from dotenv import load_dotenv
 from groq import Groq
 
-client = Groq(api_key=os.getenv("GROQ_API_KEY"))
 load_dotenv()
+client = Groq(api_key=os.getenv("GROQ_API_KEY"))
 
 logger = logging.getLogger(__name__)
 

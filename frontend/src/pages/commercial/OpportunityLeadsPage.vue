@@ -219,101 +219,6 @@
             </CardContent>
           </Card>
 
-          <Card class="border-border/80">
-            <CardContent class="p-5">
-              <div class="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-                <div>
-                  <p class="text-sm font-semibold text-tacir-darkblue">Top leads chauds</p>
-                  <p class="text-xs text-muted-foreground">
-                    Leads HOT les mieux notes, avec resume de l'historique de message et des activites recentes.
-                  </p>
-                </div>
-
-                <div class="w-full md:w-[140px]">
-                  <Select v-model="hotLeadLimit" @update:modelValue="handleHotLeadLimitChange">
-                    <SelectTrigger class="h-10 rounded-md bg-white text-sm">
-                      <SelectValue placeholder="Top 5" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="5">Top 5</SelectItem>
-                      <SelectItem value="10">Top 10</SelectItem>
-                      <SelectItem value="20">Top 20</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-              </div>
-
-              <div v-if="topHotLeads.length" class="mt-4 grid gap-4 xl:grid-cols-2">
-                <article
-                  v-for="(lead, index) in topHotLeads"
-                  :key="lead.lead_id"
-                  class="rounded-2xl border border-border bg-white p-4 shadow-card"
-                >
-                  <div class="flex items-start justify-between gap-3">
-                    <div class="min-w-0">
-                      <div class="flex items-center gap-2">
-                        <div class="flex h-7 w-7 items-center justify-center rounded-full bg-tacir-blue/10 text-xs font-semibold text-tacir-blue">
-                          {{ index + 1 }}
-                        </div>
-                        <p class="truncate text-base font-semibold text-foreground">{{ lead.company_name }}</p>
-                      </div>
-                      <p class="mt-2 truncate text-xs text-muted-foreground">
-                        {{ topLeadMeta(lead) }}
-                      </p>
-                    </div>
-
-                    <div class="flex shrink-0 items-center gap-2">
-                      <Badge class="border-emerald-200 bg-emerald-50 text-emerald-700">Chaud</Badge>
-                      <Badge variant="outline" class="border-tacir-blue/20 bg-tacir-blue/5 text-tacir-blue">
-                        {{ formatLeadScore(lead.lead_score_predicted) }}
-                      </Badge>
-                    </div>
-                  </div>
-
-                  <div class="mt-4 space-y-3">
-                    <div>
-                      <button
-                        type="button"
-                        class="text-left text-[11px] font-semibold uppercase tracking-wide text-muted-foreground transition-colors hover:text-tacir-blue"
-                        @click="toggleHistorySummary(lead.lead_id)"
-                      >
-                        Resume de l'historique
-                      </button>
-                      <p class="mt-1 text-sm leading-6 text-foreground">
-                        {{ isHistoryExpanded(lead.lead_id) ? (lead.history_summary_full || lead.history_summary) : (lead.history_summary_preview || lead.history_summary) }}
-                      </p>
-                      <button
-                        v-if="lead.history_summary_full && lead.history_summary_preview && lead.history_summary_full !== lead.history_summary_preview"
-                        type="button"
-                        class="mt-2 text-xs font-medium text-tacir-blue transition-colors hover:underline"
-                        @click="toggleHistorySummary(lead.lead_id)"
-                      >
-                        {{ isHistoryExpanded(lead.lead_id) ? 'Voir moins' : 'Voir tout' }}
-                      </button>
-                    </div>
-
-                    <div>
-                      <p class="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
-                        Activites
-                      </p>
-                      <p class="mt-1 text-sm leading-6 text-muted-foreground">{{ lead.activity_summary }}</p>
-                    </div>
-                  </div>
-                </article>
-              </div>
-
-              <div
-                v-else
-                class="mt-4 rounded-xl border border-dashed border-border bg-muted/20 px-5 py-8 text-center"
-              >
-                <p class="text-sm font-medium text-foreground">Aucun lead chaud ne correspond aux filtres actuels.</p>
-                <p class="mt-1 text-xs text-muted-foreground">
-                  Essaie de retirer certains filtres ou de relancer l'entrainement pour mettre a jour les scores.
-                </p>
-              </div>
-            </CardContent>
-          </Card>
-
           <div class="relative overflow-hidden rounded-xl border border-border bg-white shadow-card">
             <div
               v-if="isLoading"
@@ -362,6 +267,7 @@
     list-id-prefix="opportunity-create"
     :options-loading="isFormOptionsLoading"
     :job-title-options="formOptions.job_titles"
+    :industry-options="formOptions.industries"
     :lead-source-options="formOptions.lead_sources"
     :last-activity-options="formOptions.last_activities"
     :last-notable-activity-options="formOptions.last_notable_activities"
@@ -376,6 +282,7 @@
     :lead="editingLead"
     :options-loading="isFormOptionsLoading"
     :job-title-options="formOptions.job_titles"
+    :industry-options="formOptions.industries"
     :lead-source-options="formOptions.lead_sources"
     :last-activity-options="formOptions.last_activities"
     :last-notable-activity-options="formOptions.last_notable_activities"
@@ -416,7 +323,7 @@ function createEmptySummary() {
       cold: 0,
     },
     average_score: null,
-    top_hot_limit: 5,
+    top_hot_limit: 0,
     top_hot_leads: [],
   }
 }
@@ -453,19 +360,16 @@ const filters = ref({
   companySize: 'ALL',
   industry: 'ALL',
 })
-const hotLeadLimit = ref('5')
 const search = ref('')
 const activeSearch = ref('')
 const page = ref(1)
 const pageSize = ref(20)
 const totalItems = ref(0)
 const totalPages = ref(1)
-const expandedHistoryLeadIds = ref([])
 
 let searchTimer = null
 
 const leadCounts = computed(() => summary.value?.lead_counts || createEmptySummary().lead_counts)
-const topHotLeads = computed(() => summary.value?.top_hot_leads || [])
 const averageScoreLabel = computed(() => {
   const value = summary.value?.average_score
   if (value === null || value === undefined) return '-'
@@ -534,7 +438,6 @@ async function fetchOpportunityLeads() {
     const params = {
       page: page.value,
       page_size: pageSize.value,
-      hot_limit: hotLeadLimit.value,
     }
 
     if (activeSearch.value) params.search = activeSearch.value
@@ -551,15 +454,12 @@ async function fetchOpportunityLeads() {
     totalPages.value = data.total_pages || 1
     page.value = data.page || 1
     summary.value = normalizeSummary(data.summary)
-    expandedHistoryLeadIds.value = []
-    hotLeadLimit.value = String(summary.value.top_hot_limit || hotLeadLimit.value)
   } catch (error) {
     console.error('[OpportunityLeads] fetch error:', error)
     opportunityLeads.value = []
     totalItems.value = 0
     totalPages.value = 1
     summary.value = createEmptySummary()
-    expandedHistoryLeadIds.value = []
     toast.error("Impossible de charger les leads d'opportunite.")
   } finally {
     isLoading.value = false
@@ -718,11 +618,6 @@ function handleFilterChange() {
   fetchOpportunityLeads()
 }
 
-function handleHotLeadLimitChange(nextValue) {
-  hotLeadLimit.value = String(nextValue || hotLeadLimit.value)
-  fetchOpportunityLeads()
-}
-
 function handlePageChange(nextPage) {
   if (nextPage === page.value) return
   page.value = nextPage
@@ -764,34 +659,11 @@ function openDeleteDialog(lead) {
   showDeleteDialog.value = true
 }
 
-function isHistoryExpanded(leadId) {
-  return expandedHistoryLeadIds.value.includes(leadId)
-}
-
-function toggleHistorySummary(leadId) {
-  if (isHistoryExpanded(leadId)) {
-    expandedHistoryLeadIds.value = expandedHistoryLeadIds.value.filter((value) => value !== leadId)
-    return
-  }
-
-  expandedHistoryLeadIds.value = [...expandedHistoryLeadIds.value, leadId]
-}
-
 function temperatureLabel(value) {
   if (value === 'HOT') return 'Chaud'
   if (value === 'WARM') return 'Tiede'
   if (value === 'COLD') return 'Froid'
   return 'Tous'
-}
-
-function formatLeadScore(value) {
-  if (value === null || value === undefined) return '-'
-  return `${Number(value)}/100`
-}
-
-function topLeadMeta(lead) {
-  const parts = [lead.contact_name, lead.job_title, lead.country, lead.industry, lead.company_size]
-  return parts.filter(Boolean).join(' | ') || 'Informations de profil non renseignees.'
 }
 
 onMounted(() => {

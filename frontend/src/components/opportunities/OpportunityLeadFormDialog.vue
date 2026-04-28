@@ -61,7 +61,15 @@
 
             <div class="space-y-1.5">
               <label class="text-xs font-semibold text-foreground">Industry</label>
-              <input v-model="form.industry" :class="fieldClass" placeholder="Ex : Software" />
+              <input
+                v-model="form.industry"
+                :class="fieldClass"
+                :list="industryListId"
+                placeholder="Choisir ou saisir une industrie"
+              />
+              <p class="text-[11px] text-muted-foreground">
+                {{ optionsLoading ? 'Chargement des suggestions...' : `${industryOptions.length} choix depuis la base` }}
+              </p>
             </div>
 
             <div class="space-y-1.5">
@@ -180,6 +188,10 @@
     <option v-for="option in leadSourceOptions" :key="`source-${listIdPrefix}-${option}`" :value="option" />
   </datalist>
 
+  <datalist :id="industryListId">
+    <option v-for="option in industryOptions" :key="`industry-${listIdPrefix}-${option}`" :value="option" />
+  </datalist>
+
   <datalist :id="lastActivityListId">
     <option v-for="option in lastActivityOptions" :key="`activity-${listIdPrefix}-${option}`" :value="option" />
   </datalist>
@@ -211,6 +223,7 @@ const props = defineProps({
   listIdPrefix: { type: String, default: 'opportunity-form' },
   optionsLoading: { type: Boolean, default: false },
   jobTitleOptions: { type: Array, default: () => [] },
+  industryOptions: { type: Array, default: () => [] },
   leadSourceOptions: { type: Array, default: () => [] },
   lastActivityOptions: { type: Array, default: () => [] },
   lastNotableActivityOptions: { type: Array, default: () => [] },
@@ -238,6 +251,7 @@ const savingLabel = computed(() =>
 )
 
 const jobTitleListId = computed(() => `${props.listIdPrefix}-job-title-options`)
+const industryListId = computed(() => `${props.listIdPrefix}-industry-options`)
 const leadSourceListId = computed(() => `${props.listIdPrefix}-lead-source-options`)
 const lastActivityListId = computed(() => `${props.listIdPrefix}-last-activity-options`)
 const lastNotableActivityListId = computed(() => `${props.listIdPrefix}-last-notable-activity-options`)

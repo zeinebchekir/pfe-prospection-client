@@ -165,14 +165,6 @@ def _build_opportunity_summary(queryset, params):
         cold_count=Count("lead_id", filter=Q(lead_temperature="COLD")),
         average_score=Avg("lead_score_predicted", filter=Q(lead_score_predicted__isnull=False)),
     )
-    hot_limit = _hot_limit(params)
-    top_hot_leads = queryset.filter(lead_temperature="HOT").order_by(
-        F("lead_score_predicted").desc(nulls_last=True),
-        F("lead_score_probability").desc(nulls_last=True),
-        "-last_modified_date",
-        "company_name",
-    )[:hot_limit]
-
     return {
         "lead_counts": {
             "total": aggregates["total_count"] or 0,
@@ -181,8 +173,8 @@ def _build_opportunity_summary(queryset, params):
             "cold": aggregates["cold_count"] or 0,
         },
         "average_score": float(aggregates["average_score"]) if aggregates["average_score"] is not None else None,
-        "top_hot_limit": hot_limit,
-        "top_hot_leads": [_serialize_hot_lead_summary(lead) for lead in top_hot_leads],
+        "top_hot_limit": 0,
+        "top_hot_leads": [],
     }
 
 
@@ -312,7 +304,7 @@ class LeadOpportunityListCreateView(generics.ListCreateAPIView):
         return LeadOpportunitySerializer
 
     def get_queryset(self):
-        queryset = LeadOpportunity.objects.all()
+        queryset = LeadOpportunity.objects.filter(is_commercial_created=True)
         return _apply_opportunity_filters(queryset, self.request.query_params)
 
     def list(self, request, *args, **kwargs):
