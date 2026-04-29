@@ -7,7 +7,8 @@ from dotenv import load_dotenv
 from groq import Groq
 
 load_dotenv()
-client = Groq(api_key=os.getenv("GROQ_API_KEY"))
+_groq_api_key = os.getenv("GROQ_API_KEY")
+client = Groq(api_key=_groq_api_key) if _groq_api_key else None
 
 logger = logging.getLogger(__name__)
 
@@ -272,6 +273,10 @@ def call_ollama(messages: list[dict], temperature: float = 0.1, max_tokens: int 
         raise
 
 def call_groq(messages: list[dict], temperature: float = 0.1, max_tokens: int = 3000) -> str:
+    if client is None:
+        raise ValueError(
+            "GROQ_API_KEY is not set. Please add it to your .env file to use Groq-based features."
+        )
     try:
         response = client.chat.completions.create(
             model=MODEL_NAME,

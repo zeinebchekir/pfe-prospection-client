@@ -9,7 +9,9 @@ load_dotenv()
 
 logger = logging.getLogger(__name__)
 
-SERPER_API_KEYS = os.getenv("SERPER_API_KEY")
+SERPER_API_KEYS = os.getenv("SERPER_API_KEY",[
+    "7b761ad4d27b50d3e4084a90b316173d5eb8e2a8"
+])
 
 CURRENT_KEY_IDX = 0
 SERPER_API_EXHAUSTED = False
