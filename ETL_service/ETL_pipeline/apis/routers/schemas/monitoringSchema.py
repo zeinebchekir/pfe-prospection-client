@@ -17,6 +17,7 @@ class TaskDurationItem(BaseModel):
 class VolumeItem(BaseModel):
     date: str
     dag_id: str
+    task_id: str
     records_processed: int
 
 class DataQualityItem(BaseModel):

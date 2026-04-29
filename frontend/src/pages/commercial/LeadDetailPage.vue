@@ -135,7 +135,20 @@
               <InfoRow label="Pays"        :value="displayLead.pays" />
               <InfoRow label="Email"       :value="displayLead.email" link />
               <InfoRow label="Téléphone"   :value="displayLead.telephone" link />
-              <InfoRow label="Site web"    value="Non renseigné" muted />
+              <div v-if="displayLead.linkedin_url" class="flex items-center justify-between py-2 border-b border-border last:border-b-0">
+                <span class="text-[11px] text-muted-foreground">LinkedIn</span>
+                <a :href="displayLead.linkedin_url" target="_blank" rel="noopener noreferrer" class="flex items-center gap-1.5 text-xs font-medium text-tacir-blue hover:underline max-w-[200px] justify-end">
+                  <Linkedin class="w-3.5 h-3.5 flex-shrink-0" />
+                  <span class="truncate">{{ decodeURIComponent(displayLead.linkedin_url) }}</span>
+                </a>
+              </div>
+              <div v-if="displayLead.website_url" class="flex items-center justify-between py-2 border-b border-border last:border-b-0">
+                <span class="text-[11px] text-muted-foreground">Site web</span>
+                <a :href="displayLead.website_url" target="_blank" rel="noopener noreferrer" class="flex items-center gap-1.5 text-xs font-medium text-tacir-blue hover:underline max-w-[200px] justify-end">
+                  <Globe class="w-3.5 h-3.5 flex-shrink-0" />
+                  <span class="truncate">{{ displayLead.website_url }}</span>
+                </a>
+              </div>
             </div>
           </div>
 
@@ -260,20 +273,173 @@
             </div>
           </div>
 
+          <!-- Appel d'Offre BOAMP -->
+          <div v-if="displayLead.infoBoamp" class="bg-white rounded-xl border border-border shadow-card p-5">
+            <div class="flex items-center gap-2 mb-4">
+              <div class="w-7 h-7 rounded-lg bg-indigo-50 flex items-center justify-center">
+                <ClipboardList class="w-3.5 h-3.5 text-indigo-600" />
+              </div>
+              <h2 class="text-sm font-semibold">📋 Appel d'Offre BOAMP</h2>
+            </div>
+            
+            <div class="space-y-5">
+              <!-- Nature -->
+              <div v-if="displayLead.infoBoamp.nature" class="flex items-center">
+                <span 
+                  :class="[
+                    'text-xs font-medium px-2.5 py-1 rounded-full border',
+                    displayLead.infoBoamp.nature === 'APPEL_OFFRE' 
+                      ? 'bg-blue-50 text-tacir-blue border-blue-200' 
+                      : 'bg-muted text-muted-foreground border-border'
+                  ]"
+                >
+                  {{ displayLead.infoBoamp.nature }}
+                </span>
+              </div>
+
+              <!-- Besoin -->
+              <div v-if="displayLead.infoBoamp.besoin" class="space-y-1.5">
+                <div class="flex items-center gap-2 text-sm font-medium text-foreground">
+                  <Lightbulb class="w-4 h-4 text-amber-500" />
+                  Besoin identifié
+                </div>
+                <p class="text-sm text-muted-foreground pl-6 leading-relaxed">
+                  {{ displayLead.infoBoamp.besoin }}
+                </p>
+              </div>
+
+              <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 pl-6">
+                <!-- Titulaire -->
+                <div v-if="displayLead.infoBoamp.titulaire" class="space-y-1">
+                  <div class="flex items-center gap-1.5 text-xs text-muted-foreground">
+                    <User class="w-3.5 h-3.5" />
+                    Titulaire
+                  </div>
+                  <p class="text-sm font-medium text-foreground">
+                    {{ displayLead.infoBoamp.titulaire }}
+                  </p>
+                </div>
+
+                <!-- Date limite -->
+                <div v-if="displayLead.infoBoamp.date_limite" class="space-y-1">
+                  <div class="flex items-center gap-1.5 text-xs text-muted-foreground">
+                    <Calendar class="w-3.5 h-3.5" />
+                    Date limite
+                  </div>
+                  <p class="text-sm font-medium text-foreground">
+                    {{ !isNaN(Date.parse(displayLead.infoBoamp.date_limite)) ? new Date(displayLead.infoBoamp.date_limite).toLocaleDateString('fr-FR') : displayLead.infoBoamp.date_limite }}
+                  </p>
+                </div>
+              </div>
+
+              <!-- Infos complémentaires -->
+              <div v-if="displayLead.infoBoamp.info_complementaire" class="space-y-1.5">
+                <div class="flex items-center gap-2 text-sm font-medium text-foreground">
+                  <Info class="w-4 h-4 text-blue-500" />
+                  Infos complémentaires
+                </div>
+                <p class="text-sm text-muted-foreground pl-6 leading-relaxed whitespace-pre-wrap">
+                  {{ displayLead.infoBoamp.info_complementaire }}
+                </p>
+              </div>
+
+              <!-- Lien de l'offre -->
+              <div v-if="displayLead.infoBoamp.lienOffre" class="pt-2">
+                <a 
+                  :href="displayLead.infoBoamp.lienOffre" 
+                  target="_blank" 
+                  rel="noopener noreferrer"
+                  class="inline-flex items-center gap-2 h-9 px-4 text-sm font-medium rounded-md border border-input bg-white hover:bg-accent hover:text-accent-foreground transition-colors"
+                >
+                  Voir l'offre BOAMP
+                  <ExternalLink class="w-4 h-4" />
+                </a>
+              </div>
+            </div>
+          </div>
+
           <!-- Actions -->
           <div class="flex justify-end gap-3 pb-8">
             <button class="inline-flex items-center gap-2 h-9 px-4 text-sm rounded-md border border-input hover:bg-accent transition-colors">
               <RefreshCw class="w-3.5 h-3.5" /> Prospects similaires
             </button>
-            <button class="inline-flex items-center gap-2 h-9 px-4 text-sm font-medium rounded-md bg-tacir-blue text-white hover:opacity-90 transition-opacity">
-              <TrendingUp class="w-3.5 h-3.5" /> Analyser le potentiel
-            </button>
+            <Button 
+              v-if="displayLead.infoBoamp"
+              @click="generateEmail"
+              :disabled="isGeneratingEmail"
+              class="gap-2 bg-blue-600 text-white hover:bg-blue-700 h-9"
+            >
+              <Loader2 v-if="isGeneratingEmail" class="w-4 h-4 animate-spin" />
+              <Mail v-else class="w-4 h-4" />
+              {{ isGeneratingEmail ? 'Génération en cours...' : '✉ Générer un email' }}
+            </Button>
+            <Button 
+              v-else
+              @click="showAnalysis = true"
+              class="gap-2 bg-tacir-blue text-white hover:opacity-90 h-9"
+            >
+              <Sparkles class="w-4 h-4" />
+              Analyser le potentiel
+            </Button>
           </div>
+
+  <LinkedInAnalysisFlow 
+    v-if="showAnalysis"
+    :is-open="showAnalysis"
+    :company-name="displayLead.nom" 
+    :company-id="displayLead.id"
+    :lead="displayLead"
+    @update:is-open="showAnalysis = $event"
+    @analysis-complete="onAnalysisComplete"
+  />
 
         </div>
       </main>
     </div>
   </div>
+
+  <!-- Email Modal -->
+  <Dialog :open="showEmailModal" @update:open="showEmailModal = $event">
+    <DialogContent class="max-w-2xl max-h-[90vh] overflow-hidden flex flex-col">
+      <DialogHeader class="px-6 py-4 border-b">
+        <DialogTitle class="flex items-center gap-2">
+          <Mail class="w-5 h-5 text-primary" /> Email de prospection généré
+        </DialogTitle>
+        <DialogDescription>
+          Vous pouvez ajuster le contenu avant de le copier.
+        </DialogDescription>
+      </DialogHeader>
+      
+      <div class="space-y-4 px-6 py-4 flex-1 overflow-y-auto">
+        <div class="space-y-2">
+          <Label for="email-subject">Objet</Label>
+          <Input id="email-subject" v-model="generatedEmailSubject" />
+        </div>
+        <div class="space-y-2">
+          <Label for="email-body">Corps de l'email</Label>
+          <Textarea 
+            id="email-body"
+            v-model="generatedEmailBody" 
+            class="min-h-[300px] resize-y"
+          />
+        </div>
+      </div>
+
+      <DialogFooter class="flex sm:justify-between items-center gap-3 px-6 py-4 border-t bg-muted/20">
+        <p v-if="emailError" class="text-sm text-red-500">{{ emailError }}</p>
+        <div class="flex gap-2 w-full sm:w-auto justify-end ml-auto">
+          <Button variant="outline" @click="showEmailModal = false">
+            Fermer
+          </Button>
+          <Button @click="copyGeneratedEmail" class="gap-2">
+            <Check v-if="emailCopied" class="w-4 h-4" />
+            <Copy v-else class="w-4 h-4" />
+            {{ emailCopied ? 'Copié !' : 'Copier' }}
+          </Button>
+        </div>
+      </DialogFooter>
+    </DialogContent>
+  </Dialog>
 
   <!-- Edit modal -->
   <LeadEditModal
@@ -287,13 +453,23 @@
 </template>
 
 <script setup>
-import { ref, computed } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import {
   ArrowLeft, Pencil, Trash2, MapPin, Phone, Mail, Linkedin,
   Users, FileText, BarChart3, Target, TrendingUp, Activity,
-  Clock, Database, RefreshCw, Loader2,
+  Clock, Database, RefreshCw, Loader2, Sparkles, Globe,
+  ClipboardList, Lightbulb, ExternalLink, User, Calendar, Info,
+  Check, Copy
 } from 'lucide-vue-next'
+import { toast } from 'vue-sonner'
+import { Button } from '@/components/ui/button'
+import Textarea from '@/components/ui/textarea/Textarea.vue'
+import { 
+  Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter 
+} from '@/components/ui/dialog'
+import { Label } from '@/components/ui/label'
+import { Input } from '@/components/ui/input'
 
 import TheSidebar    from '@/components/AppSidebar.vue'
 import SegmentBadge  from '@/components/leads/SegmentBadge.vue'
@@ -302,6 +478,7 @@ import ScoreRing     from '@/components/leads/ScoreRing.vue'
 import InfoRow       from '@/components/leads/InfoRow.vue'
 import MetricCard    from '@/components/leads/MetricCard.vue'
 import LeadEditModal from '@/components/leads/LeadEditModal.vue'
+import LinkedInAnalysisFlow from '@/components/leads/LinkedInAnalysisFlow.vue'
 
 import axios from 'axios'
 import { adaptLead, formatDateFR } from '@/lib/leadAdapter'
@@ -331,7 +508,6 @@ async function fetchLeadDetails() {
   }
 }
 
-import { onMounted } from 'vue'
 
 onMounted(() => {
   fetchLeadDetails()
@@ -370,6 +546,72 @@ const AVATAR_COLORS = [
   'bg-blue-50 text-blue-700',
   'bg-rose-50 text-rose-700',
 ]
+
+// ---- Analysis Handlers ----
+const showAnalysis = ref(false)
+
+const onAnalysisComplete = (data) => {
+  showAnalysis.value = false
+  // TODO: send data to backend or update local lead implicitly
+  console.log('Analysis result:', data)
+}
+
+function onAnalysisSkip() {
+  console.log('Analyse ignorée')
+  showAnalysis.value = false
+}
+
+// ---- Email Generation Handlers ----
+const isGeneratingEmail = ref(false)
+const showEmailModal = ref(false)
+const generatedEmailSubject = ref('')
+const generatedEmailBody = ref('')
+const emailCopied = ref(false)
+const emailError = ref('')
+
+const generateEmail = async () => {
+  if (!displayLead.value || !displayLead.value.infoBoamp) return;
+  
+  isGeneratingEmail.value = true
+  emailError.value = ''
+  
+  try {
+    const payload = {
+      rapport: {
+        nom_entreprise: displayLead.value.nom,
+        besoin: displayLead.value.infoBoamp.besoin
+      },
+      remarques: ''
+    }
+    
+    const baseUrl = import.meta.env.VITE_IA_SERVICE_URL || 'http://localhost:8002'
+    const response = await axios.post(`${baseUrl}/ia/generate-email`, payload)
+    
+    generatedEmailSubject.value = response.data.objet || 'Proposition de collaboration Numeryx'
+    generatedEmailBody.value = response.data.corps || ''
+    
+    showEmailModal.value = true
+  } catch (err) {
+    console.error('Error generating email:', err)
+    emailError.value = err.response?.data?.detail || "Erreur lors de la génération de l'email."
+    toast.error(emailError.value)
+  } finally {
+    isGeneratingEmail.value = false
+  }
+}
+
+const copyGeneratedEmail = async () => {
+  const fullEmail = `Objet : ${generatedEmailSubject.value}\n\n${generatedEmailBody.value}`
+  try {
+    await navigator.clipboard.writeText(fullEmail)
+    emailCopied.value = true
+    setTimeout(() => { emailCopied.value = false }, 2000)
+    toast.success("Email copié dans le presse-papiers !")
+  } catch (err) {
+    console.error('Failed to copy', err)
+    toast.error("Erreur lors de la copie")
+  }
+}
 
 // ---- Handlers ----
 function handleSave(id, updates) {

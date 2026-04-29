@@ -92,6 +92,8 @@ x-airflow-common:
     - ${AIRFLOW_PROJ_DIR:-.}/plugins:/opt/airflow/plugins
     - ./ETL_pipeline:/opt/airflow/ETL_pipeline
     - ./exports:/opt/airflow/exports
+    - airflow-shared-tmp:/opt/airflow/shared_tmp  
+
 
   user: "${AIRFLOW_UID:-50000}:0"
 
@@ -321,6 +323,10 @@ services:
           --role Admin \
           --email airflow@example.com || echo "User 'airflow' already exists, skipping."
         python -c "import sys; sys.path.insert(0, '/opt/airflow/ETL_pipeline'); from db.database import create_tables; create_tables(); print('[INIT] ETL tables OK')" || echo "[WARN] ETL table creation skipped."
+        mkdir -p /opt/airflow/shared_tmp
+        chown -R "${AIRFLOW_UID:-50000}:0" /opt/airflow/shared_tmp
+        chmod 777 /opt/airflow/shared_tmp
+        echo "[INIT] shared_tmp permissions OK"
         echo "Done."
         
     # yamllint enable rule:line-length
@@ -455,3 +461,4 @@ volumes:
   postgres-db-volume:
   pgadmin-data:
   prometheus-data:    # ← ajouter
+  airflow-shared-tmp:

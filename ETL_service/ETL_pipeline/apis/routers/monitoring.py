@@ -711,30 +711,35 @@ def get_task_duration(dag_id: str = "sync_boamp", days: int = 7,
 @router.get("/volume-over-time", response_model=List[VolumeItem])
 def get_volume_over_time(days: int = 7, db: Session = Depends(get_db)):
     """Graph 3 — volume traité par source/jour (via XCom)"""
-    # Fix join to use run_id, task_id, and dag_id.
-    # Replace execution_date with start_date.
+    
     query = text("""
         SELECT
             DATE(ti.start_date)::text AS date,
             ti.dag_id,
+            ti.task_id,
             COALESCE(
-                (xc.value::jsonb->>'records_count')::int, 0
+                (xc.value::jsonb #>> '{}')::int, 0
             ) AS records_processed
         FROM task_instance ti
         LEFT JOIN xcom xc
             ON xc.dag_id = ti.dag_id
            AND xc.task_id = ti.task_id
            AND xc.run_id = ti.run_id
-           AND xc.key = 'records_count'
-        WHERE ti.task_id = 'load_clean'
+           AND xc.key = 'total_clean_loaded'
+        WHERE ti.task_id IN ('load_clean_boamp', 'load_clean_sirene')
           AND ti.start_date >= NOW() - CAST(:days || ' days' AS INTERVAL)
           AND ti.state = 'success'
         ORDER BY date, ti.dag_id
     """)
+    
+    # Exécution de la requête en passant le paramètre dynamique 'days'
     rows = db.execute(query, {"days": days}).fetchall()
+    
+    # On retourne la liste en n'oubliant pas d'inclure le task_id
     return [VolumeItem(
         date=row.date,
         dag_id=row.dag_id,
+        task_id=row.task_id,  # <-- Ajouté ici
         records_processed=row.records_processed
     ) for row in rows]
 
@@ -778,35 +783,50 @@ def get_data_quality(db: Session = Depends(get_db)):
 
 @router.get("/data-quality-boamp", response_model=List[DataQualityItem])
 def get_data_quality_boamp(db: Session = Depends(get_db)):
-    """Graph 4 — taux de remplissage des champs spécifiques JSON dans info_boamp"""
+    # La requête utilise un CTE (filtered_data) pour définir notre base de calcul
     query = text("""
-        SELECT
+        WITH filtered_data AS (
+            SELECT info_boamp 
+            FROM entreprise 
+            WHERE created_at >= NOW() - INTERVAL '7 days'
+              -- On élimine les 70 lignes NULL ou vides ici
+              AND info_boamp IS NOT NULL 
+              AND info_boamp::text != '{}' 
+        )
+        SELECT 
             'boamp_besoin' AS field_name,
-            ROUND(100.0 * COUNT(*) FILTER (WHERE info_boamp IS NOT NULL AND info_boamp->>'besoin' IS NOT NULL AND info_boamp->>'besoin' != '')
-                / NULLIF(COUNT(*) FILTER (WHERE info_boamp IS NOT NULL), 0), 1) AS fill_rate
-        FROM entreprise
-        WHERE created_at >= NOW() - INTERVAL '7 days'
+            ROUND(100.0 * COUNT(*) FILTER (WHERE info_boamp->>'besoin' IS NOT NULL AND info_boamp->>'besoin' != '') 
+                / NULLIF(COUNT(*), 0), 1) AS fill_rate
+        FROM filtered_data
 
-        UNION ALL SELECT 'boamp_date_limite',
-            ROUND(100.0 * COUNT(*) FILTER (WHERE info_boamp IS NOT NULL AND info_boamp->>'date_limite' IS NOT NULL AND info_boamp->>'date_limite' != '')
-                / NULLIF(COUNT(*) FILTER (WHERE info_boamp IS NOT NULL), 0), 1)
-        FROM entreprise WHERE created_at >= NOW() - INTERVAL '7 days'
+        UNION ALL 
+        SELECT 
+            'boamp_date_limite',
+            ROUND(100.0 * COUNT(*) FILTER (WHERE info_boamp->>'date_limite' IS NOT NULL AND info_boamp->>'date_limite' != '') 
+                / NULLIF(COUNT(*), 0), 1)
+        FROM filtered_data
 
-        UNION ALL SELECT 'boamp_info_complementaire',
-            ROUND(100.0 * COUNT(*) FILTER (WHERE info_boamp IS NOT NULL AND info_boamp->>'info_complementaire' IS NOT NULL AND info_boamp->>'info_complementaire' != '')
-                / NULLIF(COUNT(*) FILTER (WHERE info_boamp IS NOT NULL), 0), 1)
-        FROM entreprise WHERE created_at >= NOW() - INTERVAL '7 days'
-        UNION ALL SELECT 'boamp_info_lienOffre',
-            ROUND(100.0 * COUNT(*) FILTER (WHERE info_boamp IS NOT NULL AND info_boamp->>'lienOffre' IS NOT NULL AND info_boamp->>'lienOffre' != '')
-                / NULLIF(COUNT(*) FILTER (WHERE info_boamp IS NOT NULL), 0), 1)
-        FROM entreprise WHERE created_at >= NOW() - INTERVAL '7 days'
+        UNION ALL 
+        SELECT 
+            'boamp_info_complementaire',
+            ROUND(100.0 * COUNT(*) FILTER (WHERE info_boamp->>'info_complementaire' IS NOT NULL AND info_boamp->>'info_complementaire' != '') 
+                / NULLIF(COUNT(*), 0), 1)
+        FROM filtered_data
+
+        UNION ALL 
+        SELECT 
+            'boamp_info_lienOffre',
+            ROUND(100.0 * COUNT(*) FILTER (WHERE info_boamp->>'lienOffre' IS NOT NULL AND info_boamp->>'lienOffre' != '') 
+                / NULLIF(COUNT(*), 0), 1)
+        FROM filtered_data
     """)
+
     rows = db.execute(query).fetchall()
+    
     return [DataQualityItem(
         field_name=row.field_name,
         fill_rate=float(row.fill_rate or 0)
     ) for row in rows]
-
 @router.get("/kpi-summary", response_model=KPISummary)
 def get_kpi_summary(db: Session = Depends(get_db)):
     """KPI cards en haut du dashboard"""

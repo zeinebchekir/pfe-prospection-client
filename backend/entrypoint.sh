@@ -1,5 +1,5 @@
 #!/bin/sh
-# entrypoint.sh â€“ waits for the database, applies migrations, then starts Gunicorn
+# entrypoint.sh - waits for the database, applies migrations, then starts Gunicorn
 
 set -e
 
@@ -19,7 +19,7 @@ except Exception as e:
     print(f'Not ready: {e}')
     exit(1)
 "; do
-  echo "PostgreSQL is unavailable â€” sleeping 2s"
+  echo "PostgreSQL is unavailable - sleeping 2s"
   sleep 2
 done
 
