@@ -218,6 +218,7 @@ const navigation = computed(() => {
         { name: 'Pipeline équipe', href: '/manager/team', icon: Target },
         { name: 'Statistiques', href: '/manager/sync', icon: RefreshCw },
         { name: 'Rapports', href: '/manager/reports', icon: BarChart3 },
+        { name: 'Segmentation & Marché', href: '/manager/segmentation', icon: PieChart },
       ],
     })
   }

@@ -1,0 +1,19 @@
+{
+  "generated_at": "2026-04-23T22:35:32.203818Z",
+  "source": "rule-based",
+  "cluster": 3,
+  "analysis": {
+    "description": "Le segment « ETI » présente un niveau de maturité digitale élevé (8.9/10), reflétant une adoption avancée des outils numériques. Les entreprises de ce groupe disposent généralement d'infrastructures IT consolidées et de processus digitaux établis.",
+    "strengths": [
+      "Infrastructure technologique solide et gouvernance IT formelle",
+      "Processus métier largement digitalisés avec des outils intégrés"
+    ],
+    "weaknesses": [
+      "Risque de dette technique sur des systèmes anciens à moderniser",
+      "Résistance au changement dans les équipes habituées aux outils existants"
+    ],
+    "opportunity": "Avec un écart de 1.1/10, ce segment peut accélérer sa transformation en ciblant l'IA et l'automatisation avancée.",
+    "recommended_pitch": "Proposez une offre d'optimisation et d'accélération — ce segment est prêt à investir dans la prochaine vague de transformation digitale.",
+    "score_calibration": 0.0
+  }
+}

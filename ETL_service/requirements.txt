@@ -10,3 +10,6 @@ Alembic==1.13.1
 httpx
 psutil
 reportlab
+scikit-learn
+numpy
+google-genai

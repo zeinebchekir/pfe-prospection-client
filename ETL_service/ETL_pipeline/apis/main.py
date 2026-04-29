@@ -10,6 +10,7 @@ from prometheus_fastapi_instrumentator import Instrumentator
 from prometheus_client import Gauge, Counter, Histogram
 import psutil
 from apis.routers.rapport import router as rapport_router
+from apis.routers.segmentation import router as segmentation_router
 app = FastAPI(
     title="ETL Scraping Service",
     description="API de consultation des données scrappées",
@@ -35,6 +36,7 @@ app.include_router(sync.router,        prefix="/sync",        tags=["Sync"])
 app.include_router(entreprise.router, prefix="/entreprises", tags=["Entreprises"])
 app.include_router(monitoring_router)
 app.include_router(rapport_router)
+app.include_router(segmentation_router, prefix="/segmentation", tags=["Segmentation"])
 
 
 etl_task_cpu    = Gauge('etl_task_cpu_percent',    'CPU usage per task',    ['dag_id','task_id'])
