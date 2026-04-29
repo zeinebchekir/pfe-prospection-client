@@ -41,6 +41,7 @@ from market_analysis.digital_maturity import (
 from market_analysis.digital_maturity_llm import generate_all_maturity_analyses
 from market_analysis.explainability import compute_explainability
 from market_analysis.llm_service import generate_insights
+from market_analysis.text_utils import fix_mojibake, repair_text_payload
 from market_analysis.validation import compute_decision_tree_validation
 
 warnings.filterwarnings("ignore")
@@ -59,7 +60,7 @@ MODEL_TYPE = "decision_tree"
 # The Decision Tree cannot read raw text, so category/sector/band are encoded
 # into integers before training.
 TREE_FEATURE_COLUMNS = ["cat_enc", "ca", "sec_enc", "band_enc"]
-TREE_FEATURE_DISPLAY_NAMES = ["Categorie", "CA (€)", "Secteur", "CA Band"]
+TREE_FEATURE_DISPLAY_NAMES = ["Catégorie", "CA (€)", "Secteur", "CA Band"]
 
 # Converts French employee-size ranges from the database into approximate
 # numeric midpoints. Example: "100 à 199 salariés" becomes 149.
@@ -178,6 +179,13 @@ SEGMENT_META = {
     },
 }
 
+TREE_FEATURE_DISPLAY_NAMES = ["Catégorie", "CA (€)", "Secteur", "CA Band"]
+EFFECTIF_MAP = {fix_mojibake(key): value for key, value in EFFECTIF_MAP.items()}
+SECTOR_MAP = {
+    fix_mojibake(key): fix_mojibake(value) for key, value in SECTOR_MAP.items()
+}
+SEGMENT_META = repair_text_payload(SEGMENT_META)
+
 # Fields copied when exporting a company row into JSON drilldowns/top lists.
 # Keeping the list centralized avoids forgetting fields in helper functions.
 COMPANY_EXPORT_FIELDS = [
@@ -219,7 +227,7 @@ def ca_band(ca: Any) -> str:
 # Example: "Conseil informatique" becomes "IT".
 # Anything not present in SECTOR_MAP becomes "Other".
 def macro_sector(sector_label: Any) -> str:
-    return SECTOR_MAP.get(sector_label, "Other")
+    return SECTOR_MAP.get(fix_mojibake(sector_label), "Other")
 
 
 
@@ -227,7 +235,7 @@ def macro_sector(sector_label: Any) -> str:
 # The database can contain slightly different labels such as PME, ETI,
 # Grande Entreprise, micro, etc. This function normalizes them.
 def normalize_company_category(value: Any) -> str:
-    text = str(value or "").strip()
+    text = fix_mojibake(str(value or "").strip())
     if not text:
         return "Petite et Moyenne Entreprise"
 
@@ -300,8 +308,8 @@ def _get_region(cp: Any) -> str:
 def _safe_mode(series: pd.Series, default: str = "Inconnu") -> str:
     mode_vals = series.mode(dropna=True)
     if len(mode_vals) > 0:
-        return str(mode_vals.iloc[0])
-    return default
+        return fix_mojibake(str(mode_vals.iloc[0]))
+    return fix_mojibake(default)
 
 
 
@@ -315,7 +323,7 @@ def _json_safe(value: Any) -> Any:
         return int(value)
     if isinstance(value, (pd.Timestamp, datetime)):
         return value.isoformat()
-    return value
+    return fix_mojibake(value)
 
 
 
@@ -566,7 +574,7 @@ def _build_drilldown(
             "nb_locaux_cv": loc_cv,
             "is_highly_disperse": is_highly_disperse,
             "warning": (
-                "Ce segment est tres heterogenee, les moyennes peuvent etre trompeuses."
+                "Ce segment est très hétérogène, les moyennes peuvent être trompeuses."
                 if is_highly_disperse
                 else ""
             ),
@@ -651,6 +659,10 @@ def _load_companies_frame(rows: list[Any]) -> tuple[pd.DataFrame, int]:
     # The caller will decide whether to raise an error.
     if frame.empty:
         return frame, total_rows
+
+    object_columns = frame.select_dtypes(include="object").columns
+    for column in object_columns:
+        frame[column] = frame[column].map(fix_mojibake)
 
     # -------------------------------------------------------------------------
     # 1. BASIC TYPE CLEANING
@@ -971,7 +983,7 @@ def _load_insights_source(export_dir: str) -> str:
         return ""
     try:
         with open(path, "r", encoding="utf-8") as handle:
-            payload = json.load(handle)
+            payload = repair_text_payload(json.load(handle))
         return str(payload.get("source") or "")
     except Exception:
         return ""
@@ -989,6 +1001,8 @@ def _save_versioned(
 ) -> None:
     path = Path(export_dir)
     path.mkdir(parents=True, exist_ok=True)
+    summary = repair_text_payload(summary)
+    leads_records = repair_text_payload(leads_records)
 
     for filename in (f"cluster_summary_{timestamp}.json", "cluster_summary.json"):
         with open(path / filename, "w", encoding="utf-8") as handle:
@@ -1138,7 +1152,7 @@ def run_decision_tree_segmentation(
 
     run_at = datetime.utcnow().isoformat() + "Z"
     # Final summary JSON returned by FastAPI and saved as cluster_summary.json.
-    result_summary = {
+    result_summary = repair_text_payload({
         "status": "ok",
         "run_at": run_at,
         "model_type": MODEL_TYPE,
@@ -1152,7 +1166,7 @@ def run_decision_tree_segmentation(
         "maturity_overview": maturity_overview,
         "tree_rules": validation.get("tree_rules"),
         "training_accuracy": validation.get("training_accuracy"),
-    }
+    })
 
     # Lead-level JSON exported as clustered_leads.json.
     clustered_frame = frame[
@@ -1181,9 +1195,9 @@ def run_decision_tree_segmentation(
     )
     clustered_frame["age_entreprise"] = clustered_frame["age_entreprise"].round(1)
 
-    leads_records = json.loads(
+    leads_records = repair_text_payload(json.loads(
         clustered_frame.to_json(orient="records", force_ascii=False, default_handler=str)
-    )
+    ))
     segment_scores = clustered_frame["cluster"].map(
         lambda cluster_id: mat_score_map.get(int(cluster_id), 5.0)
     ).tolist()

@@ -1,0 +1,19 @@
+{
+  "generated_at": "2026-04-29T08:11:54.388325Z",
+  "source": "rule-based",
+  "cluster": 2,
+  "analysis": {
+    "description": "Le segment « PME en croissance » affiche une maturité digitale intermédiaire (5.3/10), avec des acquis solides dans certaines dimensions et des axes de progression significatifs. L'écart de 4.7/10 représente un potentiel de transformation concret.",
+    "strengths": [
+      "Premiers investissements digitaux réalisés et culture de transformation amorcée",
+      "Taille et ressources suffisantes pour absorber de nouveaux outils numériques"
+    ],
+    "weaknesses": [
+      "Digitalisation partielle créant des silos entre systèmes anciens et nouveaux",
+      "Manque de gouvernance data limitant l'exploitation des données disponibles"
+    ],
+    "opportunity": "Un programme de digitalisation ciblé peut réduire l'écart de 4.7/10 et créer un avantage concurrentiel rapide.",
+    "recommended_pitch": "Proposez une roadmap de transformation en 3 étapes — ce segment a la maturité pour avancer mais a besoin d'un cadre structuré.",
+    "score_calibration": 0.0
+  }
+}

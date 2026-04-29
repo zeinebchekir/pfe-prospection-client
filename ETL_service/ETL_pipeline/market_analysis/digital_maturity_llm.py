@@ -39,6 +39,8 @@ import logging
 from pathlib import Path
 from datetime import datetime
 
+from market_analysis.text_utils import fix_mojibake, repair_text_payload
+
 logger = logging.getLogger(__name__)
 
 # ── Feature flags ──────────────────────────────────────────────────────────────
@@ -53,7 +55,7 @@ try:
     _GEMINI_AVAILABLE = True
 except ImportError:
     _GEMINI_AVAILABLE = False
-    logger.warning("[maturity_llm] google-genai not installed — using rule-based fallback")
+    logger.warning("[maturity_llm] google-genai not installed - using rule-based fallback")
 
 
 # ── Public API ─────────────────────────────────────────────────────────────────
@@ -88,6 +90,8 @@ def generate_maturity_analysis(
     else:
         result["score_calibration"] = 0.0
 
+    result = repair_text_payload(result)
+
     # Cache to disk if export_dir provided
     if export_dir and timestamp:
         _save_maturity_analysis(segment.get("cluster"), result, export_dir, timestamp)
@@ -114,7 +118,7 @@ def generate_all_maturity_analyses(
             logger.info(f"[maturity_llm] Generated analysis for cluster {cluster_id}")
         except Exception as exc:
             logger.warning(f"[maturity_llm] Cluster {cluster_id} failed: {exc}")
-            results[cluster_id] = _rule_based_fallback(seg)
+            results[cluster_id] = repair_text_payload(_rule_based_fallback(seg))
             results[cluster_id]["score_calibration"] = 0.0
     return results
 
@@ -147,7 +151,7 @@ def _call_gemini(segment: dict) -> dict:
         return _validate_llm_output(data)
 
     except Exception as exc:
-        logger.error(f"[maturity_llm] Gemini call failed: {exc} — using fallback")
+        logger.error(f"[maturity_llm] Gemini call failed: {exc} - using fallback")
         return _rule_based_fallback(segment)
 
 
@@ -363,13 +367,16 @@ def _save_maturity_analysis(
         path.mkdir(parents=True, exist_ok=True)
         cid = cluster_id if cluster_id is not None else "unknown"
         fname = path / f"maturity_analysis_c{cid}_{timestamp}.json"
-        with open(fname, "w", encoding="utf-8") as f:
-            json.dump({
+        payload = repair_text_payload(
+            {
                 "generated_at": datetime.utcnow().isoformat() + "Z",
                 "source": "gemini-1.5-flash" if (_GEMINI_AVAILABLE and _API_KEY) else "rule-based",
                 "cluster": cluster_id,
                 "analysis": analysis,
-            }, f, ensure_ascii=False, indent=2)
+            }
+        )
+        with open(fname, "w", encoding="utf-8") as f:
+            json.dump(payload, f, ensure_ascii=False, indent=2)
     except Exception as exc:
         logger.warning(f"[maturity_llm] Could not save analysis for cluster {cluster_id}: {exc}")
 

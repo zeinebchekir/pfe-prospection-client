@@ -22,6 +22,19 @@ export const SEGMENT_META = {
   6: { name: "Grands groupes", shortName: "GE", color: "#8E1C1C", rec: "Vente enterprise" },
 };
 
+export const SECTOR_LABELS = {
+  "62.02A": "Conseil en systèmes et logiciels informatiques",
+};
+
+export function formatSector(value) {
+  if (value === null || value === undefined || value === "") {
+    return "Inconnu";
+  }
+
+  const normalized = String(value).trim();
+  return SECTOR_LABELS[normalized] || normalized;
+}
+
 export const runClustering = () => etlApi.post("/segmentation/run");
 export const getSummary = () => etlApi.get("/segmentation/summary");
 export const getLeads = (params) => etlApi.get("/segmentation/leads", { params });

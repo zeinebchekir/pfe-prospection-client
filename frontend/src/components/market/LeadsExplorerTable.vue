@@ -110,7 +110,7 @@
             </td>
             <!-- Secteur (md+) -->
             <td class="px-4 py-3 hidden md:table-cell text-tacir-darkgray max-w-[140px]">
-              <div class="truncate">{{ lead.secteur_activite || "—" }}</div>
+              <div class="truncate">{{ formatSector(lead.secteur_activite) || "—" }}</div>
             </td>
             <!-- Ville (lg+) -->
             <td class="px-4 py-3 hidden lg:table-cell text-tacir-darkgray">{{ lead.ville || "—" }}</td>
@@ -234,7 +234,7 @@
 <script setup>
 import { ref, computed, watch, onMounted } from "vue";
 import { Search, ChevronLeft, ChevronRight } from "lucide-vue-next";
-import { getLeads, formatRevenue, SEGMENT_META } from "@/services/segmentation.js";
+import { getLeads, formatRevenue, formatSector, SEGMENT_META } from "@/services/segmentation.js";
 
 const props = defineProps({ segments: { type: Array, default: () => [] } });
 

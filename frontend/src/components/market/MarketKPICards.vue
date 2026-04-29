@@ -27,19 +27,21 @@ const kpis = computed(() => {
   const segs = props.segments;
   if (!segs.length) return [];
 
-  const dominant  = [...segs].sort((a, b) => b.n - a.n)[0];
-  const totalN    = segs.reduce((s, x) => s + x.n, 0);
-  const weightedCA = segs.reduce((s, x) => s + (x.ca_moyen || 0) * x.n, 0) / totalN;
-  const weightedAge = segs.reduce((s, x) => s + x.age_moyen * x.n, 0) / totalN;
-  const priority  = [...segs].sort((a, b) => (b.ca_moyen || 0) * b.n - (a.ca_moyen || 0) * a.n)[0];
+  const dominant = [...segs].sort((a, b) => b.n - a.n)[0];
+  const totalN = segs.reduce((sum, segment) => sum + segment.n, 0);
+  const weightedCA = segs.reduce((sum, segment) => sum + (segment.ca_moyen || 0) * segment.n, 0) / totalN;
+  const weightedAge = segs.reduce((sum, segment) => sum + segment.age_moyen * segment.n, 0) / totalN;
+  const priority = [...segs].sort(
+    (a, b) => (b.ca_moyen || 0) * b.n - (a.ca_moyen || 0) * a.n
+  )[0];
 
   return [
-    { label: "Total leads",        value: props.totalLeads.toLocaleString("fr-FR"), sub: "entreprises segmentées" },
-    { label: "Segments",           value: segs.length,                              sub: "segments identifiÃ©s" },
-    { label: "Segment dominant",   value: dominant?.label?.split(" ")[0] + "…",     sub: `${dominant?.n} leads (${Math.round(dominant?.n / totalN * 100)}%)` },
-    { label: "CA moyen pondéré",   value: formatRevenue(Math.round(weightedCA)),    sub: "chiffre d'affaires" },
-    { label: "Âge moyen",          value: `${weightedAge.toFixed(1)} ans`,          sub: "ancienneté des entreprises" },
-    { label: "Priorité CA",        value: priority?.label?.split(" ")[0] + "…",     sub: priority?.recommendation },
+    { label: "Total leads", value: props.totalLeads.toLocaleString("fr-FR"), sub: "entreprises segmentées" },
+    { label: "Segments", value: segs.length, sub: "segments identifiés" },
+    { label: "Segment dominant", value: `${dominant?.label?.split(" ")[0] ?? ""}…`, sub: `${dominant?.n} leads (${Math.round((dominant?.n / totalN) * 100)}%)` },
+    { label: "CA moyen pondéré", value: formatRevenue(Math.round(weightedCA)), sub: "chiffre d'affaires" },
+    { label: "Ancienneté moyenne", value: `${weightedAge.toFixed(1)} ans`, sub: "ancienneté des entreprises" },
+    { label: "Priorité CA", value: `${priority?.label?.split(" ")[0] ?? ""}…`, sub: priority?.recommendation },
   ];
 });
 </script>

@@ -101,7 +101,7 @@
                 Catégorie : {{ drilldown?.dominant_dimensions?.categorie_entreprise || '—' }}
               </span>
               <span class="text-[11px] px-3 py-1.5 rounded-full bg-gray-100 text-gray-700 font-medium">
-                Secteur : {{ drilldown?.dominant_dimensions?.secteur_activite || '—' }}
+                Secteur : {{ formatSector(drilldown?.dominant_dimensions?.secteur_activite) || '—' }}
               </span>
               <span class="text-[11px] px-3 py-1.5 rounded-full bg-gray-100 text-gray-700 font-medium">
                 Région : {{ drilldown?.dominant_dimensions?.region || '—' }}
@@ -129,7 +129,7 @@
                 <div class="flex-1 min-w-0">
                   <div class="font-semibold text-gray-800 truncate">{{ c.nom_entreprise || '—' }}</div>
                   <div class="text-xs text-gray-500 truncate">
-                    {{ c.ville }}{{ c.secteur_activite ? ' · ' + c.secteur_activite : '' }}
+                    {{ c.ville }}{{ c.secteur_activite ? ' · ' + formatSector(c.secteur_activite) : '' }}
                   </div>
                 </div>
                 <div class="text-right flex-shrink-0 text-xs text-gray-500">
@@ -218,7 +218,7 @@
 
 <script setup>
 import { computed } from "vue";
-import { formatRevenue } from "@/services/segmentation.js";
+import { formatRevenue, formatSector } from "@/services/segmentation.js";
 
 const props = defineProps({
   open: { type: Boolean, required: true },
@@ -261,7 +261,7 @@ function formatStatBlock(stats, kind = "number") {
 const kpiBlocks = computed(() => [
   { label: "CA", stats: formatStatBlock(drilldown.value.summary_stats?.ca, "revenue") },
   { label: "Effectif", stats: formatStatBlock(drilldown.value.summary_stats?.effectif) },
-  { label: "Âge (ans)", stats: formatStatBlock(drilldown.value.summary_stats?.age) },
+  { label: "Ancienneté (ans)", stats: formatStatBlock(drilldown.value.summary_stats?.age) },
   { label: "Nb locaux", stats: formatStatBlock(drilldown.value.summary_stats?.nb_locaux) },
 ]);
 
@@ -270,7 +270,7 @@ const deltaBlocks = computed(() => {
   return [
     { label: "CA", value: gc.ca_mean_delta_pct },
     { label: "Effectif", value: gc.effectif_mean_delta_pct },
-    { label: "Âge", value: gc.age_mean_delta_pct },
+    { label: "Ancienneté", value: gc.age_mean_delta_pct },
     { label: "Nb locaux", value: gc.nb_locaux_mean_delta_pct },
   ];
 });
@@ -301,7 +301,7 @@ const cvBlocks = computed(() => {
   return [
     { label: "CA", value: h.ca_cv },
     { label: "Effectif", value: h.effectif_cv },
-    { label: "Âge", value: h.age_cv },
+    { label: "Ancienneté", value: h.age_cv },
     { label: "Nb locaux", value: h.nb_locaux_cv },
   ];
 });

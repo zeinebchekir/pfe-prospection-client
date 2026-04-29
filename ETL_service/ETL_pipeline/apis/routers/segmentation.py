@@ -14,6 +14,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
 from db.database import get_db
+from market_analysis.text_utils import repair_text_payload
 
 router = APIRouter()
 
@@ -65,12 +66,12 @@ def get_summary():
         )
 
     with open(SUMMARY_PATH, "r", encoding="utf-8") as handle:
-        data = json.load(handle)
+        data = repair_text_payload(json.load(handle))
 
     if not data.get("insights") and INSIGHTS_PATH.exists():
         try:
             with open(INSIGHTS_PATH, "r", encoding="utf-8") as handle:
-                insights_payload = json.load(handle)
+                insights_payload = repair_text_payload(json.load(handle))
             data["insights"] = insights_payload.get("insights", [])
             data["insights_source"] = insights_payload.get(
                 "source", data.get("insights_source", "")
@@ -98,7 +99,7 @@ def get_leads(
         )
 
     with open(LEADS_PATH, "r", encoding="utf-8") as handle:
-        leads = json.load(handle)
+        leads = repair_text_payload(json.load(handle))
 
     if segment is not None:
         leads = [lead for lead in leads if lead.get("cluster") == segment]
@@ -117,7 +118,7 @@ def get_leads(
     if segment is not None and SUMMARY_PATH.exists():
         try:
             with open(SUMMARY_PATH, "r", encoding="utf-8") as handle:
-                summary = json.load(handle)
+                summary = repair_text_payload(json.load(handle))
             segment_map = {
                 seg["cluster"]: seg["label"] for seg in summary.get("segments", [])
             }
@@ -141,7 +142,7 @@ def get_validation():
         raise HTTPException(status_code=404, detail="No segmentation results found.")
 
     with open(SUMMARY_PATH, "r", encoding="utf-8") as handle:
-        data = json.load(handle)
+        data = repair_text_payload(json.load(handle))
 
     validation = data.get("validation")
     if not validation:

@@ -19,6 +19,8 @@ import os
 from datetime import datetime
 from pathlib import Path
 
+from market_analysis.text_utils import fix_mojibake, repair_text_payload
+
 logger = logging.getLogger(__name__)
 
 try:
@@ -37,37 +39,37 @@ _API_KEY = os.environ.get("GEMINI_API_KEY", "")
 _FALLBACK_INSIGHTS = [
     {
         "title": "Concentration du portefeuille",
-        "description": "Le segment dominant reprÃ©sente la majoritÃ© du potentiel CA. Prioriser les actions commerciales sur ce profil.",
+        "description": "Le segment dominant représente la majorité du potentiel CA. Prioriser les actions commerciales sur ce profil.",
         "priority": "high",
         "icon": "TrendingUp",
     },
     {
-        "title": "OpportunitÃ© scale",
-        "description": "Les segments volumÃ©triques (nombreux leads, CA modÃ©rÃ©) sont idÃ©aux pour une approche self-serve automatisÃ©e.",
+        "title": "Opportunité scale",
+        "description": "Les segments volumétriques (nombreux leads, CA modéré) sont idéaux pour une approche self-serve automatisée.",
         "priority": "medium",
         "icon": "Zap",
     },
     {
-        "title": "Segments Ã  haut CA individuel",
-        "description": "Quelques segments concentrent un CA moyen trÃ¨s Ã©levÃ©. Investir en Ã©quipe dÃ©diÃ©e grand compte est justifiÃ©.",
+        "title": "Segments à haut CA individuel",
+        "description": "Quelques segments concentrent un CA moyen très élevé. Investir en équipe dédiée grand compte est justifié.",
         "priority": "high",
         "icon": "Target",
     },
     {
-        "title": "Diversification gÃ©ographique",
-        "description": "La concentration ÃŽle-de-France est forte. Identifier des opportunitÃ©s dans d'autres rÃ©gions pour rÃ©duire le risque.",
+        "title": "Diversification géographique",
+        "description": "La concentration Île-de-France est forte. Identifier des opportunités dans d'autres régions pour réduire le risque.",
         "priority": "medium",
         "icon": "MapPin",
     },
     {
-        "title": "AnciennetÃ© comme signal de fidÃ©litÃ©",
-        "description": "Les entreprises Ã©tablies depuis plus de 40 ans ont des cycles de dÃ©cision longs mais sont plus fidÃ¨les client.",
+        "title": "Ancienneté comme signal de fidélité",
+        "description": "Les entreprises établies depuis plus de 40 ans ont des cycles de décision longs mais sont plus fidèles client.",
         "priority": "low",
         "icon": "Clock",
     },
     {
-        "title": "Re-run recommandÃ©",
-        "description": "Relancez l'analyse aprÃ¨s chaque import ETL majeur pour maintenir la segmentation Ã  jour.",
+        "title": "Re-run recommandé",
+        "description": "Relancez l'analyse après chaque import ETL majeur pour maintenir la segmentation à jour.",
         "priority": "low",
         "icon": "RefreshCw",
     },
@@ -80,14 +82,13 @@ def generate_insights(
     export_dir: str,
     timestamp: str,
 ) -> list[dict]:
-    """
-    Generate executive insights via Gemini LLM or fall back to rule-based insights.
-    """
+    """Generate executive insights via Gemini LLM or fall back to rule-based insights."""
     insights = (
         _call_gemini(segments, validation)
         if _GEMINI_AVAILABLE and _API_KEY
         else _FALLBACK_INSIGHTS
     )
+    insights = repair_text_payload(insights)
     _save_insights(insights, export_dir, timestamp)
     return insights
 
@@ -124,8 +125,8 @@ def _call_gemini(segments: list[dict], validation: dict) -> list[dict]:
             priority = str(item.get("priority", "medium")).lower()
             result.append(
                 {
-                    "title": str(item.get("title", "Insight")),
-                    "description": str(item.get("description", "")),
+                    "title": fix_mojibake(str(item.get("title", "Insight"))),
+                    "description": fix_mojibake(str(item.get("description", ""))),
                     "priority": priority,
                     "icon": str(item.get("icon", icon_map.get(priority, "Info"))),
                 }
@@ -147,12 +148,12 @@ def _build_prompt(segments: list[dict], validation: dict) -> str:
         if value is None:
             return "N/A"
         if value >= 1e9:
-            return f"{value/1e9:.1f} Mdâ‚¬"
+            return f"{value/1e9:.1f} Md€"
         if value >= 1e6:
-            return f"{value/1e6:.1f} Mâ‚¬"
+            return f"{value/1e6:.1f} M€"
         if value >= 1e3:
-            return f"{value/1e3:.0f} kâ‚¬"
-        return str(round(value, 0))
+            return f"{value/1e3:.0f} k€"
+        return f"{round(value, 0):.0f} €"
 
     seg_lines = []
     for segment in segments:
@@ -160,8 +161,8 @@ def _build_prompt(segments: list[dict], validation: dict) -> str:
             f"- {segment['label']} (C{segment['cluster']}): {segment['n']} leads, "
             f"CA moyen {fmt(segment.get('ca_moyen'))}, "
             f"effectif moyen {segment.get('employes_moyen', 'N/A')}, "
-            f"Ã¢ge moyen {segment.get('age_moyen', 'N/A')} ans, "
-            f"rÃ©gion dominante: {segment.get('region_dominante', 'N/A')}, "
+            f"âge moyen {segment.get('age_moyen', 'N/A')} ans, "
+            f"région dominante: {segment.get('region_dominante', 'N/A')}, "
             f"secteur: {segment.get('secteur_dominant', 'N/A')}"
         )
 
@@ -199,7 +200,7 @@ Respond ONLY with valid JSON in this exact format:
   "insights": [
     {{
       "title": "Titre court (max 8 mots)",
-      "description": "Explication claire pour un CEO (2-3 phrases). Chiffres prÃ©cis inclus.",
+      "description": "Explication claire pour un CEO (2-3 phrases). Chiffres précis inclus.",
       "priority": "high|medium|low",
       "icon": "TrendingUp|Target|Zap|AlertTriangle|MapPin|Users|BarChart3|RefreshCw|Lightbulb|Clock"
     }}
@@ -211,23 +212,25 @@ def _save_insights(insights: list[dict], export_dir: str, timestamp: str) -> Non
     path = Path(export_dir)
     path.mkdir(parents=True, exist_ok=True)
 
-    payload = {
-        "generated_at": datetime.utcnow().isoformat() + "Z",
-        "source": (
-            "gemini-1.5-flash"
-            if (_GEMINI_AVAILABLE and _API_KEY)
-            else "rule-based-fallback"
-        ),
-        "insights": insights,
-    }
+    payload = repair_text_payload(
+        {
+            "generated_at": datetime.utcnow().isoformat() + "Z",
+            "source": (
+                "gemini-1.5-flash"
+                if (_GEMINI_AVAILABLE and _API_KEY)
+                else "rule-based-fallback"
+            ),
+            "insights": insights,
+        }
+    )
 
     versioned = path / f"cluster_insights_{timestamp}.json"
     with open(versioned, "w", encoding="utf-8") as handle:
-        json.dump(payload, handle, ensure_ascii=False, indent=2)
+        json.dump(payload, handle, ensure_ascii=False, default=str)
 
     latest = path / "cluster_insights.json"
     with open(latest, "w", encoding="utf-8") as handle:
-        json.dump(payload, handle, ensure_ascii=False, indent=2)
+        json.dump(payload, handle, ensure_ascii=False, default=str)
 
     logger.info("[llm_service] Insights saved -> %s", versioned)
 
@@ -240,6 +243,7 @@ def load_insights(export_dir: str) -> list[dict]:
     try:
         with open(path, "r", encoding="utf-8") as handle:
             data = json.load(handle)
-        return data.get("insights", [])
+        repaired = repair_text_payload(data)
+        return repaired.get("insights", [])
     except Exception:
         return []

@@ -46,7 +46,7 @@
           <div class="text-sm font-bold text-tacir-darkblue mt-0.5">{{ segment.employes_moyen?.toLocaleString("fr-FR") }}</div>
         </div>
         <div class="bg-gray-50 rounded-lg p-2">
-          <div class="text-[10px] text-tacir-darkgray uppercase tracking-wide">Âge moy.</div>
+          <div class="text-[10px] text-tacir-darkgray uppercase tracking-wide">Ancienneté moy.</div>
           <div class="text-sm font-bold text-tacir-darkblue mt-0.5">{{ segment.age_moyen }} ans</div>
         </div>
       </div>
@@ -61,7 +61,7 @@
         <div class="flex items-center gap-2 text-xs">
           <Briefcase class="w-3 h-3 text-tacir-darkgray shrink-0" />
           <span class="text-tacir-darkgray">Secteur</span>
-          <span class="text-tacir-darkblue font-medium ml-auto truncate">{{ segment.secteur_dominant }}</span>
+          <span class="text-tacir-darkblue font-medium ml-auto truncate">{{ formatSector(segment.secteur_dominant) }}</span>
         </div>
         <div class="flex items-center gap-2 text-xs">
           <MapPin class="w-3 h-3 text-tacir-darkgray shrink-0" />
@@ -191,7 +191,7 @@
 <script setup>
 import { ref, computed } from "vue";
 import { Building2, Briefcase, MapPin, Lightbulb, ChevronDown, BarChart2, ExternalLink } from "lucide-vue-next";
-import { formatRevenue } from "@/services/segmentation.js";
+import { formatRevenue, formatSector } from "@/services/segmentation.js";
 
 const props = defineProps({
   segment:    { type: Object, required: true },
