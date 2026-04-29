@@ -330,7 +330,7 @@ services:
       _AIRFLOW_WWW_USER_CREATE: 'true'
       _AIRFLOW_WWW_USER_USERNAME: ${_AIRFLOW_WWW_USER_USERNAME:-ali}
       _AIRFLOW_WWW_USER_PASSWORD: ${_AIRFLOW_WWW_USER_PASSWORD:-ali}
-      _PIP_ADDITIONAL_REQUIREMENTS: 'requests sqlalchemy psycopg2-binary pydantic-settings openpyxl pandas '
+      _PIP_ADDITIONAL_REQUIREMENTS: 'requests sqlalchemy psycopg2-binary pydantic-settings openpyxl pandas scikit-learn '
     user: "0:0"
   
   fastapi:
