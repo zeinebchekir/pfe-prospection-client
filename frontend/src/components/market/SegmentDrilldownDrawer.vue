@@ -4,18 +4,15 @@
       v-if="open && segment"
       class="fixed inset-0 z-[9999] flex items-start justify-end"
     >
-      <!-- Backdrop -->
       <div
         class="absolute inset-0 bg-black/40"
         @click="$emit('close')"
       />
 
-      <!-- Panel -->
       <div
         class="relative z-10 h-full w-full max-w-2xl bg-white shadow-2xl flex flex-col"
         style="border-left: 4px solid v-bind(accentColor)"
       >
-        <!-- Header -->
         <div
           class="flex items-start justify-between px-6 py-4 border-b border-gray-200 flex-shrink-0"
           :style="{ borderTop: `4px solid ${segment.color}` }"
@@ -47,18 +44,14 @@
           </button>
         </div>
 
-        <!-- Scrollable content -->
         <div class="flex-1 overflow-y-auto p-6 space-y-6">
-
-          <!-- Dispersion warning -->
           <div
             v-if="drilldown?.homogeneity?.warning"
             class="flex items-start gap-2 bg-amber-50 border border-amber-200 text-amber-800 text-xs rounded-lg px-4 py-3"
           >
-            ⚠️ {{ drilldown.homogeneity.warning }}
+            ⚠ {{ drilldown.homogeneity.warning }}
           </div>
 
-          <!-- A. Summary stats -->
           <div>
             <h3 class="text-xs font-bold text-gray-700 uppercase tracking-wider mb-3 pb-1 border-b border-gray-200">
               Aperçu statistique
@@ -70,16 +63,15 @@
                 class="bg-gray-50 rounded-xl p-3 border border-gray-100"
               >
                 <div class="text-[10px] text-gray-500 uppercase tracking-wide mb-1">{{ kpi.label }}</div>
-                <div class="text-lg font-bold" :style="{ color: segment.color }">{{ fmtNum(kpi.stats?.mean) }}</div>
+                <div class="text-lg font-bold" :style="{ color: segment.color }">{{ kpi.stats.mean }}</div>
                 <div class="text-[10px] text-gray-400 mt-1">
-                  <div>Méd : {{ fmtNum(kpi.stats?.median) }}</div>
-                  <div>Min / Max : {{ fmtNum(kpi.stats?.min) }} / {{ fmtNum(kpi.stats?.max) }}</div>
+                  <div>Méd : {{ kpi.stats.median }}</div>
+                  <div>Min / Max : {{ kpi.stats.min }} / {{ kpi.stats.max }}</div>
                 </div>
               </div>
             </div>
           </div>
 
-          <!-- B. Global comparison -->
           <div v-if="drilldown?.global_comparison">
             <h3 class="text-xs font-bold text-gray-700 uppercase tracking-wider mb-3 pb-1 border-b border-gray-200">
               Comparaison vs portefeuille global
@@ -100,25 +92,23 @@
             </div>
           </div>
 
-          <!-- C. Dominant dimensions -->
           <div>
             <h3 class="text-xs font-bold text-gray-700 uppercase tracking-wider mb-3 pb-1 border-b border-gray-200">
               Dimensions dominantes
             </h3>
             <div class="flex flex-wrap gap-2">
               <span class="text-[11px] px-3 py-1.5 rounded-full bg-gray-100 text-gray-700 font-medium">
-                🏢 {{ drilldown?.dominant_dimensions?.categorie_entreprise || '—' }}
+                Catégorie : {{ drilldown?.dominant_dimensions?.categorie_entreprise || '—' }}
               </span>
               <span class="text-[11px] px-3 py-1.5 rounded-full bg-gray-100 text-gray-700 font-medium">
-                💼 {{ drilldown?.dominant_dimensions?.secteur_activite || '—' }}
+                Secteur : {{ drilldown?.dominant_dimensions?.secteur_activite || '—' }}
               </span>
               <span class="text-[11px] px-3 py-1.5 rounded-full bg-gray-100 text-gray-700 font-medium">
-                📍 {{ drilldown?.dominant_dimensions?.region || '—' }}
+                Région : {{ drilldown?.dominant_dimensions?.region || '—' }}
               </span>
             </div>
           </div>
 
-          <!-- D. Representative companies -->
           <div v-if="drilldown?.representative_companies?.length">
             <h3 class="text-xs font-bold text-gray-700 uppercase tracking-wider mb-1 pb-1 border-b border-gray-200">
               Entreprises représentatives
@@ -152,7 +142,6 @@
             </div>
           </div>
 
-          <!-- E. Extremes -->
           <div v-if="drilldown?.extremes">
             <h3 class="text-xs font-bold text-gray-700 uppercase tracking-wider mb-3 pb-1 border-b border-gray-200">
               Cas extrêmes
@@ -169,7 +158,6 @@
             </div>
           </div>
 
-          <!-- F. Rankings -->
           <div v-if="drilldown?.top_lists">
             <h3 class="text-xs font-bold text-gray-700 uppercase tracking-wider mb-3 pb-1 border-b border-gray-200">
               Classements
@@ -197,7 +185,6 @@
             </div>
           </div>
 
-          <!-- G. Homogeneity -->
           <div v-if="drilldown?.homogeneity">
             <h3 class="text-xs font-bold text-gray-700 uppercase tracking-wider mb-3 pb-1 border-b border-gray-200">
               Homogénéité du segment
@@ -223,7 +210,6 @@
               CV = std / moyenne. Plus il est bas, plus le segment est homogène.
             </p>
           </div>
-
         </div>
       </div>
     </div>
@@ -235,77 +221,87 @@ import { computed } from "vue";
 import { formatRevenue } from "@/services/segmentation.js";
 
 const props = defineProps({
-  open:       { type: Boolean, required: true },
-  segment:    { type: Object,  default: null },
-  totalLeads: { type: Number,  default: 1 },
+  open: { type: Boolean, required: true },
+  segment: { type: Object, default: null },
+  totalLeads: { type: Number, default: 1 },
 });
+
 defineEmits(["close"]);
 
 const accentColor = computed(() => props.segment?.color ?? "#3b82f6");
-const drilldown   = computed(() => props.segment?.drilldown ?? {});
-const share       = computed(() =>
+const drilldown = computed(() => props.segment?.drilldown ?? {});
+const share = computed(() =>
   props.segment ? Math.round((props.segment.n / props.totalLeads) * 100) : 0
 );
 
-// Formatters
-function fmtNum(v) {
-  if (v == null) return "—";
-  const n = Number(v);
-  if (Math.abs(n) >= 1e9) return (n / 1e9).toFixed(1) + " Md";
-  if (Math.abs(n) >= 1e6) return (n / 1e6).toFixed(1) + " M";
-  if (Math.abs(n) >= 1e3) return (n / 1e3).toFixed(1) + " k";
-  return n.toFixed(1);
+function formatMetricValue(value) {
+  if (value == null) return "—";
+  return Number(value).toFixed(1);
 }
 
-// KPI blocks
+function formatStatBlock(stats, kind = "number") {
+  const empty = {
+    mean: "—",
+    median: "—",
+    min: "—",
+    max: "—",
+  };
+
+  if (!stats) return empty;
+
+  const formatter = kind === "revenue" ? formatRevenue : formatMetricValue;
+  return {
+    mean: formatter(stats.mean),
+    median: formatter(stats.median),
+    min: formatter(stats.min),
+    max: formatter(stats.max),
+  };
+}
+
 const kpiBlocks = computed(() => [
-  { label: "CA",        stats: drilldown.value.summary_stats?.ca },
-  { label: "Effectif",  stats: drilldown.value.summary_stats?.effectif },
-  { label: "Âge (ans)", stats: drilldown.value.summary_stats?.age },
-  { label: "Nb locaux", stats: drilldown.value.summary_stats?.nb_locaux },
+  { label: "CA", stats: formatStatBlock(drilldown.value.summary_stats?.ca, "revenue") },
+  { label: "Effectif", stats: formatStatBlock(drilldown.value.summary_stats?.effectif) },
+  { label: "Âge (ans)", stats: formatStatBlock(drilldown.value.summary_stats?.age) },
+  { label: "Nb locaux", stats: formatStatBlock(drilldown.value.summary_stats?.nb_locaux) },
 ]);
 
-// Delta blocks
 const deltaBlocks = computed(() => {
   const gc = drilldown.value.global_comparison ?? {};
   return [
-    { label: "CA",        value: gc.ca_mean_delta_pct },
-    { label: "Effectif",  value: gc.effectif_mean_delta_pct },
-    { label: "Âge",       value: gc.age_mean_delta_pct },
+    { label: "CA", value: gc.ca_mean_delta_pct },
+    { label: "Effectif", value: gc.effectif_mean_delta_pct },
+    { label: "Âge", value: gc.age_mean_delta_pct },
     { label: "Nb locaux", value: gc.nb_locaux_mean_delta_pct },
   ];
 });
 
-// Extreme blocks
 const extremeBlocks = computed(() => {
   const ex = drilldown.value.extremes ?? {};
   return [
-    { label: "CA le plus élevé",            company: ex.highest_ca,        display: ex.highest_ca        ? formatRevenue(ex.highest_ca.chiffre_affaires)                          : "—" },
-    { label: "CA le plus faible",           company: ex.lowest_ca,         display: ex.lowest_ca         ? formatRevenue(ex.lowest_ca.chiffre_affaires)                           : "—" },
-    { label: "Effectif le plus grand",      company: ex.highest_effectif,  display: ex.highest_effectif  ? `${ex.highest_effectif.nb_employes_mid} pers.`                        : "—" },
-    { label: "Effectif le plus petit",      company: ex.lowest_effectif,   display: ex.lowest_effectif   ? `${ex.lowest_effectif.nb_employes_mid} pers.`                         : "—" },
-    { label: "La plus ancienne",            company: ex.oldest_company,    display: ex.oldest_company    ? `${Number(ex.oldest_company.age_entreprise).toFixed(0)} ans`           : "—" },
-    { label: "La plus récente",             company: ex.youngest_company,  display: ex.youngest_company  ? `${Number(ex.youngest_company.age_entreprise).toFixed(0)} ans`        : "—" },
+    { label: "CA le plus élevé", company: ex.highest_ca, display: ex.highest_ca ? formatRevenue(ex.highest_ca.chiffre_affaires) : "—" },
+    { label: "CA le plus faible", company: ex.lowest_ca, display: ex.lowest_ca ? formatRevenue(ex.lowest_ca.chiffre_affaires) : "—" },
+    { label: "Effectif le plus grand", company: ex.highest_effectif, display: ex.highest_effectif ? `${ex.highest_effectif.nb_employes_mid} pers.` : "—" },
+    { label: "Effectif le plus petit", company: ex.lowest_effectif, display: ex.lowest_effectif ? `${ex.lowest_effectif.nb_employes_mid} pers.` : "—" },
+    { label: "La plus ancienne", company: ex.oldest_company, display: ex.oldest_company ? `${Number(ex.oldest_company.age_entreprise).toFixed(0)} ans` : "—" },
+    { label: "La plus récente", company: ex.youngest_company, display: ex.youngest_company ? `${Number(ex.youngest_company.age_entreprise).toFixed(0)} ans` : "—" },
   ];
 });
 
-// Ranking tables
 const rankingTables = computed(() => {
   const tl = drilldown.value.top_lists ?? {};
   return [
-    { title: "Top CA",        rows: tl.top_ca,        fmt: (r) => r.chiffre_affaires != null ? formatRevenue(r.chiffre_affaires) : "—" },
-    { title: "Top Effectif",  rows: tl.top_effectif,  fmt: (r) => r.nb_employes_mid  != null ? `${Number(r.nb_employes_mid).toLocaleString("fr-FR")} p.` : "—" },
-    { title: "Plus anciens",  rows: tl.oldest,        fmt: (r) => r.age_entreprise   != null ? `${Number(r.age_entreprise).toFixed(0)} ans` : "—" },
+    { title: "Top CA", rows: tl.top_ca, fmt: (row) => row.chiffre_affaires != null ? formatRevenue(row.chiffre_affaires) : "—" },
+    { title: "Top Effectif", rows: tl.top_effectif, fmt: (row) => row.nb_employes_mid != null ? `${Number(row.nb_employes_mid).toLocaleString("fr-FR")} p.` : "—" },
+    { title: "Plus anciens", rows: tl.oldest, fmt: (row) => row.age_entreprise != null ? `${Number(row.age_entreprise).toFixed(0)} ans` : "—" },
   ];
 });
 
-// CV blocks
 const cvBlocks = computed(() => {
   const h = drilldown.value.homogeneity ?? {};
   return [
-    { label: "CA",        value: h.ca_cv },
-    { label: "Effectif",  value: h.effectif_cv },
-    { label: "Âge",       value: h.age_cv },
+    { label: "CA", value: h.ca_cv },
+    { label: "Effectif", value: h.effectif_cv },
+    { label: "Âge", value: h.age_cv },
     { label: "Nb locaux", value: h.nb_locaux_cv },
   ];
 });

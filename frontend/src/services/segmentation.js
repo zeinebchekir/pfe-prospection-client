@@ -13,23 +13,45 @@ const etlApi = axios.create({
 });
 
 export const SEGMENT_META = {
-  0: { name: "PME technologiques",  shortName: "PME", color: "#04ADBF", rec: "Offre digitale packagÃ©e" },
-  1: { name: "PME opÃ©rationnelles", shortName: "PME", color: "#56A632", rec: "Accompagnement progressif" },
-  2: { name: "PME en croissance",   shortName: "PME", color: "#F29F05", rec: "MontÃ©e en gamme" },
-  3: { name: "ETI technologiques",  shortName: "ETI", color: "#303E8C", rec: "Co-innovation" },
-  4: { name: "ETI Ã©tablies",       shortName: "ETI", color: "#2D3773", rec: "Relationship selling" },
-  5: { name: "ETI grands comptes",  shortName: "ETI", color: "#C2410C", rec: "ABM dÃ©diÃ©" },
-  6: { name: "Grands groupes",      shortName: "GE",  color: "#8E1C1C", rec: "Vente enterprise" },
+  0: { name: "PME technologiques", shortName: "PME", color: "#04ADBF", rec: "Offre digitale packagée" },
+  1: { name: "PME opérationnelles", shortName: "PME", color: "#56A632", rec: "Accompagnement progressif" },
+  2: { name: "PME en croissance", shortName: "PME", color: "#F29F05", rec: "Montée en gamme" },
+  3: { name: "ETI technologiques", shortName: "ETI", color: "#303E8C", rec: "Co-innovation" },
+  4: { name: "ETI établies", shortName: "ETI", color: "#2D3773", rec: "Relationship selling" },
+  5: { name: "ETI grands comptes", shortName: "ETI", color: "#C2410C", rec: "ABM dédié" },
+  6: { name: "Grands groupes", shortName: "GE", color: "#8E1C1C", rec: "Vente enterprise" },
 };
 
 export const runClustering = () => etlApi.post("/segmentation/run");
 export const getSummary = () => etlApi.get("/segmentation/summary");
 export const getLeads = (params) => etlApi.get("/segmentation/leads", { params });
 
-export function formatRevenue(v) {
-  if (v == null) return "â€”";
-  if (v >= 1e9) return `${(v / 1e9).toFixed(1)} Mdâ‚¬`;
-  if (v >= 1e6) return `${(v / 1e6).toFixed(1)} Mâ‚¬`;
-  if (v >= 1e3) return `${(v / 1e3).toFixed(0)} kâ‚¬`;
-  return `${v} â‚¬`;
+export function formatRevenue(value) {
+  if (value === null || value === undefined || Number.isNaN(Number(value))) {
+    return "N/A";
+  }
+
+  const amount = Number(value);
+
+  if (Math.abs(amount) >= 1_000_000_000) {
+    return `${(amount / 1_000_000_000).toLocaleString("fr-FR", {
+      maximumFractionDigits: 1,
+    })} Md€`;
+  }
+
+  if (Math.abs(amount) >= 1_000_000) {
+    return `${(amount / 1_000_000).toLocaleString("fr-FR", {
+      maximumFractionDigits: 1,
+    })} M€`;
+  }
+
+  if (Math.abs(amount) >= 1_000) {
+    return `${(amount / 1_000).toLocaleString("fr-FR", {
+      maximumFractionDigits: 1,
+    })} k€`;
+  }
+
+  return `${amount.toLocaleString("fr-FR", {
+    maximumFractionDigits: 0,
+  })} €`;
 }

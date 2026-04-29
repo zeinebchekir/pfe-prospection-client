@@ -16,23 +16,16 @@
 <script setup>
 import { computed } from "vue";
 import VueApexCharts from "vue3-apexcharts";
+import { formatRevenue } from "@/services/segmentation.js";
+
 const apexchart = VueApexCharts;
 
 const props = defineProps({ segments: { type: Array, default: () => [] } });
 
 const ready = computed(() => props.segments.length > 0);
 
-function formatRevenue(v) {
-  if (v == null || isNaN(v)) return "0";
-  if (v >= 1e9) return `${(v / 1e9).toFixed(1)} Md€`;
-  if (v >= 1e6) return `${(v / 1e6).toFixed(1)} M€`;
-  if (v >= 1e3) return `${(v / 1e3).toFixed(0)} k€`;
-  return `${v.toFixed(0)} €`;
-}
-
-// ApexCharts scatter needs one series per point to get individual colors
 const scatterSeries = computed(() =>
-  props.segments.map(s => ({
+  props.segments.map((s) => ({
     name: s.label.split(" ").slice(0, 2).join(" "),
     data: [[s.n, s.ca_moyen ?? 0]],
   }))
@@ -44,24 +37,23 @@ const scatterOptions = computed(() => ({
     zoom: { enabled: false },
     parentHeightOffset: 0,
   },
-  colors: props.segments.map(s => s.color),
+  colors: props.segments.map((s) => s.color),
   markers: {
-    size: props.segments.map(s => {
-      const max = Math.max(...props.segments.map(x => x.n), 1);
+    size: props.segments.map((s) => {
+      const max = Math.max(...props.segments.map((x) => x.n), 1);
       return 8 + Math.round((s.n / max) * 20);
     }),
-    // Border width scales with digital_gap — thick border = high transformation opportunity
-    strokeWidth: props.segments.map(s => {
+    strokeWidth: props.segments.map((s) => {
       const gap = s.digital_gap ?? 5;
       if (gap >= 7) return 4;
       if (gap >= 4) return 2;
       return 1;
     }),
-    strokeColors: props.segments.map(s => {
+    strokeColors: props.segments.map((s) => {
       const gap = s.digital_gap ?? 5;
-      if (gap >= 7) return "#F29F05";   // amber = high gap
-      if (gap >= 4) return "#04ADBF";   // blue  = medium gap
-      return "#56A632";                  // green = low gap (already mature)
+      if (gap >= 7) return "#F29F05";
+      if (gap >= 4) return "#04ADBF";
+      return "#56A632";
     }),
     fillOpacity: 0.82,
   },
@@ -80,7 +72,7 @@ const scatterOptions = computed(() => ({
     },
     labels: {
       style: { fontSize: "10px", colors: "#6b7280" },
-      formatter: val => formatRevenue(val),
+      formatter: (val) => formatRevenue(val),
     },
   },
   dataLabels: {
@@ -105,20 +97,30 @@ const scatterOptions = computed(() => ({
     custom: ({ seriesIndex }) => {
       const s = props.segments[seriesIndex];
       if (!s) return "";
-      const gap      = s.digital_gap ?? null;
+
+      const gap = s.digital_gap ?? null;
       const matScore = s.digital_maturity_score ?? null;
       const matLevel = s.digital_maturity_level ?? null;
-      const gapColor = gap == null ? '#9ca3af' : gap >= 7 ? '#F29F05' : gap >= 4 ? '#04ADBF' : '#56A632';
-      const matHTML  = matScore != null
-        ? `<div style="margin-top:4px;padding-top:4px;border-top:1px solid #f3f4f6">
-             Maturité: <b style="color:${s.color}">${matScore.toFixed(1)}/10</b>
-             &nbsp;·&nbsp;
-             Écart: <b style="color:${gapColor}">${gap?.toFixed(1) ?? '—'}</b>
-             <span style="color:${gapColor};margin-left:4px">${
-               matLevel === 'Élevé' ? '↑ Déjà mature' : gap >= 7 ? '● Fort potentiel' : gap >= 4 ? '○ Potentiel modéré' : '↓ Faible écart'
-             }</span>
-           </div>`
-        : "";
+      const gapColor =
+        gap == null ? "#9ca3af" : gap >= 7 ? "#F29F05" : gap >= 4 ? "#04ADBF" : "#56A632";
+      const matHTML =
+        matScore != null
+          ? `<div style="margin-top:4px;padding-top:4px;border-top:1px solid #f3f4f6">
+               Maturité: <b style="color:${s.color}">${matScore.toFixed(1)}/10</b>
+               &nbsp;·&nbsp;
+               Écart: <b style="color:${gapColor}">${gap?.toFixed(1) ?? "—"}</b>
+               <span style="color:${gapColor};margin-left:4px">${
+                 matLevel === "Élevé"
+                   ? "↑ Déjà mature"
+                   : gap >= 7
+                     ? "● Fort potentiel"
+                     : gap >= 4
+                       ? "○ Potentiel modéré"
+                       : "↓ Faible écart"
+               }</span>
+             </div>`
+          : "";
+
       return `
         <div style="padding:8px 12px;font-size:12px;line-height:1.6">
           <b style="color:${s.color}">${s.label}</b><br/>
