@@ -142,6 +142,12 @@ const routes = [
     component: () => import("@/pages/DashboardPage.vue"),
     meta: { requiresAuth: true, roles: ["COMMERCIAL"] },
   },
+  {
+    path: "/commercial/analyse-results",
+    name: "AnalyseResults",
+    component: () => import("@/pages/commercial/AnalyseResultsPage.vue"),
+    meta: { requiresAuth: true, roles: ["COMMERCIAL"] },
+  },
 
   // ───────────── LEADS MODULE ─────────────
 
@@ -149,6 +155,12 @@ const routes = [
     path: "/commercial/leads",
     name: "LeadsPage",
     component: () => import("@/pages/commercial/LeadsPage.vue"),
+    meta: { requiresAuth: true, roles: ["COMMERCIAL"] },
+  },
+  {
+    path: "/commercial/opportunities",
+    name: "OpportunityLeadsPage",
+    component: () => import("@/pages/commercial/OpportunityLeadsPage.vue"),
     meta: { requiresAuth: true, roles: ["COMMERCIAL"] },
   },
   {

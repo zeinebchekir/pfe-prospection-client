@@ -16,6 +16,7 @@ services:
       retries: 5
     networks:
       - crmpfe_network
+               
 
   pgadmin:
     image: dpage/pgadmin4
@@ -70,11 +71,35 @@ services:
       - web
     networks:
       - crmpfe_network
-
+  ia-ml:
+    build:
+      context: ./IA-ML_service
+      dockerfile: dockerfile
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    ports:
+      - "8002:8002"
+    volumes:
+      - ./IA-ML_service:/app   
+      - ./IA-ML_service/models:/app/models  # modèle partagé, pas recopié
+           # ← ton code
+    env_file: .env
+    depends_on:
+      db:
+        condition: service_healthy
+    networks:
+      - crmpfe_network
+      - etl_network 
+    dns:
+      - 8.8.8.8
 volumes:
   postgres_data:
   static_volume:
+  ollama_data:
 
 networks:
   crmpfe_network:
     driver: bridge
+  etl_network:
+    external: true
+    name: etl_service_default 

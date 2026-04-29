@@ -182,7 +182,7 @@ import {
 import {
   Zap, LayoutDashboard, Users, Target, BarChart3, Settings,
   LogOut, Menu, ChevronUp, User, ShieldCheck, RefreshCw,
-  CheckCircle2, FileText, Building2, PieChart,
+  CheckCircle2, FileText, Building2, Sparkles,
 } from 'lucide-vue-next'
 
 const router = useRouter()
@@ -229,6 +229,7 @@ const navigation = computed(() => {
       items: [
         { name: 'Dashboard',    href: '/commercial',          icon: Zap,         exact: true },
         { name: 'Mes leads',    href: '/commercial/leads',    icon: Target },
+        { name: 'Opportunités', href: '/commercial/opportunities', icon: Sparkles },
         { name: 'Prospection',  href: '/commercial/prospects',icon: Building2 },
         { name: 'Qualification',href: '/commercial/qualify',  icon: CheckCircle2 },
         { name: 'Sync Boond',   href: '/commercial/sync',     icon: RefreshCw },

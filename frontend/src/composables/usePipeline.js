@@ -295,7 +295,7 @@ export function useMonitoringETL() {
       kpi.value            = r1.data
       dagSuccess.value     = r2.data
       taskDuration.value   = r3.data
-      volumeOverTime.value = r4.data
+      volumeOverTime.value = r4.data      
       dataQuality.value    = r5.data
       dataQualityBoamp.value = r6.data
       error.value          = null
