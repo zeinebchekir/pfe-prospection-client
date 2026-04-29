@@ -339,6 +339,8 @@ services:
       dockerfile: dockerfile.apis
     ports:
       - "8001:8000"
+    env_file:
+      - .env
     volumes:
       - ./ETL_pipeline:/app              # ← ton code
       - ./exports:/opt/airflow/exports   # ← fichiers xlsx
@@ -349,6 +351,7 @@ services:
       AIRFLOW_USER: airflow
       AIRFLOW_PASSWORD: airflow
       AIRFLOW__CORE__FERNET_KEY: 097a1o3NNpZrDZgFJY3GhZOYDk9alwSLybr_qtLnLEw=
+      GEMINI_API_KEY: ${GEMINI_API_KEY:-}
     depends_on:
       - postgres
     restart: always
@@ -398,7 +401,7 @@ services:
       PGADMIN_DEFAULT_PASSWORD: admin
       PGADMIN_CONFIG_SERVER_MODE: "False"   # single-user desktop mode
     ports:
-      - "5050:80"
+      - "5055:80"
     volumes:
       - pgadmin-data:/var/lib/pgadmin
     depends_on:

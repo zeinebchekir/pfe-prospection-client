@@ -118,6 +118,12 @@ const routes = [
     component: () => import("@/pages/DashboardPage.vue"),
     meta: { requiresAuth: true, roles: ["CEO"] },
   },
+  {
+    path: "/manager/segmentation",
+    name: "MarketAnalysis",
+    component: () => import("@/pages/manager/MarketAnalysisPage.vue"),
+    meta: { requiresAuth: true, roles: ["CEO"] },
+  },
 
   // ───────────── COMMERCIAL SUB ROUTES ─────────────
 

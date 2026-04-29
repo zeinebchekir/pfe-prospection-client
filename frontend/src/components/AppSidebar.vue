@@ -182,7 +182,7 @@ import {
 import {
   Zap, LayoutDashboard, Users, Target, BarChart3, Settings,
   LogOut, Menu, ChevronUp, User, ShieldCheck, RefreshCw,
-  CheckCircle2, FileText, Building2,
+  CheckCircle2, FileText, Building2, PieChart,
 } from 'lucide-vue-next'
 
 const router = useRouter()
@@ -218,6 +218,7 @@ const navigation = computed(() => {
         { name: 'Pipeline équipe', href: '/manager/team', icon: Target },
         { name: 'Statistiques', href: '/manager/sync', icon: RefreshCw },
         { name: 'Rapports', href: '/manager/reports', icon: BarChart3 },
+        { name: 'Segmentation & Marché', href: '/manager/segmentation', icon: PieChart },
       ],
     })
   }
