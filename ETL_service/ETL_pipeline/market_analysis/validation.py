@@ -11,7 +11,8 @@ Model validation: silhouette score + elbow curve.
 
 import numpy as np
 from sklearn.cluster import KMeans
-from sklearn.metrics import silhouette_score
+from sklearn.metrics import classification_report, confusion_matrix, silhouette_score
+from sklearn.tree import export_text
 
 
 K_MIN = 2
@@ -102,3 +103,57 @@ def _elbow_point(k_values: list[int], inertias: list[float]) -> int:
 
     best_idx = int(np.argmax(dists))
     return k_values[best_idx]
+
+
+def compute_decision_tree_validation(
+    model,
+    X_train,
+    y_true,
+    y_pred,
+    feature_names: list[str],
+    segment_count: int,
+) -> dict:
+    """
+    Compute validation metrics for the decision-tree segmentation pipeline while
+    keeping a frontend-friendly validation object.
+    """
+    labels = sorted({str(value) for value in y_true.astype(str).tolist()})
+    report = classification_report(
+        y_true,
+        y_pred,
+        labels=labels,
+        output_dict=True,
+        zero_division=0,
+    )
+    matrix = confusion_matrix(y_true, y_pred, labels=labels)
+    training_accuracy = float(model.score(X_train, y_true))
+
+    return {
+        "model_type": "decision_tree",
+        "k_used": int(segment_count),
+        "training_accuracy": round(training_accuracy, 4),
+        "tree_depth": int(model.get_depth()),
+        "n_leaves": int(model.get_n_leaves()),
+        "silhouette": None,
+        "silhouette_score": None,
+        "silhouette_interpretation": "Not applicable for decision-tree segmentation",
+        "elbow": None,
+        "classification_report": _round_nested(report),
+        "confusion_matrix": {
+            "labels": labels,
+            "matrix": matrix.tolist(),
+        },
+        "tree_rules": export_text(model, feature_names=feature_names),
+    }
+
+
+def _round_nested(value):
+    if isinstance(value, dict):
+        return {key: _round_nested(val) for key, val in value.items()}
+    if isinstance(value, list):
+        return [_round_nested(item) for item in value]
+    if isinstance(value, (float, np.floating)):
+        return round(float(value), 4)
+    if isinstance(value, (int, np.integer)):
+        return int(value)
+    return value

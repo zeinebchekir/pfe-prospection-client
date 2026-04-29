@@ -5,7 +5,7 @@
     <div class="px-4 sm:px-5 py-4 border-b border-border">
       <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
         <div>
-          <h3 class="font-semibold text-tacir-darkblue text-sm">Explorateur de leads clusterisés</h3>
+          <h3 class="font-semibold text-tacir-darkblue text-sm">Explorateur de leads segmentés</h3>
           <p class="text-xs text-tacir-darkgray mt-0.5">
             {{ total }} résultat{{ total !== 1 ? 's' : '' }}
             <span v-if="selectedSegment !== null"> · filtre actif</span>

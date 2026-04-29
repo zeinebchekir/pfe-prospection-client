@@ -8,6 +8,8 @@ import sys, json, os
 sys.path.insert(0, "/opt/airflow/ETL_pipeline")
 sys.path.insert(0, "/opt/airflow/ETL_pipeline/cleaners")
 
+from filters import filter_by_naf_prefix, filter_by_completeness
+
 from scrapers.boamp import BoampService
 from scrapers.dataGouv import DataGouvService
 from scrapers.sirene import SireneService
@@ -128,9 +130,13 @@ def scrape_datagouv(**context):
     conf       = context.get("dag_run").conf or {}
     filtre     = conf.get("query", None)
 
-    filtres = [{"q": filtre}] if filtre else [{"etat_administratif": "A"}]
+    filtres = [{"q": filtre}] if filtre else None
 
     raw = DataGouvService().source_scraping(filtre=filtres)
+    
+    # Plafond : 3 groupes NAF × pages = (40+40+10)×25 = 2 250 résultats max
+    raw = raw[:2250]
+    
     for item in raw:
         item["date_scraping"] = aujourdhui
     _write(RAW_DATAGOUV_PATH, raw)
@@ -178,11 +184,57 @@ def enrich_boamp(**context):
 
 @measure_task
 def extract_datagouv(**context):
-    raw   = _read(RAW_DATAGOUV_PATH)
-    clean = extract_data_from_datagouv(raw)
-    _write(RAW_DATAGOUV_PATH, clean)
-    context["ti"].xcom_push(key="total_extracted", value=len(clean))
-    print(f"[EXTRACT DATAGOUV] {len(clean)} enregistrements extraits")
+    raw = _read(RAW_DATAGOUV_PATH)
+    total_raw = len(raw)
+    print(f"[EXTRACT DATAGOUV] {total_raw} enregistrements bruts en entrée")
+
+    # ── STEP 1 : NAF prefix filter (on raw API records) ──────────────────────
+    # Runs before extraction so we drop records early using the raw NAF code
+    # (activite_principale), before it gets translated to a human label.
+    naf_kept, naf_dropped = filter_by_naf_prefix(raw)
+    print(
+        f"[FILTER NAF] "
+        f"Entrée={total_raw} | "
+        f"Conservés={len(naf_kept)} | "
+        f"Supprimés={naf_dropped} "
+        f"(code NAF hors périmètre IT/digital)"
+    )
+    context["ti"].xcom_push(key="naf_kept",    value=len(naf_kept))
+    context["ti"].xcom_push(key="naf_dropped", value=naf_dropped)
+
+    # ── STEP 2 : Extraction (NAF-filtered records only) ──────────────────────
+    extracted = extract_data_from_datagouv(naf_kept)
+    print(f"[EXTRACT DATAGOUV] {len(extracted)} enregistrements extraits après filtre NAF")
+
+    # ── STEP 3 : Completeness filter (on extracted dicts) ────────────────────
+    # Keeps only companies where ca, categorie_entreprise, taille_entrep and
+    # region (via code_postal) are all present and usable.
+    complete_kept, complete_dropped, drop_log = filter_by_completeness(extracted)
+    print(
+        f"[FILTER COMPLETUDE] "
+        f"Entrée={len(extracted)} | "
+        f"Conservés={len(complete_kept)} | "
+        f"Supprimés={complete_dropped} "
+        f"(champs obligatoires manquants)"
+    )
+    context["ti"].xcom_push(key="completeness_kept",    value=len(complete_kept))
+    context["ti"].xcom_push(key="completeness_dropped", value=complete_dropped)
+
+    # Log the first 20 dropped records for debuggability (avoid flooding logs)
+    if drop_log:
+        print(f"[FILTER COMPLETUDE] Détail des {min(20, len(drop_log))} premiers rejetés :")
+        for entry in drop_log[:20]:
+            print(
+                f"  siren={entry['siren']} | nom={entry['nom']!r} "
+                f"| manquants={entry['missing_fields']}"
+            )
+
+    _write(RAW_DATAGOUV_PATH, complete_kept)
+    context["ti"].xcom_push(key="total_extracted", value=len(complete_kept))
+    print(
+        f"[EXTRACT DATAGOUV] Pipeline filtre complet : "
+        f"{total_raw} bruts → {len(naf_kept)} NAF OK → {len(complete_kept)} complets (chargés)"
+    )
 
 
 # ──────────────────────────────────────────────

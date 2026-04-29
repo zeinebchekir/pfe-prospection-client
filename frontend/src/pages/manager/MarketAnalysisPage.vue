@@ -17,15 +17,14 @@
             <p class="text-[11px] text-tacir-darkgray hidden sm:block">{{ today }}</p>
           </div>
           <div class="flex items-center gap-2 flex-shrink-0">
-            <!-- Silhouette score badge -->
             <span
-              v-if="summary?.validation?.silhouette"
+              v-if="validationBadge"
               class="hidden md:inline-flex items-center gap-1.5 text-[11px] font-medium px-2.5 py-1 rounded-full border"
-              :class="silhouetteBadgeClass"
-              :title="summary.validation.silhouette_interpretation"
+              :class="validationBadge.className"
+              :title="validationBadge.title"
             >
-              <span class="font-mono font-bold">S={{ summary.validation.silhouette }}</span>
-              <span class="opacity-70">silhouette</span>
+              <span class="font-mono font-bold">{{ validationBadge.value }}</span>
+              <span class="opacity-70">{{ validationBadge.label }}</span>
             </span>
             <span
               v-if="summary"
@@ -108,6 +107,7 @@
                   :key="s.cluster"
                   :segment="s"
                   :total-leads="summary.total_leads"
+                  @select="selectedSegment = $event"
                 />
               </div>
             </div>
@@ -145,7 +145,7 @@
           <div>
             <p class="text-tacir-darkblue font-semibold mb-1">Aucune analyse disponible</p>
             <p class="text-xs text-tacir-darkgray max-w-xs">
-              Cliquez sur "Relancer l'analyse" pour exécuter le clustering K-Means sur les données actuelles.
+              Cliquez sur "Relancer l'analyse" pour exécuter la segmentation sur les données actuelles.
             </p>
           </div>
           <button
@@ -161,6 +161,14 @@
       </main>
     </div>
   </div>
+
+  <!-- Drilldown drawer (teleported outside main layout) -->
+  <SegmentDrilldownDrawer
+    :open="!!selectedSegment"
+    :segment="selectedSegment"
+    :total-leads="summary?.total_leads ?? 1"
+    @close="selectedSegment = null"
+  />
 </template>
 
 <script setup>
@@ -172,6 +180,7 @@ import { getSummary, runClustering } from "@/services/segmentation.js";
 import MarketKPICards           from "@/components/market/MarketKPICards.vue";
 import SegmentBubbleChart       from "@/components/market/SegmentBubbleChart.vue";
 import SegmentCard              from "@/components/market/SegmentCard.vue";
+import SegmentDrilldownDrawer   from "@/components/market/SegmentDrilldownDrawer.vue";
 import SegmentComparisonCharts  from "@/components/market/SegmentComparisonCharts.vue";
 import SegmentRadarChart        from "@/components/market/SegmentRadarChart.vue";
 import OpportunityMatrix        from "@/components/market/OpportunityMatrix.vue";
@@ -179,10 +188,11 @@ import InsightsPanel            from "@/components/market/InsightsPanel.vue";
 import LeadsExplorerTable       from "@/components/market/LeadsExplorerTable.vue";
 import MaturityAnalysisSection  from "@/components/market/MaturityAnalysisSection.vue";
 
-const summary = ref(null);
-const loading = ref(false);
-const running = ref(false);
-const error   = ref(null);
+const summary         = ref(null);
+const loading         = ref(false);
+const running         = ref(false);
+const error           = ref(null);
+const selectedSegment = ref(null);
 
 const today = new Date().toLocaleDateString("fr-FR", {
   weekday: "long", day: "numeric", month: "long",
@@ -205,12 +215,42 @@ async function loadData() {
   }
 }
 
-// Silhouette badge colour
-const silhouetteBadgeClass = computed(() => {
-  const s = summary.value?.validation?.silhouette ?? 0;
-  if (s >= 0.5) return 'bg-green-50 text-green-700 border-green-200';
-  if (s >= 0.3) return 'bg-amber-50 text-amber-700 border-amber-200';
-  return 'bg-red-50 text-red-600 border-red-200';
+function silhouetteBadgeClass(score) {
+  if (score >= 0.5) return "bg-green-50 text-green-700 border-green-200";
+  if (score >= 0.3) return "bg-amber-50 text-amber-700 border-amber-200";
+  return "bg-red-50 text-red-600 border-red-200";
+}
+
+function accuracyBadgeClass(score) {
+  if (score >= 0.9) return "bg-green-50 text-green-700 border-green-200";
+  if (score >= 0.75) return "bg-amber-50 text-amber-700 border-amber-200";
+  return "bg-red-50 text-red-600 border-red-200";
+}
+
+const validationBadge = computed(() => {
+  const validation = summary.value?.validation;
+  if (!validation) return null;
+
+  const modelType = summary.value?.model_type || validation.model_type || "kmeans";
+  if (modelType === "decision_tree") {
+    const accuracy = validation.training_accuracy;
+    if (accuracy == null) return null;
+    return {
+      value: `Acc=${Math.round(accuracy * 100)}%`,
+      label: "training",
+      className: accuracyBadgeClass(accuracy),
+      title: `Arbre de décision · profondeur ${validation.tree_depth ?? "—"} · ${validation.n_leaves ?? "—"} feuilles`,
+    };
+  }
+
+  const silhouette = validation.silhouette;
+  if (silhouette == null) return null;
+  return {
+    value: `S=${silhouette}`,
+    label: "silhouette",
+    className: silhouetteBadgeClass(silhouette),
+    title: validation.silhouette_interpretation || "",
+  };
 });
 
 async function handleRun() {

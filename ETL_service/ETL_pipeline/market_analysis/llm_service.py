@@ -13,62 +13,63 @@ Writes:  cluster_insights.json  (latest)
 
 from __future__ import annotations
 
-import os
 import json
 import logging
+import os
 from datetime import datetime
 from pathlib import Path
 
 logger = logging.getLogger(__name__)
 
-# ── Gemini SDK import (new google-genai SDK) ─────────────────────────────────
 try:
     from google import genai
     from google.genai import types as genai_types
+
     _GEMINI_AVAILABLE = True
 except ImportError:
     _GEMINI_AVAILABLE = False
-    logger.warning("[llm_service] google-genai not installed. Falling back to rule-based insights.")
+    logger.warning(
+        "[llm_service] google-genai not installed. Falling back to rule-based insights."
+    )
 
 _API_KEY = os.environ.get("GEMINI_API_KEY", "")
 
-# ── Fallback insights (used when Gemini is unavailable / key missing) ─────────
 _FALLBACK_INSIGHTS = [
     {
-        "title":       "Concentration du portefeuille",
-        "description": "Le segment dominant représente la majorité du potentiel CA. Prioriser les actions commerciales sur ce profil.",
-        "priority":    "high",
-        "icon":        "TrendingUp",
+        "title": "Concentration du portefeuille",
+        "description": "Le segment dominant reprÃ©sente la majoritÃ© du potentiel CA. Prioriser les actions commerciales sur ce profil.",
+        "priority": "high",
+        "icon": "TrendingUp",
     },
     {
-        "title":       "Opportunité scale",
-        "description": "Les segments volumétriques (nombreux leads, CA modéré) sont idéaux pour une approche self-serve automatisée.",
-        "priority":    "medium",
-        "icon":        "Zap",
+        "title": "OpportunitÃ© scale",
+        "description": "Les segments volumÃ©triques (nombreux leads, CA modÃ©rÃ©) sont idÃ©aux pour une approche self-serve automatisÃ©e.",
+        "priority": "medium",
+        "icon": "Zap",
     },
     {
-        "title":       "Segments à haut CA individuel",
-        "description": "Quelques segments concentrent un CA moyen très élevé. Investir en équipe dédiée grand compte est justifié.",
-        "priority":    "high",
-        "icon":        "Target",
+        "title": "Segments Ã  haut CA individuel",
+        "description": "Quelques segments concentrent un CA moyen trÃ¨s Ã©levÃ©. Investir en Ã©quipe dÃ©diÃ©e grand compte est justifiÃ©.",
+        "priority": "high",
+        "icon": "Target",
     },
     {
-        "title":       "Diversification géographique",
-        "description": "La concentration Île-de-France est forte. Identifier des opportunités dans d'autres régions pour réduire le risque.",
-        "priority":    "medium",
-        "icon":        "MapPin",
+        "title": "Diversification gÃ©ographique",
+        "description": "La concentration ÃŽle-de-France est forte. Identifier des opportunitÃ©s dans d'autres rÃ©gions pour rÃ©duire le risque.",
+        "priority": "medium",
+        "icon": "MapPin",
     },
     {
-        "title":       "Ancienneté comme signal de fidélité",
-        "description": "Les entreprises établies depuis plus de 40 ans ont des cycles de décision longs mais sont plus fidèles client.",
-        "priority":    "low",
-        "icon":        "Clock",
+        "title": "AnciennetÃ© comme signal de fidÃ©litÃ©",
+        "description": "Les entreprises Ã©tablies depuis plus de 40 ans ont des cycles de dÃ©cision longs mais sont plus fidÃ¨les client.",
+        "priority": "low",
+        "icon": "Clock",
     },
     {
-        "title":       "Re-run recommandé",
-        "description": "Relancez l'analyse après chaque import ETL majeur pour maintenir la segmentation à jour.",
-        "priority":    "low",
-        "icon":        "RefreshCw",
+        "title": "Re-run recommandÃ©",
+        "description": "Relancez l'analyse aprÃ¨s chaque import ETL majeur pour maintenir la segmentation Ã  jour.",
+        "priority": "low",
+        "icon": "RefreshCw",
     },
 ]
 
@@ -81,29 +82,20 @@ def generate_insights(
 ) -> list[dict]:
     """
     Generate executive insights via Gemini LLM or fall back to rule-based insights.
-
-    Args:
-        segments:   list of cluster summary dicts (from clustering.py)
-        validation: validation dict (silhouette, elbow, etc.)
-        export_dir: path to write cluster_insights.json
-        timestamp:  run timestamp string YYYYMMDD_HHMM
-
-    Returns:
-        list of insight dicts: [{title, description, priority, icon}]
     """
-    insights = _call_gemini(segments, validation) if _GEMINI_AVAILABLE and _API_KEY else _FALLBACK_INSIGHTS
-
+    insights = (
+        _call_gemini(segments, validation)
+        if _GEMINI_AVAILABLE and _API_KEY
+        else _FALLBACK_INSIGHTS
+    )
     _save_insights(insights, export_dir, timestamp)
     return insights
 
 
-# ── Gemini call ───────────────────────────────────────────────────────────────
-
 def _call_gemini(segments: list[dict], validation: dict) -> list[dict]:
-    """Call Gemini 2.0 Flash via the new google-genai SDK and return structured insights."""
+    """Call Gemini and return structured insights."""
     try:
         client = genai.Client(api_key=_API_KEY)
-
         prompt = _build_prompt(segments, validation)
 
         response = client.models.generate_content(
@@ -116,7 +108,6 @@ def _call_gemini(segments: list[dict], validation: dict) -> list[dict]:
         )
         raw = response.text.strip()
 
-        # Strip markdown code fences if present
         if raw.startswith("```"):
             raw = raw.split("```")[1]
             if raw.startswith("json"):
@@ -127,54 +118,70 @@ def _call_gemini(segments: list[dict], validation: dict) -> list[dict]:
         if not isinstance(insights, list):
             raise ValueError("Unexpected Gemini response format")
 
-        _ICON_MAP = {"high": "TrendingUp", "medium": "Target", "low": "Info"}
+        icon_map = {"high": "TrendingUp", "medium": "Target", "low": "Info"}
         result = []
         for item in insights[:6]:
-            p = str(item.get("priority", "medium")).lower()
-            result.append({
-                "title":       str(item.get("title",       "Insight")),
-                "description": str(item.get("description", "")),
-                "priority":    p,
-                "icon":        str(item.get("icon", _ICON_MAP.get(p, "Info"))),
-            })
-        logger.info(f"[llm_service] Gemini returned {len(result)} insights")
+            priority = str(item.get("priority", "medium")).lower()
+            result.append(
+                {
+                    "title": str(item.get("title", "Insight")),
+                    "description": str(item.get("description", "")),
+                    "priority": priority,
+                    "icon": str(item.get("icon", icon_map.get(priority, "Info"))),
+                }
+            )
+        logger.info("[llm_service] Gemini returned %s insights", len(result))
         return result
 
     except Exception as exc:
-        logger.error(f"[llm_service] Gemini call failed: {exc}. Using fallback insights.")
+        logger.error(
+            "[llm_service] Gemini call failed: %s. Using fallback insights.", exc
+        )
         return _FALLBACK_INSIGHTS
 
 
 def _build_prompt(segments: list[dict], validation: dict) -> str:
-    """Build the Gemini prompt from cluster statistics."""
+    """Build the Gemini prompt from segment statistics."""
 
-    def fmt(v):
-        if v is None: return "N/A"
-        if v >= 1e9:  return f"{v/1e9:.1f} Md€"
-        if v >= 1e6:  return f"{v/1e6:.1f} M€"
-        if v >= 1e3:  return f"{v/1e3:.0f} k€"
-        return str(round(v, 0))
+    def fmt(value):
+        if value is None:
+            return "N/A"
+        if value >= 1e9:
+            return f"{value/1e9:.1f} Mdâ‚¬"
+        if value >= 1e6:
+            return f"{value/1e6:.1f} Mâ‚¬"
+        if value >= 1e3:
+            return f"{value/1e3:.0f} kâ‚¬"
+        return str(round(value, 0))
 
     seg_lines = []
-    for s in segments:
+    for segment in segments:
         seg_lines.append(
-            f"- {s['label']} (C{s['cluster']}): {s['n']} leads, "
-            f"CA moyen {fmt(s.get('ca_moyen'))}, "
-            f"effectif moyen {s.get('employes_moyen', 'N/A')}, "
-            f"âge moyen {s.get('age_moyen', 'N/A')} ans, "
-            f"région dominante: {s.get('region_dominante', 'N/A')}, "
-            f"secteur: {s.get('secteur_dominant', 'N/A')}"
+            f"- {segment['label']} (C{segment['cluster']}): {segment['n']} leads, "
+            f"CA moyen {fmt(segment.get('ca_moyen'))}, "
+            f"effectif moyen {segment.get('employes_moyen', 'N/A')}, "
+            f"Ã¢ge moyen {segment.get('age_moyen', 'N/A')} ans, "
+            f"rÃ©gion dominante: {segment.get('region_dominante', 'N/A')}, "
+            f"secteur: {segment.get('secteur_dominant', 'N/A')}"
         )
 
-    sil = validation.get("silhouette", "N/A")
-    sil_interp = validation.get("silhouette_interpretation", "")
-    best_k = validation.get("elbow", {}).get("best_k", "N/A")
+    model_type = validation.get("model_type", "kmeans")
+    if model_type == "decision_tree":
+        model_context = f"""The database has been segmented into {len(segments)} business segments using a supervised Decision Tree classifier.
+Training accuracy: {validation.get('training_accuracy', 'N/A')}
+Tree depth: {validation.get('tree_depth', 'N/A')}
+Number of leaves: {validation.get('n_leaves', 'N/A')}"""
+    else:
+        silhouette = validation.get("silhouette", "N/A")
+        silhouette_interp = validation.get("silhouette_interpretation", "")
+        best_k = (validation.get("elbow") or {}).get("best_k", "N/A")
+        model_context = f"""The database has been segmented into {len(segments)} clusters using KMeans clustering.
+Silhouette score: {silhouette} ({silhouette_interp})
+Recommended K from elbow analysis: {best_k}"""
 
     return f"""You are an expert B2B sales strategy consultant analyzing a CRM lead database for a CEO.
 
-The database has been segmented into {len(segments)} clusters using KMeans clustering.
-Silhouette score: {sil} ({sil_interp})
-Recommended K from elbow analysis: {best_k}
+{model_context}
 
 Segment profiles:
 {chr(10).join(seg_lines)}
@@ -192,7 +199,7 @@ Respond ONLY with valid JSON in this exact format:
   "insights": [
     {{
       "title": "Titre court (max 8 mots)",
-      "description": "Explication claire pour un CEO (2-3 phrases). Chiffres précis inclus.",
+      "description": "Explication claire pour un CEO (2-3 phrases). Chiffres prÃ©cis inclus.",
       "priority": "high|medium|low",
       "icon": "TrendingUp|Target|Zap|AlertTriangle|MapPin|Users|BarChart3|RefreshCw|Lightbulb|Clock"
     }}
@@ -200,39 +207,39 @@ Respond ONLY with valid JSON in this exact format:
 }}"""
 
 
-# ── File I/O ──────────────────────────────────────────────────────────────────
-
 def _save_insights(insights: list[dict], export_dir: str, timestamp: str) -> None:
     path = Path(export_dir)
     path.mkdir(parents=True, exist_ok=True)
 
     payload = {
         "generated_at": datetime.utcnow().isoformat() + "Z",
-        "source":       "gemini-1.5-flash" if (_GEMINI_AVAILABLE and _API_KEY) else "rule-based-fallback",
-        "insights":     insights,
+        "source": (
+            "gemini-1.5-flash"
+            if (_GEMINI_AVAILABLE and _API_KEY)
+            else "rule-based-fallback"
+        ),
+        "insights": insights,
     }
 
-    # Versioned copy
     versioned = path / f"cluster_insights_{timestamp}.json"
-    with open(versioned, "w", encoding="utf-8") as f:
-        json.dump(payload, f, ensure_ascii=False, indent=2)
+    with open(versioned, "w", encoding="utf-8") as handle:
+        json.dump(payload, handle, ensure_ascii=False, indent=2)
 
-    # Latest symlink (overwrite)
     latest = path / "cluster_insights.json"
-    with open(latest, "w", encoding="utf-8") as f:
-        json.dump(payload, f, ensure_ascii=False, indent=2)
+    with open(latest, "w", encoding="utf-8") as handle:
+        json.dump(payload, handle, ensure_ascii=False, indent=2)
 
-    logger.info(f"[llm_service] Insights saved → {versioned}")
+    logger.info("[llm_service] Insights saved -> %s", versioned)
 
 
 def load_insights(export_dir: str) -> list[dict]:
-    """Load latest cluster_insights.json, return empty list if missing."""
-    p = Path(export_dir) / "cluster_insights.json"
-    if not p.exists():
+    """Load latest cluster_insights.json, return an empty list if missing."""
+    path = Path(export_dir) / "cluster_insights.json"
+    if not path.exists():
         return []
     try:
-        with open(p, "r", encoding="utf-8") as f:
-            data = json.load(f)
+        with open(path, "r", encoding="utf-8") as handle:
+            data = json.load(handle)
         return data.get("insights", [])
     except Exception:
         return []

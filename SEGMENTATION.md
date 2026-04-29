@@ -1324,3 +1324,826 @@ commercial immédiate.
 3. **Per-lead scores** use deterministic jitter seeded by SIREN — same SIREN always gets the same jitter offset, making results consistent across pagination.
 4. **No new database tables** — all maturity data is stored in the existing JSON export files.
 5. **Zero breaking changes** — all existing component props are unchanged; maturity fields are additive.
+
+---
+
+## v4 — Decision Tree Segmentation (Replacing KMeans)
+
+This section documents the **v4 migration** of the Segmentation & Market Analysis feature:
+
+- the **old KMeans clustering engine** was replaced
+- the **new engine is a supervised Decision Tree segmentation pipeline**
+- the **FastAPI endpoints, JSON file names, and Vue dashboard contract remain preserved**
+
+This means the **internal machine learning logic changed**, but the **CEO workflow stays the same**:
+
+1. run the analysis
+2. read the summary
+3. browse leads by segment
+
+---
+
+### 1. Why we replaced KMeans
+
+Before v4, the system used **KMeans clustering** to group companies into segments based on numeric and one-hot encoded features.
+
+KMeans was useful because it could automatically discover patterns in the portfolio, but it had three important limitations:
+
+| Limitation | Why it is a problem in this project |
+|---|---|
+| **Not naturally explainable** | KMeans returns cluster numbers, but it does not produce human-readable business rules such as "PME + small revenue + IT". |
+| **Hard to translate into sales logic** | A sales or executive team needs explicit rules they can understand and communicate. KMeans gives geometric groupings, not business rules. |
+| **Interpretation can drift over time** | Even if cluster ids are kept stable with `random_state`, the business meaning of a cluster can still evolve as the portfolio changes. A cluster may become harder to interpret after future ETL imports. |
+
+In practice, KMeans answers:
+
+> "Which leads are numerically close to each other in feature space?"
+
+But the business team more often needs:
+
+> "Why is this lead in this segment, and can I explain that rule to a manager or salesperson?"
+
+That is why v4 replaced KMeans with a **Decision Tree segmentation approach**.
+
+Decision Tree is better here because it offers:
+
+- **interpretable rules**: the segmentation logic can be explained as simple conditions
+- **deterministic segmentation**: the same feature logic leads to the same business segment
+- **easier business alignment**: segment names directly reflect company category, sector family, and revenue band
+- **better communication with non-technical teams**: sales, marketing, and management can understand the model output without reading ML theory
+
+In short:
+
+- **KMeans** was good for discovering clusters
+- **Decision Tree** is better for operationalizing segmentation as a business product
+
+---
+
+### 2. Updated Architecture
+
+The new pipeline is:
+
+```text
+DB → Feature Engineering → Rule-based Segmentation → Decision Tree → JSON → FastAPI → Vue Dashboard
+```
+
+What this means:
+
+- **DB**: data still comes from the `entreprise` table through SQLAlchemy
+- **Feature Engineering**: the system still prepares structured features from raw company data
+- **Rule-based Segmentation**: a first deterministic business labeling step creates training labels
+- **Decision Tree**: the model learns these labels using a shallow supervised tree
+- **JSON**: output files are still written to the same export directory
+- **FastAPI**: the same routes still serve summary and leads data
+- **Vue Dashboard**: the same page and components still render the results
+
+Important architectural change:
+
+- **KMeans is no longer the production segmentation engine**
+- **Decision Tree is now the core engine**
+- the file name `clustering.py` still exists for compatibility, but it now delegates to the decision-tree pipeline
+
+Important compatibility guarantee:
+
+- **API paths are unchanged**
+- **JSON file names are unchanged**
+- **Vue route `/manager/segmentation` is unchanged**
+
+So from the frontend point of view, the product still behaves like the same feature, even though the segmentation intelligence underneath is different.
+
+---
+
+### 3. Decision Tree Segmentation Pipeline
+
+The new segmentation logic runs in several clear steps.
+
+#### Step 1 — Data Loading
+
+The system still loads companies from PostgreSQL using **SQLAlchemy**.
+
+The source table is still:
+
+- `entreprise`
+
+The production pipeline still reads the same business fields:
+
+- `siren`
+- `nom`
+- `categorie_entreprise`
+- `taille_entrep`
+- `nb_locaux`
+- `ca`
+- `date_creation_entreprise`
+- `code_postal`
+- `secteur_activite`
+- `ville`
+
+So the database schema does **not** need to change for v4.
+
+The rows are still converted into a pandas `DataFrame`, just like before.
+
+The cleaning logic remains familiar:
+
+- `ca` is coerced to numeric
+- `nb_locaux` is coerced to numeric
+- duplicate SIRENs are removed
+- missing category values are normalized toward a PME-family default
+- missing city/sector/postal values are filled with safe fallback values
+
+This is important because the new model still depends on structured features, so the system must continue protecting itself against incomplete ETL data.
+
+#### Step 2 — Feature Engineering
+
+The v4 pipeline keeps some existing engineered features and adds new ones specifically inspired by the notebook.
+
+**Reused features from the old system**
+
+| Feature | Source | Why it is still useful |
+|---|---|---|
+| `region` | derived from `code_postal` | keeps a high-level geographic signal without exposing too many departments |
+| `age_entreprise` | derived from `date_creation_entreprise` | age is more meaningful than a raw date for business segmentation |
+| `nb_employes_mid` | mapped from `taille_entrep` using midpoint table | converts employee ranges into a comparable numeric signal |
+
+**New features introduced by the Decision Tree logic**
+
+| Feature | How it is built | Why it exists |
+|---|---|---|
+| `macro_sector` | maps raw `secteur_activite` values into broader groups such as `IT`, `Commerce`, `Finance`, `Services`, `Public`, or `Other` | reduces sector noise and makes rules easier to explain |
+| `ca_band` | converts `ca` into `Small`, `Mid`, `Large`, or `Unknown` | gives the model a business-readable revenue scale |
+| `segment_rule` | deterministic business label created from category + revenue band + macro sector | becomes the training target for the Decision Tree |
+
+The new `macro_sector` feature is especially important because raw sector labels are too detailed and inconsistent for business communication.
+
+For example:
+
+- `62.02A` → `IT`
+- `Conseil informatique` → `IT`
+- `Commerce de gros` → `Commerce`
+- `Act. auxil. assurance` → `Finance`
+- missing or unmapped values → `Other`
+
+The `ca_band` feature is also important because raw revenue is hard to interpret directly.
+
+Instead of reasoning only with exact amounts like `7,200,000` or `42,000,000`, the model can also reason with:
+
+- `Small` if CA < `10_000_000`
+- `Mid` if CA < `50_000_000`
+- `Large` otherwise
+- `Unknown` if CA is missing
+
+This makes segmentation more readable for humans and easier to express in business rules.
+
+#### Step 3 — Rule-based Segmentation
+
+The notebook introduced a deterministic function called `segment_label()`.
+
+Its role is simple:
+
+- take a company row
+- inspect its **company category**
+- inspect its **revenue band**
+- inspect its **macro sector**
+- assign a **business segment label**
+
+The logic is:
+
+**PME**
+
+- `Small + IT` → `PME_Small_IT`
+- `Small + non-IT` → `PME_Small_NonIT`
+- `Mid/Large` → `PME_Mid`
+
+**ETI**
+
+- `IT` → `ETI_IT`
+- `Large CA` → `ETI_Large`
+- otherwise → `ETI_Mid`
+
+**Grande Entreprise**
+
+- always → `GE_Large`
+
+Examples:
+
+```text
+PME + Small + IT      → PME_Small_IT
+PME + Small + Other   → PME_Small_NonIT
+PME + Mid             → PME_Mid
+ETI + IT              → ETI_IT
+ETI + Large CA        → ETI_Large
+ETI + Mid + Commerce  → ETI_Mid
+Grande Entreprise     → GE_Large
+```
+
+This step is extremely important conceptually.
+
+The Decision Tree is **not inventing segment names from scratch**.
+Instead:
+
+1. business logic first defines what a segment means
+2. the Decision Tree then learns to reproduce that logic in a structured model
+
+So the final system combines:
+
+- **explicit business rules**
+- **a trainable, exportable classifier**
+
+That is why the system is both explainable and operational.
+
+#### Step 4 — Decision Tree Training
+
+The production model is:
+
+```python
+DecisionTreeClassifier(max_depth=3, min_samples_leaf=20, random_state=42)
+```
+
+Each parameter matters:
+
+| Parameter | Meaning | Why it was chosen |
+|---|---|---|
+| `max_depth=3` | the tree can only split a few times | keeps the tree shallow and readable |
+| `min_samples_leaf=20` | each final leaf must contain enough samples | prevents tiny leaves and reduces overfitting |
+| `random_state=42` | fixes internal randomness | makes training reproducible |
+
+Why a shallow tree is useful:
+
+- it is easier to **inspect**
+- it is easier to **document**
+- it is easier to **export as text rules**
+- it is easier to **justify to business teams**
+
+The tree uses the following input features:
+
+- encoded `categorie_entreprise`
+- raw `ca` (or an imputed modeling version when CA is missing at prediction time)
+- encoded `macro_sector`
+- encoded `ca_band`
+
+The target is:
+
+- `segment_rule`
+
+So the model is learning:
+
+> "Given category, revenue, sector family, and revenue band, which business segment should this company belong to?"
+
+#### Step 5 — Prediction
+
+Once trained, the Decision Tree predicts the segment for the full dataset.
+
+This means:
+
+- labeled rows can be predicted again by the trained model
+- incomplete rows can still receive a prediction if the pipeline can build fallback features
+- the system also computes `predict_proba()` to estimate confidence
+
+That confidence is exported as:
+
+- `decision_tree_confidence`
+
+How missing or difficult cases are handled:
+
+| Situation | Production behavior |
+|---|---|
+| missing `categorie_entreprise` | normalized toward a PME-family fallback |
+| missing `ca` | a modeling fallback value is built from category median, then global median, then `0` if needed |
+| missing sector mapping | falls back to `Other` |
+| missing revenue band | falls back to `Unknown` |
+
+This is an important difference from the notebook:
+
+- the notebook assumed an uploaded file in a controlled environment
+- the production pipeline must survive real ETL imperfections
+
+So the production adaptation adds **robust fallback handling** to ensure every run can complete more safely.
+
+#### Step 6 — Segment ID Mapping
+
+The Decision Tree predicts **string labels** such as:
+
+- `PME_Small_IT`
+- `ETI_Mid`
+- `GE_Large`
+
+However, the frontend already expects a numeric field called:
+
+- `cluster`
+
+So v4 preserves a stable label-to-id mapping:
+
+| Segment label | Numeric `cluster` id |
+|---|---:|
+| `PME_Small_IT` | `0` |
+| `PME_Small_NonIT` | `1` |
+| `PME_Mid` | `2` |
+| `ETI_IT` | `3` |
+| `ETI_Mid` | `4` |
+| `ETI_Large` | `5` |
+| `GE_Large` | `6` |
+
+This mapping exists for one main reason:
+
+> the Vue dashboard was already built around a numeric segment id
+
+Without this compatibility layer, filters, cards, tables, badges, and chart grouping logic would break.
+
+So the system now uses:
+
+- `segment_code` internally for the business label
+- `cluster` externally for frontend compatibility
+
+---
+
+### 4. JSON Output (IMPORTANT)
+
+The JSON structure is intentionally preserved.
+
+This is one of the most important design decisions of v4.
+
+The goal was:
+
+> replace the ML engine without forcing a frontend rewrite
+
+So the filenames are still the same:
+
+- `cluster_summary.json`
+- `clustered_leads.json`
+- versioned timestamp files in the same export directory
+- `cluster_insights.json` remains compatible when insights are generated
+
+#### `cluster_summary.json`
+
+At the top level, the file still contains the high-level segmentation result for the dashboard.
+
+Common top-level fields now include:
+
+- `status`
+- `run_at`
+- `total_rows`
+- `total_leads`
+- `segments`
+- `validation`
+- `insights`
+- `maturity_overview`
+- `model_type`
+- optionally `tree_rules`
+- optionally `training_accuracy`
+
+Each object inside `segments` still contains the business profile expected by the UI.
+
+| Field | Meaning in v4 |
+|---|---|
+| `cluster` | numeric segment id used by the frontend |
+| `label` | business-facing segment name |
+| `label_short` | short label used by legends, chips, and grouped bubbles |
+| `label_sub` | secondary qualifier shown in cards and filters |
+| `color` | display color for charts and badges |
+| `recommendation` | sales or strategic recommendation |
+| `n` | number of companies in the segment |
+| `employes_moyen` | mean employee count |
+| `ca_moyen` | mean revenue |
+| `nb_locaux_moyen` | mean number of sites |
+| `age_moyen` | mean company age |
+| `categorie_dominante` | dominant company category |
+| `secteur_dominant` | dominant raw sector |
+| `region_dominante` | dominant region |
+| `explainability` | comparison of this segment vs the global portfolio |
+| `digital_maturity_score` | segment digital maturity score |
+| `digital_maturity_level` | maturity level (`Faible`, `Moyen`, `Élevé`) |
+| `digital_gap` | distance to ideal digital maturity |
+| `maturity_details` | detailed maturity breakdown |
+| `llm_analysis` | textual maturity explanation |
+
+In other words:
+
+- the **schema stays dashboard-friendly**
+- the **meaning of the segment changed**
+- but the **shape of the payload remains stable**
+
+#### `clustered_leads.json`
+
+This file still stores one record per company/lead.
+
+The classic fields remain:
+
+- `siren`
+- `nom_entreprise`
+- `ville`
+- `secteur_activite`
+- `categorie_entreprise`
+- `tranche_effectif`
+- `chiffre_affaires`
+- `age_entreprise`
+- `region`
+- `cluster`
+- `cluster_label`
+
+Each lead now also includes the decision-tree-specific fields:
+
+| Field | Meaning |
+|---|---|
+| `cluster` | numeric segment id |
+| `cluster_label` | readable business label for the segment |
+| `macro_sector` | broad sector family used by the model |
+| `ca_band` | revenue band used by the model |
+| `decision_tree_confidence` | probability-like confidence from `predict_proba()` |
+| `segment_rule` | original rule-based label when available |
+
+Maturity fields remain additive when available:
+
+- `digital_maturity_score`
+- `digital_maturity_level`
+- `digital_gap`
+
+This means the leads table still works, but each row now carries more explicit business context than before.
+
+---
+
+### 5. Validation Changes
+
+Validation changed significantly because the model type changed.
+
+#### Before (KMeans)
+
+The old KMeans pipeline relied mainly on:
+
+- **silhouette score**
+- **elbow method**
+
+These metrics are appropriate for unsupervised clustering because the system is trying to evaluate:
+
+> "Are these clusters compact and well separated?"
+
+#### Now (Decision Tree)
+
+The v4 model is supervised, so the validation focus is different.
+
+The new validation block is centered around:
+
+- `training_accuracy`
+- `tree_depth`
+- `n_leaves`
+- `classification_report` (optional but useful)
+- `confusion_matrix`
+- `tree_rules`
+
+Example:
+
+```json
+"validation": {
+  "model_type": "decision_tree",
+  "training_accuracy": 0.94,
+  "tree_depth": 3,
+  "n_leaves": 7
+}
+```
+
+Meaning of these metrics:
+
+| Metric | What it tells us |
+|---|---|
+| `training_accuracy` | how well the trained tree reproduces the business labels on the training data |
+| `tree_depth` | how complex the tree is |
+| `n_leaves` | how many final decision outcomes the tree has |
+| `classification_report` | precision/recall/F1 per segment |
+| `confusion_matrix` | which segments are confused with which others |
+| `tree_rules` | human-readable textual decision rules |
+
+For compatibility, the validation object still exists under the same top-level key:
+
+- `validation`
+
+But `silhouette` and `elbow` are now either:
+
+- absent from the new logic
+- or explicitly marked as not applicable in the decision-tree validation payload
+
+This is intentional.
+It avoids showing misleading cluster metrics for a supervised model.
+
+---
+
+### 6. Explainability (Updated)
+
+The project still keeps an explainability layer, but its interpretation is now slightly different.
+
+Before, explainability described:
+
+> "Why this cluster looks different from the global dataset"
+
+Now it describes:
+
+> "Why this business segment looks different from the global dataset"
+
+The mechanics remain similar:
+
+- compare segment means vs global means
+- compute ratios
+- compute z-scores
+- identify top differentiating features
+
+Typical compared features still include:
+
+- employee count
+- revenue
+- number of sites
+- age
+
+The explainability block still highlights:
+
+- **top features**
+- whether the segment is **above** or **below** the portfolio average
+- the ratio relative to the global mean
+
+So the explainability layer is still useful for the CEO dashboard, but it should now be understood as:
+
+- **segment explainability**
+- not pure clustering explainability
+
+This is a subtle but important conceptual shift.
+
+---
+
+### 7. Frontend Impact
+
+The frontend impact was intentionally minimized.
+
+What did **not** change:
+
+- the dashboard page still exists at `/manager/segmentation`
+- the UI layout is still the same
+- the same Vue components still render the page
+- the same FastAPI endpoints are still called
+- the same JSON filenames are still consumed
+
+So from a user perspective:
+
+✔ same page  
+✔ same workflow  
+✔ same cards  
+✔ same charts  
+✔ same leads table
+
+What changed internally in the UI layer:
+
+- the segment labels are now based on Decision Tree business segments
+- the fallback `SEGMENT_META` can reflect the new segment palette
+- the validation badge can now display decision-tree quality information such as training accuracy instead of only silhouette
+
+Important frontend behavior change:
+
+- the number of segments is no longer conceptually tied to **exactly 5**
+- the UI now needs to tolerate a **dynamic number of segments**
+
+This matters because the Decision Tree segment catalog can produce:
+
+- PME variants
+- ETI variants
+- GE variant
+
+Depending on the actual dataset, some runs may show fewer active segments than the maximum.
+
+The Vue dashboard mostly remains safe because many components already iterate dynamically over:
+
+- `summary.segments`
+
+This means the rendering logic can keep working without a redesign.
+
+---
+
+### 8. Files Modified / Added
+
+The migration was intentionally organized to preserve the old public entry point while moving the new logic into a dedicated module.
+
+#### Modified
+
+| File | Role after v4 |
+|---|---|
+| `ETL_service/ETL_pipeline/market_analysis/clustering.py` | no longer contains the KMeans pipeline; now acts as a compatibility wrapper exposing `run_clustering(db)` and delegating to the decision-tree engine |
+| `ETL_service/ETL_pipeline/apis/routers/segmentation.py` | same endpoints, but now returns decision-tree segmentation results and updated validation metadata |
+| `frontend/src/services/segmentation.js` | still exposes the same API calls, but the fallback segment metadata can reflect the new segment ids/colors/labels |
+
+Additional files that may also be updated in the same migration:
+
+| File | Why it may change |
+|---|---|
+| `ETL_service/ETL_pipeline/market_analysis/validation.py` | adds Decision Tree validation helpers |
+| `ETL_service/ETL_pipeline/market_analysis/llm_service.py` | adapts insight prompts so they describe decision-tree segmentation instead of KMeans |
+| `frontend/src/pages/manager/MarketAnalysisPage.vue` | keeps the same layout but may show decision-tree validation badges |
+
+#### Added
+
+| File | Role |
+|---|---|
+| `ETL_service/ETL_pipeline/market_analysis/decision_tree_segmentation.py` | new core production engine implementing the v4 segmentation pipeline |
+
+Why this organization is useful:
+
+- the new logic is cleanly isolated
+- the router does not need a breaking import change
+- old integration points continue to work
+
+### 8bis. Detailed File-Level Changes
+
+#### 🔹 File: `ETL_service/ETL_pipeline/market_analysis/clustering.py`
+
+Before:
+- Full KMeans pipeline implemented here
+- Feature engineering + clustering + labeling
+
+Now:
+- Acts as an entry point for backward compatibility
+- Calls decision tree pipeline from `decision_tree_segmentation.py`
+- Keeps identical function signature: `run_clustering(db, export_dir)`
+
+Why:
+- Avoids breaking FastAPI router imports
+- Allows testing Both KMeans and Decision Tree easily
+
+#### 🔹 File: `ETL_service/ETL_pipeline/market_analysis/decision_tree_segmentation.py`
+
+This is the NEW core machine learning engine. It replaces the role of `clustering.py` entirely in v4.
+
+Main functions and logic:
+- **Data loading**: Reads raw `Entreprise` rows via SQLAlchemy
+- **Feature engineering**: Prepares `ca_band`, `nb_employes_mid`, `age_entreprise`, and handles fallbacks
+- **Macro_sector mapping**: Translates detailed NAF codes into broad groups (IT, Commerce, Finance, etc.)
+- **ca_band logic**: Groups revenue into Small (<10M), Mid (<50M), Large (>50M) 
+- **segment_label()**: Deterministic function that creates the target business segment (e.g., `PME_Small_IT`)
+- **Model training**: Fits `DecisionTreeClassifier` on labeled rows to learn these rules
+- **Prediction**: Applies the tree to predict segments for the entire database and estimate confidence
+- **JSON export**: Writes out `cluster_summary.json` and `clustered_leads.json` in the exact format the frontend expects
+
+#### 🔹 File: `ETL_service/ETL_pipeline/apis/routers/segmentation.py`
+
+Before:
+- Exposed standard REST endpoints pointing to KMeans logic
+
+Now:
+- Endpoints remain completely unchanged 
+- Still calls `run_clustering` (which delegates to the Decision Tree)
+- Effectively decoupled from the ML implementation change
+
+#### 🔹 File: `frontend/src/services/segmentation.js`
+
+Before:
+- Handled API calls and contained K-Means segment metadata
+
+Now:
+- No API changes
+- Still calls the same endpoints 
+- `SEGMENT_META` is updated to reflect the new rule-based segment definitions, names, and assigned colors
+
+#### 🔹 Helper Files
+
+- **`validation.py`**: Now computes Decision Tree metrics (training accuracy, tree depth, text rules) instead of just Silhouette score
+- **`explainability.py`**: Still compares cluster means to global means to highlight what makes a segment unique
+- **`digital_maturity.py`**: Unchanged logic, but now evaluates the newly formed Decision Tree segments instead of KMeans clusters 
+
+
+### 8ter. Mapping Between Old and New Logic
+
+Understanding the paradigm shift from v3 to v4:
+
+| Old (KMeans)             | New (Decision Tree)  |
+| ------------------------ | -------------------- |
+| Unsupervised learning    | Supervised learning  |
+| cluster = distance-based in vector space | segment = rule-based from business logic |
+| silhouette score + elbow method | training accuracy + confusion matrix |
+| cluster centers          | decision rules       |
+| opaque boundaries        | transparent feature splits (e.g. CA > 10M) |
+
+
+### 8quater. Developer Reading Guide
+
+If you are onboarding to this codebase or trying to debug the v4 segmentation, read the files in this exact order to trace the execution flow:
+
+1. **`ETL_service/ETL_pipeline/market_analysis/decision_tree_segmentation.py`** 
+   → This is the heart of the new system. Start here to understand the business rules, feature engineering, and the actual model training.
+2. **`ETL_service/ETL_pipeline/market_analysis/clustering.py`** 
+   → Look here next. See how it delegates the work and acts as a generic wrapper to keep the application stable.
+3. **`ETL_service/ETL_pipeline/apis/routers/segmentation.py`** 
+   → See how the REST API endpoints are exposed to the outside world without caring about the underlying ML model.
+4. **`frontend/src/services/segmentation.js`** 
+   → Move to the frontend. Observe how the Vue application fetches the generated JSON and manages the static `SEGMENT_META`.
+
+---
+
+### 9. Backward Compatibility
+
+Backward compatibility was a primary requirement of v4.
+
+What remains compatible:
+
+- **same endpoint paths**
+  - `POST /segmentation/run`
+  - `GET /segmentation/summary`
+  - `GET /segmentation/leads`
+- **same JSON filenames**
+  - `cluster_summary.json`
+  - `clustered_leads.json`
+- **same frontend route**
+  - `/manager/segmentation`
+- **same broad response structure**
+  - summary still contains `segments`
+  - leads endpoint still returns paginated `leads`
+
+What changed internally:
+
+- the segmentation engine
+- the validation philosophy
+- the business meaning of segment labels
+- the set of additive lead/summary fields
+
+So the safest way to describe v4 is:
+
+> the public product contract was preserved, while the internal ML logic was replaced
+
+---
+
+### 10. How to Run
+
+The operational workflow remains the same as before.
+
+#### Run the segmentation
+
+```http
+POST /segmentation/run
+```
+
+What it does now:
+
+1. loads `Entreprise` rows from DB
+2. builds engineered features
+3. creates rule-based segment labels
+4. trains the shallow Decision Tree
+5. predicts segments for all leads
+6. computes validation, explainability, maturity, and insights
+7. writes JSON export files
+8. returns the summary payload
+
+#### Read the latest summary
+
+```http
+GET /segmentation/summary
+```
+
+What it returns:
+
+- latest `cluster_summary.json`
+- segment profiles
+- decision-tree validation metadata
+- insights and maturity overview
+
+#### Read paginated leads
+
+```http
+GET /segmentation/leads
+```
+
+Supported query behavior remains the same:
+
+- filter by numeric `segment`
+- search by company name
+- paginate with `skip` and `limit`
+
+Typical test flow:
+
+1. call `POST /segmentation/run`
+2. call `GET /segmentation/summary`
+3. verify `model_type = "decision_tree"`
+4. verify segments are present
+5. call `GET /segmentation/leads?segment=0&limit=20`
+6. verify each lead contains `cluster`, `cluster_label`, `macro_sector`, `ca_band`, and `decision_tree_confidence`
+7. open the Vue page `/manager/segmentation` and confirm the dashboard renders normally
+
+This is the **same workflow as before**, only the segmentation engine behind it is different.
+
+---
+
+### 11. Key Takeaway
+
+Before v4:
+
+- machine learning was mainly used to **discover clusters**
+- business interpretation came **afterward**
+
+Now in v4:
+
+- business rules first define what a segment means
+- the Decision Tree learns and reproduces those rules
+- the result is easier to explain, validate, and maintain
+
+So the change can be summarized simply:
+
+**Before**
+
+- ML discovers clusters
+
+**Now**
+
+- business rules define segments
+- Decision Tree makes them explainable and scalable
+
+That is the core idea of the migration from **KMeans clustering** to **Decision Tree segmentation**.

@@ -1,7 +1,13 @@
 <template>
   <div
-    class="bg-white border border-border rounded-xl shadow-sm border-l-4 hover:shadow-md transition-all overflow-hidden"
+    class="bg-white border border-border rounded-xl shadow-sm border-l-4 hover:shadow-lg transition-all overflow-hidden cursor-pointer group focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2"
     :style="{ borderLeftColor: segment.color }"
+    role="button"
+    tabindex="0"
+    :aria-label="`Voir le détail du segment ${segment.label}`"
+    @click="$emit('select', segment)"
+    @keydown.enter.prevent="$emit('select', segment)"
+    @keydown.space.prevent="$emit('select', segment)"
   >
     <!-- ── Card body ────────────────────────────────────────── -->
     <div class="p-5">
@@ -71,6 +77,12 @@
       >
         {{ segment.recommendation }}
       </span>
+
+      <!-- Drill-down hint (visible on hover) -->
+      <div class="mt-3 flex items-center justify-end gap-1 text-[10px] text-tacir-darkgray/50 opacity-0 group-hover:opacity-100 transition-opacity duration-200">
+        <ExternalLink class="w-3 h-3" />
+        <span>Voir le détail</span>
+      </div>
 
       <!-- ── Digital Maturity block ──────────────────────────────────── -->
       <div
@@ -178,13 +190,14 @@
 
 <script setup>
 import { ref, computed } from "vue";
-import { Building2, Briefcase, MapPin, Lightbulb, ChevronDown, BarChart2 } from "lucide-vue-next";
+import { Building2, Briefcase, MapPin, Lightbulb, ChevronDown, BarChart2, ExternalLink } from "lucide-vue-next";
 import { formatRevenue } from "@/services/segmentation.js";
 
 const props = defineProps({
   segment:    { type: Object, required: true },
   totalLeads: { type: Number, default: 1 },
 });
+const emit = defineEmits(["select"]);
 
 const explainOpen = ref(false);
 const maturityOpen = ref(false);

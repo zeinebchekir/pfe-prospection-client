@@ -34,8 +34,8 @@ const kpis = computed(() => {
   const priority  = [...segs].sort((a, b) => (b.ca_moyen || 0) * b.n - (a.ca_moyen || 0) * a.n)[0];
 
   return [
-    { label: "Total leads",        value: props.totalLeads.toLocaleString("fr-FR"), sub: "entreprises clusterisées" },
-    { label: "Segments",           value: segs.length,                              sub: "clusters KMeans K=5" },
+    { label: "Total leads",        value: props.totalLeads.toLocaleString("fr-FR"), sub: "entreprises segmentées" },
+    { label: "Segments",           value: segs.length,                              sub: "segments identifiÃ©s" },
     { label: "Segment dominant",   value: dominant?.label?.split(" ")[0] + "…",     sub: `${dominant?.n} leads (${Math.round(dominant?.n / totalN * 100)}%)` },
     { label: "CA moyen pondéré",   value: formatRevenue(Math.round(weightedCA)),    sub: "chiffre d'affaires" },
     { label: "Âge moyen",          value: `${weightedAge.toFixed(1)} ans`,          sub: "ancienneté des entreprises" },
