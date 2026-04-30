@@ -9,8 +9,6 @@ load_dotenv()
 
 logger = logging.getLogger(__name__)
 
-SERPER_API_KEYS = os.getenv("SERPER_API_KEY")
-
 CURRENT_KEY_IDX = 0
 SERPER_API_EXHAUSTED = False
 

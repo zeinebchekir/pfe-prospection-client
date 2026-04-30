@@ -602,6 +602,7 @@ const getAnalysisPayload = (): AnalysisResult => {
 }
 
 const generateAnalysis = async () => {
+
   isAnalyzing.value = true
   const payload = {
     nom: props.companyName,

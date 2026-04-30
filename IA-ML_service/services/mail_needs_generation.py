@@ -212,11 +212,12 @@ def call_ollama_email(messages: list[dict], max_tokens: int = 2000) -> str:
                 "model": MODEL_NAME,
                 "messages": messages,
                 "stream": False,
+                "keep_alive": 0,
                 # No "format": "json" here — intentional, see docstring
                 "options": {
                     "temperature": 0.1,
                     "num_predict": max_tokens,
-                    "num_ctx": 8192,
+                    "num_ctx": 16384,
                     "repeat_penalty": 1.1,
                     "top_p": 0.9
                 }
@@ -288,7 +289,7 @@ def call_groq(messages: list[dict], temperature: float = 0.1, max_tokens: int = 
 
 def analyze_company(company_data: dict) -> dict:
     """Signature identique à l'originale — endpoint inchangé."""
-
+    print("DEBUG company_data",company_data)
     # Posts comme liste propre (conforme au format attendu par le system prompt)
     posts_list = [
         clean_post(p)
