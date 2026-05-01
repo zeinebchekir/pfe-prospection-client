@@ -48,7 +48,7 @@ def run_migrations_offline() -> None:
 
 def run_migrations_online() -> None:
     configuration = config.get_section(config.config_ini_section, {})
-    database_url = "postgresql://airflow:airflow@postgres/airflow"
+    database_url = os.environ.get("DATABASE_URL", "postgresql://airflow:airflow@postgres-airflow/airflow")
     configuration["sqlalchemy.url"] = database_url
 
     connectable = engine_from_config(

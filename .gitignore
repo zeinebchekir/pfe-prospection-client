@@ -1,5 +1,6 @@
 logs/
 *.log
+
 # Python
 __pycache__/
 *.py[cod]
@@ -14,8 +15,13 @@ build/
 venv/
 .venv/
 env/
+
+# ── Environment files (SECRETS — never commit) ──
 .env
-logs/
+ETL_service/.env
+IA-ML_service/.env
+frontend/.env
+
 # Django
 *.sqlite3
 staticfiles/
@@ -36,6 +42,16 @@ dist/
 *.swo
 .DS_Store
 Thumbs.db
-IA-ML_service/.env
+
+# IA-ML artifacts
 IA-ML_service/artifacts/
 IA-ML_service/catboost_info/
+
+# Airflow
+ETL_service/logs/
+ETL_service/plugins/
+
+# ETL exports & temp
+ETL_service/exports/segmentation/
+ETL_service/exports/reports/
+ETL_service/fastapi_out.log
