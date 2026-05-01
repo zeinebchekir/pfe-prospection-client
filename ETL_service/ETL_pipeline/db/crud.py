@@ -503,6 +503,8 @@ def query_clean_leads(
         q = q.filter(Entreprise.status_lead == status_lead)
     return q.order_by(Entreprise.created_at.desc()).limit(limit).all()
 
+
+
 def update_clean_lead(db: Session, lead_id: int, **kwargs) -> bool:
     try:
         lead = db.query(Entreprise).filter(Entreprise.id == lead_id).first()

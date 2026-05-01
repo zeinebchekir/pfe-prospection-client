@@ -94,10 +94,14 @@ def extract_data_from_datagouv(results):
                 "pays":"dataGouv",
                 "taille_entrep":"dataGouv" if taille_globale else None,
                 "categorie_entreprise":"dataGouv" if categorie_entreprise else None,
-                "nb_locaux":nb_locaux_ouverts,
-                "ca":ca,
-                "dateCreation":date_creation,
-                "dateDerniereModification":date_maj,
+                "nb_locaux":"dataGouv" if nb_locaux_ouverts else None,
+                "ca":"dataGouv" if ca else None,
+                "dateCreation":"dataGouv" if date_creation else None,
+                "dateDerniereModification":"dataGouv" if date_maj else None,
+                "linkedin_url": None,
+                "website_url":None,
+                "dirigeants":"dataGouv" if dirigeants_filtres else None,
+                "description":None
                 
             }
 

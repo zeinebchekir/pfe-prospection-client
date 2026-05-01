@@ -82,6 +82,7 @@ const routes = [
     component: () => import("@/pages/admin/AuditLogs.vue"),
     meta: { requiresAuth: true, roles: ["ADMIN"] },
   },
+
   {
     path: "/admin/monitoring-etl",
     name: "MonitoringETL",
@@ -95,6 +96,13 @@ const routes = [
     component: () => import("@/pages/admin/ReportsList.vue"),
     meta: { requiresAuth: true, roles: ["ADMIN"] },
   },
+  {
+    path: "/admin/etllogs",
+    name: "ETLLogsViewer",
+    component: () => import("@/pages/admin/ETLLogs.vue"),
+    meta: { requiresAuth: true, roles: ["ADMIN"] },
+  },
+
   {
     path: "/admin/crm",
     component: () => import("@/pages/DashboardPage.vue"),

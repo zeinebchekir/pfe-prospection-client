@@ -3,10 +3,13 @@ from airflow.operators.python import PythonOperator
 from datetime import datetime
 import psutil
 import sys, json, os
+import time
+import functools
 
 # ── Fix: path must match the actual folder name on disk ──
 sys.path.insert(0, "/opt/airflow/ETL_pipeline")
 sys.path.insert(0, "/opt/airflow/ETL_pipeline/cleaners")
+
 
 from scrapers.boamp import BoampService
 from scrapers.dataGouv import DataGouvService
@@ -17,10 +20,9 @@ from extractors.dataGouv.boamp_enricher import enrich_boamp_data
 from db.database import SessionLocal, create_tables
 from db import sync_crud
 from db import crud
-
 from cleaners.boamp_cleaner import BoampCleaner
 from cleaners.dataGouv_cleaner import DataGouvCleaner
-
+from db.etl_logger import log_task_start, log_task_success, log_task_failure
 # ──────────────────────────────────────────────
 #  Chemins temporaires (supprimés après load)
 # ──────────────────────────────────────────────
@@ -58,27 +60,56 @@ def _update_sync(source: str, date: str, total_clean: int):
         sync_crud.update_sync_state(db, source, date, total_clean)
 
 def measure_task(func):
-    """Décorateur qui mesure CPU/RAM d'une task et pousse via XCom."""
+    """Décorateur qui mesure CPU/RAM d'une task, pousse via XCom, et log dans fichier journalier."""
+    @functools.wraps(func)  # préserve func.__name__ pour Airflow
     def wrapper(**context):
+        ti      = context.get("ti")
+        dag_id  = ti.dag_id  if ti else "unknown"
+        run_id  = ti.run_id  if ti else "unknown"
+        task_id = ti.task_id if ti else func.__name__
+
         process = psutil.Process(os.getpid())
 
         # Snapshot avant
         cpu_before = process.cpu_percent(interval=0.1)
-        ram_before = process.memory_info().rss / (1024 ** 2)  # MB
+        ram_before = process.memory_info().rss / (1024 ** 2)
+        start_time = time.time()
 
-        # Exécuter la vraie task
-        result = func(**context)
+        log_task_start(dag_id, run_id, task_id)
 
-        # Snapshot après
-        cpu_after = process.cpu_percent(interval=0.1)
-        ram_after = process.memory_info().rss / (1024 ** 2)
+        try:
+            result = func(**context)
 
-        # Pousser les métriques via XCom
-        context['ti'].xcom_push(key='cpu_used', value=round(cpu_after, 1))
-        context['ti'].xcom_push(key='ram_used_mb', value=round(ram_after, 1))
-        context['ti'].xcom_push(key='ram_delta_mb', value=round(ram_after - ram_before, 1))
+            # Snapshot après
+            cpu_after  = process.cpu_percent(interval=0.1)
+            ram_after  = process.memory_info().rss / (1024 ** 2)
+            duration   = round(time.time() - start_time, 2)
 
-        return result
+            # XCom — inchangé
+            ti.xcom_push(key="cpu_used",      value=round(cpu_after, 1))
+            ti.xcom_push(key="ram_used_mb",   value=round(ram_after, 1))
+            ti.xcom_push(key="ram_delta_mb",  value=round(ram_after - ram_before, 1))
+
+            # Récupère les XCom métier poussés par la tâche elle-même
+            details = {
+                "cpu_used"     : f"{round(cpu_after, 1)}%",
+                "ram_used_mb"  : f"{round(ram_after, 1)} MB",
+                "ram_delta_mb" : f"{round(ram_after - ram_before, 1)} MB",
+            }
+            for key in ["total_raw", "total_extracted", "records_count",
+                        "total_inserted", "watermark_start", "total_cleaned"]:
+                val = ti.xcom_pull(task_ids=task_id, key=key)
+                if val is not None:
+                    details[key] = val
+
+            log_task_success(dag_id, run_id, task_id, duration, details)
+            return result
+
+        except Exception as exc:
+            duration = round(time.time() - start_time, 2)
+            log_task_failure(dag_id, run_id, task_id, duration, exc)
+            raise  # re-raise obligatoire pour qu'Airflow marque la tâche failed
+
     return wrapper
 
 # ──────────────────────────────────────────────

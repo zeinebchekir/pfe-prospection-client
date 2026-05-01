@@ -139,7 +139,7 @@
                 <span class="text-[11px] text-muted-foreground">LinkedIn</span>
                 <a :href="displayLead.linkedin_url" target="_blank" rel="noopener noreferrer" class="flex items-center gap-1.5 text-xs font-medium text-tacir-blue hover:underline max-w-[200px] justify-end">
                   <Linkedin class="w-3.5 h-3.5 flex-shrink-0" />
-                  <span class="truncate">{{ decodeURIComponent(displayLead.linkedin_url) }}</span>
+                  <span class="truncate">{{ safeDecode(displayLead.linkedin_url) }}</span>
                 </a>
               </div>
               <div v-if="displayLead.website_url" class="flex items-center justify-between py-2 border-b border-border last:border-b-0">
@@ -265,11 +265,57 @@
               <InfoRow label="Mis à jour le"            :value="displayLead.updatedAt ? formatDateFR(displayLead.updatedAt) : '—'" />
               <InfoRow label="Raw Lead ID"              :value="displayLead.rawLeadId ?? '—'" />
             </div>
-            <div v-if="displayLead.sources" class="mt-3 pt-3 border-t border-border">
-              <p class="text-[11px] text-muted-foreground mb-1">Sources</p>
-              <p class="text-xs font-mono text-muted-foreground bg-muted/50 rounded-lg p-2 overflow-x-auto">
-                {{ JSON.stringify(displayLead.sources, null, 0).slice(0, 200) }}…
-              </p>
+            <!-- ✅ Sources table — refactored -->
+            <div v-if="displayLead.sources" class="mt-4 pt-4 border-t border-border">
+              <h3 class="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider mb-3">Sources de données</h3>
+              <div class="overflow-x-auto rounded-xl border border-border shadow-sm">
+                <Table>
+                  <TableHeader class="bg-muted/50">
+                    <TableRow class="hover:bg-transparent">
+                      <TableHead 
+                        v-for="key in sourceKeys" 
+                        :key="key" 
+                        class="text-xs font-semibold uppercase text-muted-foreground whitespace-nowrap h-10"
+                      >
+                        {{ formatSourceKey(key) }}
+                      </TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    <TableRow 
+                      v-for="(source, idx) in sourcesList" 
+                      :key="idx"
+                      class="hover:bg-muted/30 transition border-b border-border last:border-0"
+                    >
+                      <TableCell 
+                        v-for="key in sourceKeys" 
+                        :key="key"
+                        class="text-sm text-foreground py-3 px-4 align-top"
+                      >
+                        <template v-if="source[key] == null || source[key] === ''">
+                          <span class="text-muted-foreground">—</span>
+                        </template>
+                        <template v-else-if="isUrl(source[key])">
+                          <a 
+                            :href="source[key]" 
+                            target="_blank" 
+                            rel="noopener noreferrer" 
+                            class="text-primary underline underline-offset-2 hover:opacity-80 truncate max-w-[200px] block"
+                            :title="source[key]"
+                          >
+                            {{ source[key] }}
+                          </a>
+                        </template>
+                        <template v-else>
+                          <span class="block max-w-[300px] truncate" :title="String(source[key])">
+                            {{ source[key] }}
+                          </span>
+                        </template>
+                      </TableCell>
+                    </TableRow>
+                  </TableBody>
+                </Table>
+              </div>
             </div>
           </div>
 
@@ -470,6 +516,14 @@ import {
 } from '@/components/ui/dialog'
 import { Label } from '@/components/ui/label'
 import { Input } from '@/components/ui/input'
+import {
+  Table,
+  TableHeader,
+  TableRow,
+  TableHead,
+  TableBody,
+  TableCell
+} from '@/components/ui/table'
 
 import TheSidebar    from '@/components/AppSidebar.vue'
 import SegmentBadge  from '@/components/leads/SegmentBadge.vue'
@@ -494,6 +548,47 @@ const localLead  = ref(null)
 const displayLead = computed(() => localLead.value ?? leadFromApi.value)
 
 const editOpen = ref(false)
+
+const sourcesList = computed(() => {
+  if (!displayLead.value || !displayLead.value.sources) return []
+  return Array.isArray(displayLead.value.sources) ? displayLead.value.sources : [displayLead.value.sources]
+})
+
+const sourceKeys = computed(() => {
+  if (sourcesList.value.length === 0) return []
+  const keys = new Set()
+  sourcesList.value.forEach(s => {
+    if (s && typeof s === 'object') {
+      Object.keys(s).forEach(k => keys.add(k))
+    }
+  })
+  return Array.from(keys)
+})
+
+function formatSourceKey(key) {
+  const map = {
+    nom: 'Source',
+    ville: 'Ville',
+    date_publication: 'Date de publication',
+    url: 'Lien',
+    source: 'Source',
+  }
+  if (map[key]) return map[key]
+  return key.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())
+}
+
+function isUrl(str) {
+  if (typeof str !== 'string') return false
+  return str.startsWith('http://') || str.startsWith('https://')
+}
+
+const safeDecode = (url) => {
+  try {
+    return decodeURIComponent(url)
+  } catch (e) {
+    return url
+  }
+}
 
 async function fetchLeadDetails() {
   isLoading.value = true

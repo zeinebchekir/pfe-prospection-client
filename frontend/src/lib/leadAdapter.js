@@ -188,6 +188,7 @@ export function adaptLead(raw, index) {
     email: safeStr(raw.adresse_email),
     linkedin_url: raw.linkedin_url ?? null,
     website_url: raw.website_url ?? null,
+    description: raw.description ?? null,
     hasBoamp: raw.info_boamp != null,
     infoBoamp: raw.info_boamp ?? null,
     createdAt: raw.created_at ?? null,

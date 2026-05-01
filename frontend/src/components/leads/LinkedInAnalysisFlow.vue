@@ -472,9 +472,9 @@ const enrichmentFields = [
 // --- Computed ---
 const modalTitle = computed(() => {
   switch (currentStep.value) {
-    case 1: return "🔍 Analyse LinkedIn"
+    case 1: return "🔍 Recherche et Vérification..."
     case 2: return foundUrl.value ? "✅ Page LinkedIn trouvée" : "⚠️ Saisie manuelle requise"
-    case 3: return "📥 Récupération des publications..."
+    case 3: return "📥 Récupération des données..."
     case 4: return "📊 Analyse terminée"
     default: return "Analyse LinkedIn"
   }
@@ -506,6 +506,24 @@ const startAnalysisFlow = () => {
   currentStep.value = 1
   progressValue.value = 0
   
+  // Etape 1: Vérifier les sources avant tout appel API
+  const sources = props.lead?.sources || {}
+  const hasLinkedinSource = Object.values(sources).includes('linkedin')
+
+  if (hasLinkedinSource) {
+    // Branch A: Données existantes trouvées
+    // Peupler directement companyInfo avec les données du lead
+    companyInfo.value = {
+      description: props.lead?.description,
+      nb_locaux: props.lead?.nbLocaux || props.lead?.nb_locaux,
+      date_creation_entreprise: props.lead?.dateCreationFormatted || props.lead?.dateCreationEntreprise || props.lead?.date_creation_entreprise,
+      taille: props.lead?.tailleEntreprise || props.lead?.taille_entrep,
+      ca: props.lead?.ca,
+      website: props.lead?.website_url,
+      phone: props.lead?.telephone
+    }
+  }
+
   let simProgress = 0
   const interval = setInterval(() => {
     if (currentStep.value === 1 && simProgress < 60) {
@@ -518,19 +536,34 @@ const startAnalysisFlow = () => {
 
   setTimeout(async () => {
     try {
-      const url = await fetchLinkedInUrl(props.companyName)
+      let url = props.lead?.linkedin_url
+      
+      // If we don't have a valid url, fetch it via Serper API
+      if (!url) {
+        url = await fetchLinkedInUrl(props.companyName)
+      }
+      
       clearInterval(interval)
       
       if (url) {
         foundUrl.value = url
+        // Store the result as linkedin_url on the entreprise object via PATCH implicitly or just keep it
+        // Note: The diagram says "Store the result as linkedin_url on the entreprise object."
+        // We will do a background PATCH to save it
+        if (props.companyId && url !== props.lead?.linkedin_url) {
+           const baseUrl = import.meta.env.VITE_FASTAPI_URL || 'http://localhost:8001'
+           axios.patch(`${baseUrl}/entreprises/${props.companyId}`, { linkedin_url: url }).catch(console.error)
+        }
+
         progressValue.value = 75
         currentStep.value = 2
-        setTimeout(() => { startFetchingData() }, 1500)
+        setTimeout(() => { startFetchingData(hasLinkedinSource) }, 1500)
       } else {
         foundUrl.value = null
         currentStep.value = 2
       }
     } catch (e) {
+      clearInterval(interval)
       currentStep.value = 2
     }
   }, 500)
@@ -552,14 +585,17 @@ const skipAnalysis = () => {
   emit('skip')
 }
 
-const startFetchingData = () => {
+const startFetchingData = (preComputedHasLinkedinSource?: boolean) => {
   currentStep.value = 3
   progressValue.value = 75
   postsError.value = null
   infoError.value = null
-  companyInfo.value = null
   finalPosts.value = []
   
+  // Re-evaluate if not passed
+  const sources = props.lead?.sources || {}
+  const hasLinkedinSource = preComputedHasLinkedinSource !== undefined ? preComputedHasLinkedinSource : Object.values(sources).includes('linkedin')
+
   let simProgress = 75
   const interval = setInterval(() => {
     if (currentStep.value === 3 && simProgress < 95) {
@@ -572,15 +608,42 @@ const startFetchingData = () => {
 
   setTimeout(async () => {
     if (foundUrl.value) {
+      // Posts API is ALWAYS executed
       const pPosts = fetchLinkedInPosts(foundUrl.value).catch(err => {
         postsError.value = "Impossible de récupérer les publications."
         return []
       })
       
-      const pInfo = fetchLinkedInInfo(foundUrl.value).catch(err => {
-        infoError.value = "Impossible de récupérer les informations de l'entreprise."
-        return null
-      })
+      // Enrichment API is ONLY executed if no linkedin data in sources
+      let pInfo: Promise<any>;
+      if (hasLinkedinSource && companyInfo.value) {
+        // We already have companyInfo populated directly from props.lead
+        pInfo = Promise.resolve(companyInfo.value)
+      } else {
+        pInfo = fetchLinkedInInfo(foundUrl.value).then(async (info) => {
+          // "After a successful enrichment API call, update the sources field by setting each populated field to 'linkedin'"
+          if (info && props.companyId) {
+             const baseUrl = import.meta.env.VITE_FASTAPI_URL || 'http://localhost:8001'
+             const patchPayload: any = {}
+             if (info.description) patchPayload.description = info.description
+             if (info.nb_locaux) patchPayload.nb_locaux = info.nb_locaux
+             if (info.date_creation_entreprise) patchPayload.date_creation_entreprise = info.date_creation_entreprise
+             if (info.taille) patchPayload.taille_entreprise = info.taille
+             if (info.ca) patchPayload.ca_affiche = info.ca
+             // Note: the backend route maps fields to columns and updates sources automatically if they change.
+             // (See update_entreprise in entreprise.py: `sources_actuelles[champ] = "linkedin"`)
+             try {
+                await axios.patch(`${baseUrl}/entreprises/${props.companyId}`, patchPayload)
+             } catch (e) {
+                console.error("Failed to patch sources after enrichment", e)
+             }
+          }
+          return info
+        }).catch(err => {
+          infoError.value = "Impossible de récupérer les informations de l'entreprise."
+          return null
+        })
+      }
 
       const [postsRes, infoRes] = await Promise.all([pPosts, pInfo])
       finalPosts.value = postsRes

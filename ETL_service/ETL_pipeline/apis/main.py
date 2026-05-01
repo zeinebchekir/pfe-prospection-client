@@ -3,7 +3,7 @@ sys.path.insert(0, "/app")
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from apis.routers import sync, entreprise 
+from apis.routers import sync, entreprise ,logs
 from apis.routers.monitoring import router as monitoring_router
 from db.database import create_tables
 from prometheus_fastapi_instrumentator import Instrumentator
@@ -35,7 +35,7 @@ app.include_router(sync.router,        prefix="/sync",        tags=["Sync"])
 app.include_router(entreprise.router, prefix="/entreprises", tags=["Entreprises"])
 app.include_router(monitoring_router)
 app.include_router(rapport_router)
-
+app.include_router(logs.router)
 
 etl_task_cpu    = Gauge('etl_task_cpu_percent',    'CPU usage per task',    ['dag_id','task_id'])
 etl_task_ram    = Gauge('etl_task_ram_percent',    'RAM usage per task',    ['dag_id','task_id'])

@@ -133,6 +133,10 @@ def get_global_information(resultats):
                 "lienOffre":"BOAMP" ,
                 "info_complementaire":"BOAMP" ,
                 "dateMAJ":"BOAMP" if datemiseajour else None,
+                "linkedin_url":None,
+                "website_url":None,
+                "description":None,
+                "dirigeants":None,
             },
             
                 "num_tel":ext_num_tel,

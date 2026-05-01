@@ -339,6 +339,7 @@ class EntrepriseUpdate(BaseModel):
 @router.patch("/{identifiant}", summary="Mettre à jour un Lead (partiel)")
 def update_entreprise(identifiant: str, payload: EntrepriseUpdate, db: Session = Depends(get_db)):
     """Update lead editable fields from Informations + Contact only."""
+    updated_fields = []
     obj = db.query(Entreprise).filter_by(identifiant=identifiant).first()
     if not obj:
         raise HTTPException(status_code=404, detail="Entreprise introuvable")
@@ -390,6 +391,7 @@ def update_entreprise(identifiant: str, payload: EntrepriseUpdate, db: Session =
         if ui_field in update_data:
             setattr(obj, db_col, update_data[ui_field])
             mutated = True
+            updated_fields.append(db_col)
             
     # Handle ca_affiche mapping to float "ca"
     if "ca_affiche" in update_data:
@@ -406,6 +408,16 @@ def update_entreprise(identifiant: str, payload: EntrepriseUpdate, db: Session =
         mutated = True
 
     if mutated:
+        # ✅ Met à jour sources — chaque champ modifié → "linkedin"
+        sources_actuelles = obj.sources or {}
+        for champ in updated_fields:
+            sources_actuelles[champ] = "linkedin"
+        obj.sources = sources_actuelles
+
+        # SQLAlchemy ne détecte pas toujours les mutations JSONB
+        from sqlalchemy.orm.attributes import flag_modified
+        flag_modified(obj, "sources")
+
         obj.updated_at = datetime.now(timezone.utc)
         db.commit()
         db.refresh(obj)

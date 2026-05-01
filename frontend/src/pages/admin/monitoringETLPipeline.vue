@@ -15,10 +15,16 @@
         </div>
 
         <div class="flex items-center gap-3">
-          <Button @click="router.push('/admin/reports')" variant="outline" size="sm" class="hidden sm:flex items-center gap-2 border-border/60 text-tacir-darkblue bg-tacir-lightgray/20 hover:bg-tacir-lightgray/50">
+          <!-- <Button @click="router.push('/admin/reports')" variant="outline" size="sm" class="hidden sm:flex items-center gap-2 border-border/60 text-tacir-darkblue bg-tacir-lightgray/20 hover:bg-tacir-lightgray/50">
             <Database class="w-3.5 h-3.5 text-tacir-darkgray" />
             <span class="text-xs font-semibold">Reports List</span>
+          </Button> -->
+
+          <Button @click="router.push('/admin/etllogs')" variant="outline" size="sm" class="hidden sm:flex items-center gap-2 border-border/60 text-tacir-darkblue bg-tacir-lightgray/20 hover:bg-tacir-lightgray/50">
+            <FileText class="w-3.5 h-3.5 text-tacir-darkgray" />
+            <span class="text-xs font-semibold">Logs ETL</span>
           </Button>
+
           <div class="hidden sm:flex items-center gap-2 bg-tacir-lightgray/50 border border-border/60 rounded-lg px-3 py-1.5">
             <Clock class="w-3.5 h-3.5 text-tacir-darkgray" />
             <span class="font-mono text-xs font-bold text-tacir-darkblue tabular-nums">{{ liveClock }}</span>
@@ -253,15 +259,15 @@
             </Card>
 
             <!-- ── PHASE CARDS ── -->
-            <Transition
+            <!-- <Transition
               enter-active-class="transition-all duration-500 ease-in-out origin-top"
               enter-from-class="grid-rows-[0fr] opacity-0"
               enter-to-class="grid-rows-[1fr] opacity-100"
               leave-active-class="transition-all duration-300 ease-in-out origin-top"
               leave-from-class="grid-rows-[1fr] opacity-100"
               leave-to-class="grid-rows-[0fr] opacity-0"
-            >
-              <div v-show="expandedPipelines.has(pid)" class="grid">
+            > -->
+              <!-- <div v-show="expandedPipelines.has(pid)" class="grid">
                 <div class="space-y-0 min-h-0">
                   <template v-for="(phase, idx) in pipelines[pid].phases" :key="phase.name">
 
@@ -271,8 +277,8 @@
                 >
                   <CardContent class="p-4">
 
-                    <!-- Phase header -->
-                    <div class="flex items-start gap-2.5 mb-3">
+                    Phase header -->
+                    <!-- <div class="flex items-start gap-2.5 mb-3">
                       <div
                         class="w-7 h-7 rounded-full flex items-center justify-center text-[11px] font-black flex-shrink-0 mt-0.5"
                         :class="phaseCircleClass(phase.st)"
@@ -287,10 +293,10 @@
                         </div>
                         <p class="text-[10px] text-tacir-darkgray mt-0.5 leading-tight">{{ phase.sub }}</p>
                       </div>
-                    </div>
+                    </div> -->
 
                     <!-- Metadata row -->
-                    <div class="grid grid-cols-4 gap-1.5 mb-3">
+                    <!-- <div class="grid grid-cols-4 gap-1.5 mb-3">
                       <div class="bg-tacir-lightgray/40 rounded-lg p-2 border border-border/30">
                         <p class="text-[8px] uppercase tracking-wider text-tacir-darkgray font-semibold mb-0.5">Durée</p>
                         <p class="font-mono text-[10px] font-bold text-tacir-darkblue">{{ phase.st === 'idle' ? '—' : phase.dur }}</p>
@@ -303,10 +309,10 @@
                         <p class="text-[8px] uppercase tracking-wider text-tacir-darkgray font-semibold mb-0.5">Sorties</p>
                         <p class="font-mono text-[10px] font-bold text-tacir-darkblue truncate">{{ phase.st === 'idle' ? '—' : phase.out }}</p>
                       </div>
-                    </div>
+                    </div> -->
 
                     <!-- Resource bars -->
-                    <div class="grid grid-cols-3 gap-2 mb-3">
+                    <!-- <div class="grid grid-cols-3 gap-2 mb-3">
                       <div v-for="(res, key) in { CPU: phase.cpu, RAM: phase.ram, 'I/O': phase.disk }" :key="key">
                         <div class="flex justify-between items-center mb-0.5">
                           <span class="text-[9px] font-semibold text-tacir-darkgray">{{ key }}</span>
@@ -322,10 +328,10 @@
                           ></div>
                         </div>
                       </div>
-                    </div>
+                    </div> -->
 
                     <!-- Taux de complétude (load phases only) -->
-                    <div v-if="isLoadPhase(phase.name) && phase.st === 'ok'" class="mb-3">
+                    <!-- <div v-if="isLoadPhase(phase.name) && phase.st === 'ok'" class="mb-3">
                       <div class="flex justify-between items-center mb-0.5">
                         <span class="text-[9px] uppercase tracking-wider font-semibold text-tacir-darkgray">Taux de complétude</span>
                         <span class="text-[10px] font-black text-tacir-lightblue">{{ completionRate(phase) }}%</span>
@@ -333,19 +339,19 @@
                       <div class="w-full h-1.5 bg-tacir-lightgray rounded-full overflow-hidden">
                         <div class="h-full rounded-full bg-tacir-lightblue transition-all duration-700" :style="{ width: completionRate(phase) + '%' }"></div>
                       </div>
-                    </div>
+                    </div> -->
 
                     <!-- Error box -->
-                    <div v-if="phase.err && phase.st === 'err'" class="bg-red-50 border border-red-200 rounded-xl p-3 font-mono text-[10px] text-red-800 mb-3">
+                    <!-- <div v-if="phase.err && phase.st === 'err'" class="bg-red-50 border border-red-200 rounded-xl p-3 font-mono text-[10px] text-red-800 mb-3">
                       <div class="flex items-center gap-1.5 mb-1.5 font-sans">
                         <AlertTriangle class="w-3 h-3 text-red-500" />
                         <span class="text-[9px] uppercase tracking-wider font-black text-red-600">Erreur d'exécution</span>
                       </div>
                       <pre class="whitespace-pre-wrap break-all text-[9px] leading-relaxed">{{ phase.err }}</pre>
-                    </div>
+                    </div> -->
 
                     <!-- Log toggle -->
-                    <div class="h-px bg-border mb-2" />
+                    <!-- <div class="h-px bg-border mb-2" />
                     <button
                       @click="toggleLog(pid, phase.name)"
                       class="flex items-center gap-1.5 text-[10px] font-bold text-tacir-darkgray hover:text-tacir-blue transition-colors rounded-lg hover:bg-tacir-lightgray px-2 py-1 -mx-2 w-full group"
@@ -356,10 +362,10 @@
                         class="w-3 h-3 ml-auto transition-transform duration-200"
                         :class="openLogs.has(pid + ':' + phase.name) ? 'rotate-180' : ''"
                       />
-                    </button>
+                    </button> -->
 
                     <!-- Log terminal -->
-                    <div
+                    <!-- <div
                       v-if="openLogs.has(pid + ':' + phase.name)"
                       class="mt-2 bg-slate-900 rounded-lg p-2.5 font-mono overflow-y-auto max-h-48"
                     >
@@ -372,20 +378,20 @@
                         <span :class="logLevelClass(log.lvl)" class="flex-shrink-0 uppercase font-black w-6 text-[8px]">{{ log.lvl }}</span>
                         <span class="text-slate-300 break-all text-[9px]">{{ log.text }}</span>
                       </div>
-                    </div>
+                    </div> -->
 
-                  </CardContent>
-                </Card>
+                  <!-- </CardContent> -->
+                <!-- </Card> --> 
 
                 <!-- Connector -->
-                <div v-if="idx < pipelines[pid].phases.length - 1" class="flex justify-center py-0.5">
+                <!-- <div v-if="idx < pipelines[pid].phases.length - 1" class="flex justify-center py-0.5">
                   <ChevronDown class="w-3.5 h-3.5 text-tacir-darkgray/30" />
                 </div>
 
                   </template>
                 </div>
               </div>
-            </Transition>
+            </Transition> -->
 
           </div>
         </div>
