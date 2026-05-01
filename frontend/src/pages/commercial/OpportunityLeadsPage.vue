@@ -1,4 +1,5 @@
 <template>
+  <div>
   <div class="flex min-h-screen bg-tacir-lightgray/30">
     <TheSidebar />
 
@@ -295,6 +296,7 @@
     :lead="deletingLead"
     @confirm="handleDeleteLead"
   />
+  </div>
 </template>
 
 <script setup>

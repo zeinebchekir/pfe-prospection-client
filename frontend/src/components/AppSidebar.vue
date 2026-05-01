@@ -182,7 +182,7 @@ import {
 import {
   Zap, LayoutDashboard, Users, Target, BarChart3, Settings,
   LogOut, Menu, ChevronUp, User, ShieldCheck, RefreshCw,
-  CheckCircle2, FileText, Building2, Sparkles,
+  CheckCircle2, FileText, Building2, Sparkles, PieChart,
 } from 'lucide-vue-next'
 
 const router = useRouter()
