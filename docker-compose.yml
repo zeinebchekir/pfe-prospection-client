@@ -1,7 +1,89 @@
+# ═══════════════════════════════════════════════════════════════════════════════
+#  QUALIFIXPROJECT — Unified Docker Compose
+# ═══════════════════════════════════════════════════════════════════════════════
+#
+#  All services in ONE file. Single .env at project root controls everything.
+#
+#  Usage:
+#    docker-compose up -d                  # start all services
+#    docker-compose --profile flower up -d # start all + Celery Flower
+#    docker-compose --profile debug up -d  # start all + Airflow CLI
+#    docker-compose logs -f web            # tail Django logs
+#    docker-compose down -v                # stop + remove volumes
+#
+# ═══════════════════════════════════════════════════════════════════════════════
+
+# ─────────────────────────────────────────────────────────────────────────────
+#  YAML Anchors — Airflow shared config (DRY)
+# ─────────────────────────────────────────────────────────────────────────────
+x-airflow-common: &airflow-common
+  build:
+    context: ./ETL_service
+    dockerfile: Dockerfile.airflow
+  env_file:
+    - .env
+  environment: &airflow-common-env
+    AIRFLOW__CORE__EXECUTOR: CeleryExecutor
+    AIRFLOW__CORE__AUTH_MANAGER: airflow.providers.fab.auth_manager.fab_auth_manager.FabAuthManager
+    AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: ${AIRFLOW__DATABASE__SQL_ALCHEMY_CONN}
+    AIRFLOW__CELERY__RESULT_BACKEND: ${AIRFLOW__CELERY__RESULT_BACKEND}
+    AIRFLOW__CELERY__BROKER_URL: ${AIRFLOW__CELERY__BROKER_URL}
+    AIRFLOW__CORE__FERNET_KEY: ${AIRFLOW__CORE__FERNET_KEY}
+    AIRFLOW__CORE__DAGS_ARE_PAUSED_AT_CREATION: "true"
+    AIRFLOW__CORE__LOAD_EXAMPLES: "false"
+    AIRFLOW__CORE__EXECUTION_API_SERVER_URL: "http://airflow-apiserver:8080/execution/"
+    AIRFLOW__API_AUTH__JWT_SECRET: ${AIRFLOW__API_AUTH__JWT_SECRET}
+    AIRFLOW__API_AUTH__JWT_ISSUER: ${AIRFLOW__API_AUTH__JWT_ISSUER}
+    AIRFLOW__API__AUTH_BACKENDS: "airflow.providers.fab.auth_manager.api.auth.backend.basic_auth,airflow.api.auth.backend.session"
+    # Override Django DB vars that leak from root .env — Airflow must use its own postgres
+    DB_HOST: postgres-airflow
+    DB_PORT: "5432"
+    # Python path for ETL pipeline imports inside Airflow
+    PYTHONPATH: /opt/airflow/ETL_pipeline
+    # Logging
+    AIRFLOW__LOGGING__LOGGING_LEVEL: "INFO"
+    AIRFLOW__LOGGING__WORKER_LOG_SERVER_PORT: "8793"
+    AIRFLOW__CELERY__WORKER_LOG_SERVER_PORT: "8793"
+    AIRFLOW__SCHEDULER__ENABLE_HEALTH_CHECK: "true"
+    AIRFLOW_CONFIG: "/opt/airflow/config/airflow.cfg"
+    # Monitoring — StatsD
+    AIRFLOW__METRICS__STATSD_ON: "true"
+    AIRFLOW__METRICS__STATSD_HOST: "statsd-exporter"
+    AIRFLOW__METRICS__STATSD_PORT: "9125"
+    AIRFLOW__METRICS__STATSD_PREFIX: "airflow"
+    # External API keys (passed from root .env)
+    INSEE_TOKEN: ${INSEE_TOKEN}
+    _PIP_ADDITIONAL_REQUIREMENTS: ${_PIP_ADDITIONAL_REQUIREMENTS:-}
+  volumes:
+    - ${AIRFLOW_PROJ_DIR:-.}/dags:/opt/airflow/dags
+    - ${AIRFLOW_PROJ_DIR:-.}/logs:/opt/airflow/logs
+    - ${AIRFLOW_PROJ_DIR:-.}/config:/opt/airflow/config
+    - ${AIRFLOW_PROJ_DIR:-.}/plugins:/opt/airflow/plugins
+    - ./ETL_service/ETL_pipeline:/opt/airflow/ETL_pipeline
+    - shared_exports:/opt/airflow/exports
+    - airflow_shared_tmp:/opt/airflow/shared_tmp
+  user: "${AIRFLOW_UID:-50000}:0"
+  depends_on: &airflow-common-depends-on
+    redis:
+      condition: service_healthy
+    postgres-airflow:
+      condition: service_healthy
+  networks:
+    - etl_net
+
+# ═══════════════════════════════════════════════════════════════════════════════
+#  SERVICES
+# ═══════════════════════════════════════════════════════════════════════════════
 services:
+
+  # ─────────────────────────────────────────────────────────────────────────────
+  #  CORE INFRASTRUCTURE
+  # ─────────────────────────────────────────────────────────────────────────────
+
+  # Django Postgres — Application database
   db:
     image: postgres:15-alpine
-    container_name: crmpfe_db
+    container_name: qualifixproject_db
     restart: unless-stopped
     environment:
       POSTGRES_DB: ${DB_NAME}
@@ -10,34 +92,79 @@ services:
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${DB_USER} -d ${DB_NAME}"]
+      test: [ "CMD-SHELL", "pg_isready -U ${DB_USER} -d ${DB_NAME}" ]
       interval: 10s
       timeout: 5s
       retries: 5
     networks:
-      - crmpfe_network
-               
+      - backend_net
 
+  # Airflow Postgres — ETL metadata database
+  postgres-airflow:
+    image: postgres:16
+    container_name: qualifixproject_postgres_airflow
+    restart: always
+    environment:
+      POSTGRES_USER: ${AIRFLOW_DB_USER}
+      POSTGRES_PASSWORD: ${AIRFLOW_DB_PASSWORD}
+      POSTGRES_DB: ${AIRFLOW_DB_NAME}
+    volumes:
+      - postgres_airflow_data:/var/lib/postgresql/data
+    healthcheck:
+      test: [ "CMD", "pg_isready", "-U", "${AIRFLOW_DB_USER}" ]
+      interval: 10s
+      retries: 5
+      start_period: 5s
+    networks:
+      - etl_net
+
+  # PgAdmin — Single instance to manage both databases
   pgadmin:
-    image: dpage/pgadmin4
-    container_name: crmpfe_pgadmin
+    image: dpage/pgadmin4:latest
+    container_name: qualifixproject_pgadmin
     restart: unless-stopped
     environment:
-      PGADMIN_DEFAULT_EMAIL: admin@admin.com
-      PGADMIN_DEFAULT_PASSWORD: admin
+      PGADMIN_DEFAULT_EMAIL: ${PGADMIN_DEFAULT_EMAIL}
+      PGADMIN_DEFAULT_PASSWORD: ${PGADMIN_DEFAULT_PASSWORD}
+      PGADMIN_CONFIG_SERVER_MODE: "False"
     ports:
-      - "5051:80"
+      - "5050:80"
+    volumes:
+      - pgadmin_data:/var/lib/pgadmin
     depends_on:
       db:
         condition: service_healthy
+      postgres-airflow:
+        condition: service_healthy
     networks:
-      - crmpfe_network
+      - backend_net
+      - etl_net
+
+  # Redis — Celery broker for Airflow
+  redis:
+    image: redis:7.2-bookworm
+    container_name: qualifixproject_redis
+    restart: always
+    expose:
+      - 6379
+    healthcheck:
+      test: [ "CMD", "redis-cli", "ping" ]
+      interval: 10s
+      timeout: 30s
+      retries: 50
+      start_period: 30s
+    networks:
+      - etl_net
+
+  # ─────────────────────────────────────────────────────────────────────────────
+  #  BACKEND — Django
+  # ─────────────────────────────────────────────────────────────────────────────
 
   web:
     build:
       context: ./backend
       dockerfile: Dockerfile
-    container_name: crmpfe_web
+    container_name: qualifixproject_web
     restart: unless-stopped
     env_file: .env
     environment:
@@ -47,59 +174,462 @@ services:
       - static_volume:/app/staticfiles
     ports:
       - "8000:8000"
+    command: [ "sh", "-c", "sed -i 's/\\r//' /app/entrypoint.sh && chmod +x /app/entrypoint.sh && /app/entrypoint.sh" ]
+    entrypoint: [ "" ]
     depends_on:
       db:
         condition: service_healthy
     networks:
-      - crmpfe_network
+      - backend_net
+
+  # ─────────────────────────────────────────────────────────────────────────────
+  #  FRONTEND — Vue.js
+  # ─────────────────────────────────────────────────────────────────────────────
 
   frontend:
     image: node:20-alpine
-    container_name: crmpfe_frontend
+    container_name: qualifixproject_frontend
     working_dir: /app
     restart: unless-stopped
     environment:
       CHOKIDAR_USEPOLLING: "true"
-      VITE_PROXY_TARGET: "http://web:8000"
+      VITE_PROXY_TARGET: ${VITE_PROXY_TARGET}
+      VITE_ETL_API_URL: ${VITE_ETL_API_URL}
     volumes:
       - ./frontend:/app
-      - /app/node_modules
+      - frontend_node_modules:/app/node_modules
     ports:
       - "5174:5173"
     command: sh -c "npm install && npm run dev -- --host 0.0.0.0 --port 5173"
     depends_on:
       - web
     networks:
-      - crmpfe_network
+      - backend_net
+
+  # ─────────────────────────────────────────────────────────────────────────────
+  #  ETL — Airflow Cluster (CeleryExecutor)
+  # ─────────────────────────────────────────────────────────────────────────────
+
+  airflow-apiserver:
+    <<: *airflow-common
+    container_name: qualifixproject_airflow_apiserver
+    command: api-server
+    ports:
+      - "8080:8080"
+    healthcheck:
+      test: [ "CMD", "curl", "--fail", "http://localhost:8080/api/v2/monitor/health" ]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+    restart: always
+    depends_on:
+      <<: *airflow-common-depends-on
+      airflow-init:
+        condition: service_completed_successfully
+
+  airflow-scheduler:
+    <<: *airflow-common
+    container_name: qualifixproject_airflow_scheduler
+    command: scheduler
+    healthcheck:
+      test: [ "CMD", "curl", "--fail", "http://localhost:8974/health" ]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+    restart: always
+    depends_on:
+      <<: *airflow-common-depends-on
+      airflow-init:
+        condition: service_completed_successfully
+
+  airflow-dag-processor:
+    <<: *airflow-common
+    container_name: qualifixproject_airflow_dag_processor
+    command: dag-processor
+    healthcheck:
+      test: [ "CMD-SHELL", 'airflow jobs check --job-type DagProcessorJob --hostname "$${HOSTNAME}"' ]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+    restart: always
+    depends_on:
+      <<: *airflow-common-depends-on
+      airflow-init:
+        condition: service_completed_successfully
+
+  airflow-worker:
+    <<: *airflow-common
+    container_name: qualifixproject_airflow_worker
+    command: celery worker
+    ports:
+      - "8793:8793"
+    healthcheck:
+      test: [ "CMD-SHELL", 'celery --app airflow.providers.celery.executors.celery_executor.app inspect ping -d "celery@$${HOSTNAME}" || celery --app airflow.executors.celery_executor.app inspect ping -d "celery@$${HOSTNAME}"' ]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+    environment:
+      <<: *airflow-common-env
+      DUMB_INIT_SETSID: "0"
+    restart: always
+    depends_on:
+      <<: *airflow-common-depends-on
+      airflow-apiserver:
+        condition: service_healthy
+      airflow-init:
+        condition: service_completed_successfully
+
+  airflow-triggerer:
+    <<: *airflow-common
+    container_name: qualifixproject_airflow_triggerer
+    command: triggerer
+    healthcheck:
+      test: [ "CMD-SHELL", 'airflow jobs check --job-type TriggererJob --hostname "$${HOSTNAME}"' ]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+    restart: always
+    depends_on:
+      <<: *airflow-common-depends-on
+      airflow-init:
+        condition: service_completed_successfully
+
+  # Airflow initialization — runs once, creates DB schema and admin users
+  airflow-init:
+    <<: *airflow-common
+    container_name: qualifixproject_airflow_init
+    entrypoint: /bin/bash
+    command:
+      - -c
+      - |
+        if [[ -z "$${AIRFLOW_UID}" ]]; then
+          echo
+          echo -e "\033[1;33mWARNING: AIRFLOW_UID not set!\e[0m"
+          echo "Setting to current user ID..."
+          export AIRFLOW_UID=$$(id -u)
+        fi
+        one_meg=1048576
+        mem_available=$$(($$(getconf _PHYS_PAGES) * $$(getconf PAGE_SIZE) / one_meg))
+        cpus_available=$$(grep -cE 'cpu[0-9]+' /proc/stat)
+        disk_available=$$(df / | tail -1 | awk '{print $$4}')
+        warning_resources="false"
+        if (( mem_available < 4000 )) ; then
+          echo -e "\033[1;33mWARNING: Not enough memory (need 4GB, have $$(numfmt --to iec $$((mem_available * one_meg))))\e[0m"
+          warning_resources="true"
+        fi
+        if (( cpus_available < 2 )); then
+          echo -e "\033[1;33mWARNING: Not enough CPUs (need 2, have $${cpus_available})\e[0m"
+          warning_resources="true"
+        fi
+        echo
+        echo "Creating Airflow directories..."
+        mkdir -v -p /opt/airflow/{logs,dags,plugins,config}
+        echo
+        echo "Airflow version:"
+        /entrypoint airflow version
+        echo
+        echo "Running DB migration..."
+        /entrypoint airflow db migrate
+        echo "DB migration done."
+        echo
+        ls -la /opt/airflow/{logs,dags,plugins,config}
+        /entrypoint airflow config list >/dev/null
+        echo
+        echo "Setting ownership to $${AIRFLOW_UID}:0..."
+        chown -R "$${AIRFLOW_UID}:0" /opt/airflow/
+        chown -v -R "$${AIRFLOW_UID}:0" /opt/airflow/{logs,dags,plugins,config}
+        echo
+        echo "Creating Airflow admin users..."
+        /entrypoint airflow users create \
+          --username $${AIRFLOW_ADMIN_USER:-airflow} \
+          --password $${AIRFLOW_ADMIN_PASSWORD:-airflow} \
+          --firstname Airflow \
+          --lastname Admin \
+          --role Admin \
+          --email airflow@example.com || echo "Admin user already exists, skipping."
+        echo
+        echo "Initializing ETL tables..."
+        python -c "import sys; sys.path.insert(0, '/opt/airflow/ETL_pipeline'); from db.database import create_tables; create_tables(); print('[INIT] ETL tables OK')" || echo "[WARN] ETL table creation skipped."
+        echo
+        echo "Setting up shared_tmp..."
+        mkdir -p /opt/airflow/shared_tmp
+        chown -R "$${AIRFLOW_UID:-50000}:0" /opt/airflow/shared_tmp
+        chmod 777 /opt/airflow/shared_tmp
+        echo "[INIT] shared_tmp permissions OK"
+        echo "Done."
+    environment:
+      <<: *airflow-common-env
+      _AIRFLOW_DB_MIGRATE: "true"
+      _AIRFLOW_WWW_USER_CREATE: "true"
+      _AIRFLOW_WWW_USER_USERNAME: ${AIRFLOW_ADMIN_USER:-airflow}
+      _AIRFLOW_WWW_USER_PASSWORD: ${AIRFLOW_ADMIN_PASSWORD:-airflow}
+      _PIP_ADDITIONAL_REQUIREMENTS: "requests sqlalchemy psycopg2-binary pydantic-settings openpyxl pandas scikit-learn"
+    user: "0:0"
+
+  # Airflow CLI — only starts with: docker-compose --profile debug up
+  airflow-cli:
+    <<: *airflow-common
+    container_name: qualifixproject_airflow_cli
+    profiles:
+      - debug
+    environment:
+      <<: *airflow-common-env
+      CONNECTION_CHECK_MAX_COUNT: "0"
+    command:
+      - bash
+      - -c
+      - airflow
+    depends_on:
+      <<: *airflow-common-depends-on
+
+  # Celery Flower — only starts with: docker-compose --profile flower up
+  flower:
+    <<: *airflow-common
+    container_name: qualifixproject_flower
+    command: celery flower
+    profiles:
+      - flower
+    ports:
+      - "5555:5555"
+    healthcheck:
+      test: [ "CMD", "curl", "--fail", "http://localhost:5555/" ]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+    restart: always
+    depends_on:
+      <<: *airflow-common-depends-on
+      airflow-init:
+        condition: service_completed_successfully
+
+  # ─────────────────────────────────────────────────────────────────────────────
+  #  ETL — Bootstrap (auto-trigger initial_load when entreprise table is empty)
+  # ─────────────────────────────────────────────────────────────────────────────
+  #
+  #  This service runs ONCE per `docker compose up`.
+  #  It checks if `entreprise` has rows:
+  #    → rows exist  : exits silently (project already initialized)
+  #    → table empty : triggers Airflow DAG `initial_load` via CLI
+  #
+  #  Set BOOTSTRAP_WAIT_FOR_INITIAL_LOAD=true to block until ETL finishes.
+  # ─────────────────────────────────────────────────────────────────────────────
+
+  etl-bootstrap:
+    <<: *airflow-common
+    container_name: qualifixproject_etl_bootstrap
+    command:
+      - bash
+      - -c
+      - |
+        echo "[BOOTSTRAP] Starting ETL bootstrap check..."
+        python /opt/airflow/bootstrap/bootstrap_initial_load.py
+    environment:
+      <<: *airflow-common-env
+      DATABASE_URL: ${ETL_DATABASE_URL:-postgresql://airflow:airflow@postgres-airflow/airflow}
+      BOOTSTRAP_WAIT_FOR_INITIAL_LOAD:          ${BOOTSTRAP_WAIT_FOR_INITIAL_LOAD:-true}
+      BOOTSTRAP_INITIAL_LOAD_TIMEOUT_SECONDS:   ${BOOTSTRAP_INITIAL_LOAD_TIMEOUT_SECONDS:-3600}
+      BOOTSTRAP_STALE_QUEUED_SECONDS:           ${BOOTSTRAP_STALE_QUEUED_SECONDS:-300}
+      BOOTSTRAP_RESET_STALE_DAGRUNS:            ${BOOTSTRAP_RESET_STALE_DAGRUNS:-true}
+      BOOTSTRAP_MAX_TRIGGER_ATTEMPTS:           ${BOOTSTRAP_MAX_TRIGGER_ATTEMPTS:-2}
+    volumes:
+      - ${AIRFLOW_PROJ_DIR:-.}/dags:/opt/airflow/dags
+      - ${AIRFLOW_PROJ_DIR:-.}/logs:/opt/airflow/logs
+      - ${AIRFLOW_PROJ_DIR:-.}/config:/opt/airflow/config
+      - ${AIRFLOW_PROJ_DIR:-.}/plugins:/opt/airflow/plugins
+      - ./ETL_service/ETL_pipeline:/opt/airflow/ETL_pipeline
+      - ./ETL_service/scripts:/opt/airflow/bootstrap
+      - shared_exports:/opt/airflow/exports
+      - airflow_shared_tmp:/opt/airflow/shared_tmp
+    restart: "no"
+    depends_on:
+      postgres-airflow:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      airflow-init:
+        condition: service_completed_successfully
+      airflow-apiserver:
+        condition: service_healthy
+      airflow-scheduler:
+        condition: service_healthy
+      airflow-worker:
+        condition: service_healthy
+    networks:
+      - etl_net
+
+  # ─────────────────────────────────────────────────────────────────────────────
+  #  ETL — FastAPI (API gateway for ETL pipeline)
+  # ─────────────────────────────────────────────────────────────────────────────
+
+  etl-fastapi:
+    build:
+      context: ./ETL_service
+      dockerfile: Dockerfile.api
+    container_name: qualifixproject_etl_fastapi
+    restart: always
+    ports:
+      - "8001:8000"
+    env_file:
+      - .env
+    volumes:
+      - ./ETL_service/ETL_pipeline:/app
+      - shared_exports:/opt/airflow/exports
+      - ./ETL_service/logs:/opt/airflow/logs
+    environment:
+      DATABASE_URL: ${ETL_DATABASE_URL}
+      AIRFLOW_URL: http://airflow-apiserver:8080
+      AIRFLOW_USER: ${AIRFLOW_ADMIN_USER:-airflow}
+      AIRFLOW_PASSWORD: ${AIRFLOW_ADMIN_PASSWORD:-airflow}
+      AIRFLOW__CORE__FERNET_KEY: ${AIRFLOW__CORE__FERNET_KEY}
+      GEMINI_API_KEY: ${GEMINI_API_KEY:-}
+      INSEE_TOKEN: ${INSEE_TOKEN:-}
+    healthcheck:
+      test: [ "CMD", "curl", "--fail", "http://localhost:8000/" ]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 15s
+    depends_on:
+      postgres-airflow:
+        condition: service_healthy
+    networks:
+      - etl_net
+
+  # ─────────────────────────────────────────────────────────────────────────────
+  #  IA-ML — AI/Machine Learning Service
+  # ─────────────────────────────────────────────────────────────────────────────
+
   ia-ml:
     build:
       context: ./IA-ML_service
-      dockerfile: dockerfile
+      dockerfile: Dockerfile
+    container_name: qualifixproject_ia_ml
+    restart: unless-stopped
     extra_hosts:
       - "host.docker.internal:host-gateway"
     ports:
       - "8002:8002"
     volumes:
-      - ./IA-ML_service:/app   
-      - ./IA-ML_service/models:/app/models  # modèle partagé, pas recopié
-           # ← ton code
+      - ./IA-ML_service:/app
+      - ./IA-ML_service/models:/app/models
     env_file: .env
+    environment:
+      ETL_SERVICE_URL: ${ETL_SERVICE_URL:-http://etl-fastapi:8000}
+      OLLAMA_URL: ${OLLAMA_URL:-http://host.docker.internal:11434}
+      OLLAMA_MODEL: ${OLLAMA_MODEL:-gemma3:4b}
+      GROQ_API_KEY: ${GROQ_API_KEY:-}
+      APIFY_TOKEN: ${APIFY_TOKEN:-}
+      SERPER_API_KEY: ${SERPER_API_KEY:-}
+    healthcheck:
+      test: [ "CMD", "curl", "--fail", "http://localhost:8002/health" ]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 15s
     depends_on:
       db:
         condition: service_healthy
-    networks:
-      - crmpfe_network
-      - etl_network 
+      etl-fastapi:
+        condition: service_healthy
     dns:
       - 8.8.8.8
-volumes:
-  postgres_data:
-  static_volume:
-  ollama_data:
+    networks:
+      - backend_net
+      - etl_net
 
+  # ─────────────────────────────────────────────────────────────────────────────
+  #  MONITORING
+  # ─────────────────────────────────────────────────────────────────────────────
+
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: qualifixproject_prometheus
+    restart: always
+    volumes:
+      - ./ETL_service/monitoring/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus_data:/prometheus
+    ports:
+      - "9090:9090"
+    command:
+      - "--config.file=/etc/prometheus/prometheus.yml"
+      - "--storage.tsdb.retention.time=7d"
+    depends_on:
+      - postgres-airflow
+    networks:
+      - etl_net
+
+  statsd-exporter:
+    image: prom/statsd-exporter:latest
+    container_name: qualifixproject_statsd
+    restart: always
+    ports:
+      - "9125:9125/udp"
+      - "9102:9102"
+    volumes:
+      - ./ETL_service/monitoring/statsd_mapping.yml:/etc/statsd_mapping.yml:ro
+    command:
+      - "--statsd.mapping-config=/etc/statsd_mapping.yml"
+    networks:
+      - etl_net
+
+  node-exporter:
+    image: prom/node-exporter:latest
+    container_name: qualifixproject_node_exporter
+    restart: always
+    ports:
+      - "9100:9100"
+    volumes:
+      - /proc:/host/proc:ro
+      - /sys:/host/sys:ro
+      - /:/rootfs:ro
+    command:
+      - "--path.procfs=/host/proc"
+      - "--path.sysfs=/host/sys"
+      - "--collector.filesystem.mount-points-exclude=^/(sys|proc|dev|host|etc)($$|/)"
+    networks:
+      - etl_net
+
+# ═══════════════════════════════════════════════════════════════════════════════
+#  VOLUMES
+# ═══════════════════════════════════════════════════════════════════════════════
+volumes:
+  # Core data
+  postgres_data:
+    name: qualifixproject_postgres_data
+  postgres_airflow_data:
+    name: qualifixproject_postgres_airflow_data
+  pgadmin_data:
+    name: qualifixproject_pgadmin_data
+
+  # Application
+  static_volume:
+    name: qualifixproject_static
+  frontend_node_modules:
+    name: qualifixproject_frontend_node_modules
+
+  # ETL / Airflow
+  airflow_shared_tmp:
+    name: qualifixproject_airflow_shared_tmp
+  shared_exports:
+    name: qualifixproject_shared_exports
+
+  # Monitoring
+  prometheus_data:
+    name: qualifixproject_prometheus_data
+
+# ═══════════════════════════════════════════════════════════════════════════════
+#  NETWORKS
+# ═══════════════════════════════════════════════════════════════════════════════
 networks:
-  crmpfe_network:
+  backend_net:
     driver: bridge
-  etl_network:
-    external: true
-    name: etl_service_default 
+    name: qualifixproject_backend
+  etl_net:
+    driver: bridge
+    name: qualifixproject_etl

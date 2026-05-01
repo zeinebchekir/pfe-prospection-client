@@ -453,6 +453,19 @@ def rapport_final(sources: list, **context):
 # ══════════════════════════════════════════════
 #  DAG 1 — Chargement initial (ETL complet)
 #
+#  ┌─────────────────────────────────────────────────────────────────┐
+#  │  schedule=None  — NEVER runs on a cron.                         │
+#  │                                                                  │
+#  │  Auto-triggered by: etl-bootstrap service on startup            │
+#  │    → Only fires when entreprise table is empty.                 │
+#  │    → Safe on every `docker compose up` restart.                 │
+#  │                                                                  │
+#  │  Manual trigger (if needed):                                    │
+#  │    Airflow UI : http://localhost:8080 → DAG initial_load        │
+#  │    API        : POST /etl/trigger-initial-load                  │
+#  └─────────────────────────────────────────────────────────────────┘
+#
+#  Task graph:
 #  init_db
 #    ├── scrape_boamp → extract_boamp → load_raw_boamp
 #    │                              → clean_boamp → load_clean_boamp ──┐

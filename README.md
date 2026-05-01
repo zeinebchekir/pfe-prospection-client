@@ -348,3 +348,145 @@ docker compose up -d --build
 # lancer l'entrainement du modele depuis Opportunites
 ```
 
+---
+
+## 🗄️ First-Time ETL Setup: `initial_load` DAG
+
+> **This section applies to any developer who clones the repo fresh (or resets Docker volumes).**
+
+### Why this step is needed
+
+After a fresh clone or after running `docker-compose down -v`, the **ETL database is empty**.  
+The `entreprise` table (which feeds the segmentation dashboard, leads pages, and BOAMP enrichment) will have **zero rows**.
+
+The `initial_load` Airflow DAG performs a full ETL pipeline:
+- Scrapes BOAMP (public tenders) and DataGouv (company registry)
+- Extracts, filters, cleans, and enriches the data
+- Loads everything into the `entreprise` table
+
+**This DAG is manual-only** (`schedule=None`) — it will never run automatically.
+
+---
+
+### Step 1 — Start the project
+
+```bash
+# Copy and fill your environment file first
+cp .env.example .env
+# Edit .env and set all required secrets
+
+docker-compose up --build -d
+```
+
+Wait for all services to be healthy:
+
+```bash
+docker-compose ps
+```
+
+### Step 2 — Check if initial load is needed
+
+```bash
+curl http://localhost:8001/etl/status
+```
+
+**If `entreprise` table is empty** (fresh clone):
+
+```json
+{
+  "status": "ok",
+  "database_connected": true,
+  "entreprise_count": 0,
+  "initial_load_required": true,
+  "message": "No company data found. Trigger Airflow DAG initial_load manually."
+}
+```
+
+**If data already exists** (normal restart or resumed project):
+
+```json
+{
+  "status": "ok",
+  "database_connected": true,
+  "entreprise_count": 1244,
+  "initial_load_required": false,
+  "message": "ETL data is already available."
+}
+```
+
+You can also use the CLI helper script (requires Python + DB reachable):
+
+```bash
+python scripts/check_etl_data.py
+```
+
+### Step 3 — Trigger `initial_load` (only if needed)
+
+#### Option A — Airflow UI (recommended)
+
+1. Open **http://localhost:8080**
+2. Login with your Airflow credentials (configured in `.env`)
+3. Find the DAG named `initial_load`
+4. Click the **▶ Trigger** button
+5. Wait for all tasks to succeed — this can take **10–30 minutes** depending on API rate limits
+
+#### Option B — ETL API (programmatic)
+
+```bash
+curl -X POST http://localhost:8001/etl/trigger-initial-load
+```
+
+The endpoint will:
+- Check `entreprise_count` first
+- Only trigger the DAG if the table is empty
+- Return a JSON response with the `dag_run_id` and a link to the Airflow UI
+
+#### Option C — Force trigger (advanced, use with caution)
+
+```bash
+curl -X POST "http://localhost:8001/etl/trigger-initial-load?force=true"
+```
+
+> ⚠️ **Warning**: `force=true` will trigger even when data exists.  
+> This may cause duplicate or overwritten records if the upsert logic is not perfectly idempotent.
+
+### Step 4 — Verify the load completed
+
+```bash
+curl http://localhost:8001/etl/status
+```
+
+You should see `"initial_load_required": false` and a non-zero `entreprise_count`.
+
+### ⛔ Do NOT re-run `initial_load` unnecessarily
+
+Regular data updates are handled automatically by the **delta DAGs**:
+
+| DAG | Schedule | Purpose |
+|-----|----------|---------|
+| `sync_datagouv` | Every 6 hours | Incremental company registry updates |
+| `sync_boamp` | Daily at 06:00 | New BOAMP public tenders |
+
+Only run `initial_load` again if you:
+- Reset Docker volumes (`docker-compose down -v`)
+- Intentionally want a full data reload from scratch
+- Are onboarding to a completely fresh environment
+
+### Quick reference
+
+```bash
+# Check DB state
+curl http://localhost:8001/etl/status
+
+# Trigger initial load (safe — won't run if data exists)
+curl -X POST http://localhost:8001/etl/trigger-initial-load
+
+# Developer CLI check
+python scripts/check_etl_data.py
+
+# Airflow UI
+http://localhost:8080
+
+# ETL API docs
+http://localhost:8001/docs
+```
