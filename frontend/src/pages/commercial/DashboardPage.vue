@@ -1,13 +1,8 @@
 <template>
   <div class="flex min-h-screen bg-tacir-lightgray/30">
-
-    <!-- Sidebar -->
     <TheSidebar />
 
-    <!-- Main content -->
     <div class="flex-1 flex flex-col min-w-0">
-
-      <!-- Sticky header -->
       <header class="h-16 border-b border-border bg-white sticky top-0 z-40 px-6 flex items-center justify-between shadow-sm">
         <div class="flex items-center gap-3">
           <div class="flex items-center gap-2">
@@ -22,18 +17,15 @@
         </div>
 
         <div class="flex items-center gap-3">
-          <!-- Live badge -->
           <span class="hidden sm:inline-flex items-center gap-1.5 bg-emerald-50 text-emerald-700 border border-emerald-200 text-[10px] font-semibold uppercase tracking-widest px-3 py-1 rounded-full">
             <span class="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
             LIVE
           </span>
 
-          <!-- Date -->
           <span class="text-xs text-muted-foreground">
             {{ todayLabel }}
           </span>
 
-          <!-- Refresh button -->
           <button
             @click="reload"
             :disabled="isLoading"
@@ -45,61 +37,54 @@
         </div>
       </header>
 
-      <!-- Page body -->
       <main class="flex-1 p-6 md:p-8 overflow-y-auto">
         <div class="max-w-[1400px] mx-auto space-y-6">
-
-          <!-- ── Filters bar ─────────────────────────────────────── -->
           <div class="flex flex-wrap items-center gap-3">
-            <!-- Segment filter -->
             <div class="flex items-center gap-2">
               <span class="text-xs font-semibold text-foreground">Segment</span>
               <Select v-model="segmentFilter">
-                  <SelectTrigger class="w-40 h-9 text-sm bg-background focus:outline-none focus:ring-1 focus:ring-ring">
-                    <SelectValue placeholder="Tous les segments" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">Tous les segments</SelectItem>
-                    <SelectItem value="Micro">Microentreprise</SelectItem>
-                    <SelectItem value="PME">PME</SelectItem>
-                    <SelectItem value="ETI">ETI</SelectItem>
-                    <SelectItem value="GE">Grande Entreprise</SelectItem>
-                  </SelectContent>
-                </Select>
+                <SelectTrigger class="w-40 h-9 text-sm bg-background focus:outline-none focus:ring-1 focus:ring-ring">
+                  <SelectValue placeholder="Tous les segments" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Tous les segments</SelectItem>
+                  <SelectItem value="Micro">Microentreprise</SelectItem>
+                  <SelectItem value="PME">PME</SelectItem>
+                  <SelectItem value="ETI">ETI</SelectItem>
+                  <SelectItem value="GE">Grande Entreprise</SelectItem>
+                </SelectContent>
+              </Select>
             </div>
 
-            <!-- Source filter -->
             <div class="flex items-center gap-2">
               <span class="text-xs font-semibold text-foreground">Source</span>
               <Select v-model="sourceFilter">
-                  <SelectTrigger class="w-40 h-9 text-sm bg-background focus:outline-none focus:ring-1 focus:ring-ring">
-                    <SelectValue placeholder="Toutes sources" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">Toutes sources</SelectItem>
-                    <SelectItem value="DataGouv">DataGouv</SelectItem>
-                    <SelectItem value="BOAMP">BOAMP</SelectItem>
-                  </SelectContent>
-                </Select>
+                <SelectTrigger class="w-40 h-9 text-sm bg-background focus:outline-none focus:ring-1 focus:ring-ring">
+                  <SelectValue placeholder="Toutes sources" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Toutes sources</SelectItem>
+                  <SelectItem value="DataGouv">DataGouv</SelectItem>
+                  <SelectItem value="BOAMP">BOAMP</SelectItem>
+                </SelectContent>
+              </Select>
             </div>
 
-            <!-- Status filter -->
             <div class="flex items-center gap-2">
               <span class="text-xs font-semibold text-foreground">Statut</span>
               <Select v-model="statusFilter">
-                  <SelectTrigger class="w-40 h-9 text-sm bg-background focus:outline-none focus:ring-1 focus:ring-ring">
-                    <SelectValue placeholder="Tous statuts" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">Tous statuts</SelectItem>
-                    <SelectItem value="Nouveau">Nouveau</SelectItem>
-                    <SelectItem value="Qualifié">Qualifié</SelectItem>
-                    <SelectItem value="Opportunité">Opportunité</SelectItem>
-                  </SelectContent>
-                </Select>
+                <SelectTrigger class="w-40 h-9 text-sm bg-background focus:outline-none focus:ring-1 focus:ring-ring">
+                  <SelectValue placeholder="Tous statuts" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Tous statuts</SelectItem>
+                  <SelectItem value="Nouveau">Nouveau</SelectItem>
+                  <SelectItem value="Qualifié">Qualifié</SelectItem>
+                  <SelectItem value="Opportunité">Opportunité</SelectItem>
+                </SelectContent>
+              </Select>
             </div>
 
-            <!-- Active filter chips -->
             <div v-if="hasActiveFilters" class="flex items-center gap-1.5">
               <span
                 v-if="segmentFilter !== 'all'"
@@ -108,6 +93,7 @@
               >
                 {{ segmentFilter }} <X class="w-2.5 h-2.5" />
               </span>
+
               <span
                 v-if="sourceFilter !== 'all'"
                 class="inline-flex items-center gap-1 text-[10px] font-semibold px-2 py-0.5 rounded-full bg-tacir-blue/10 text-tacir-blue cursor-pointer hover:bg-tacir-blue/20"
@@ -115,6 +101,7 @@
               >
                 {{ sourceFilter }} <X class="w-2.5 h-2.5" />
               </span>
+
               <span
                 v-if="statusFilter !== 'all'"
                 class="inline-flex items-center gap-1 text-[10px] font-semibold px-2 py-0.5 rounded-full bg-tacir-blue/10 text-tacir-blue cursor-pointer hover:bg-tacir-blue/20"
@@ -122,6 +109,7 @@
               >
                 {{ statusFilter }} <X class="w-2.5 h-2.5" />
               </span>
+
               <button
                 @click="resetFilters"
                 class="text-[10px] text-muted-foreground underline hover:text-foreground transition-colors"
@@ -130,22 +118,18 @@
               </button>
             </div>
 
-            <!-- Result count -->
             <span class="ml-auto text-xs text-muted-foreground">
               <strong class="text-foreground">{{ filteredLeads.length }}</strong> / {{ allLeads.length }} prospects
             </span>
           </div>
 
-          <!-- ── KPI Cards ───────────────────────────────────────── -->
           <DashboardKpiCards :kpis="dashboardData.kpis" :loading="isLoading" />
 
-          <!-- ── Segment summary cards ───────────────────────────── -->
           <DashboardSegmentCards
             :segments="dashboardData.segmentSummaries.filter(s => s.count > 0)"
             :loading="isLoading"
           />
 
-          <!-- ── Charts row 1: Donut + CA Bar ───────────────────── -->
           <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
             <DashboardSegmentPieChart
               :distribution="dashboardData.distribution"
@@ -158,7 +142,6 @@
             />
           </div>
 
-          <!-- ── Charts row 2: Complétude + Pipeline ────────────── -->
           <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
             <DashboardCompletudeBars
               :segments="dashboardData.segmentSummaries"
@@ -171,7 +154,6 @@
             />
           </div>
 
-          <!-- ── Empty state ─────────────────────────────────────── -->
           <Transition name="fade">
             <div
               v-if="!isLoading && allLeads.length === 0"
@@ -181,7 +163,9 @@
                 <BarChart3 class="w-7 h-7 text-muted-foreground" />
               </div>
               <p class="text-sm font-medium text-foreground mb-1">Aucune donnée disponible</p>
-              <p class="text-xs text-muted-foreground mb-4">Vérifiez que l'API est accessible et que des leads ont été importés.</p>
+              <p class="text-xs text-muted-foreground mb-4">
+                Vérifiez que l'API est accessible et que des leads ont été importés.
+              </p>
               <button
                 @click="reload"
                 class="h-9 px-4 text-sm font-medium rounded-md bg-tacir-blue text-white hover:opacity-90 transition-opacity"
@@ -190,7 +174,6 @@
               </button>
             </div>
           </Transition>
-
         </div>
       </main>
     </div>
@@ -204,64 +187,81 @@ import { BarChart3, RefreshCw, X } from 'lucide-vue-next'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 
 import TheSidebar from '@/components/AppSidebar.vue'
-import DashboardKpiCards       from '@/components/dashboard/DashboardKpiCards.vue'
-import DashboardSegmentCards   from '@/components/dashboard/DashboardSegmentCards.vue'
+import DashboardKpiCards from '@/components/dashboard/DashboardKpiCards.vue'
+import DashboardSegmentCards from '@/components/dashboard/DashboardSegmentCards.vue'
 import DashboardSegmentPieChart from '@/components/dashboard/DashboardSegmentPieChart.vue'
-import DashboardCaBarChart     from '@/components/dashboard/DashboardCaBarChart.vue'
+import DashboardCaBarChart from '@/components/dashboard/DashboardCaBarChart.vue'
 import DashboardCompletudeBars from '@/components/dashboard/DashboardCompletudeBars.vue'
-import DashboardPipeline       from '@/components/dashboard/DashboardPipeline.vue'
+import DashboardPipeline from '@/components/dashboard/DashboardPipeline.vue'
 
 import { adaptLeadResponse } from '@/lib/leadAdapter'
 import { computeDashboardData } from '@/lib/dashboardData'
 
-// ── Constants ────────────────────────────────────────────────────
-const BASE_URL = import.meta.env.VITE_FASTAPI_URL || 'http://localhost:8001'
+const BASE_URL = import.meta.env.VITE_FASTAPI_URL || 'http://10.0.2.2:8001'
+
+console.log('[Dashboard] FASTAPI BASE_URL:', BASE_URL)
 
 const todayLabel = new Date().toLocaleDateString('fr-FR', {
-  day: 'numeric', month: 'long', year: 'numeric',
+  day: 'numeric',
+  month: 'long',
+  year: 'numeric',
 })
 
-// ── Data state ───────────────────────────────────────────────────
 const allLeads = ref([])
 const isLoading = ref(false)
 
 async function fetchLeads() {
   isLoading.value = true
+
+  const url = `${BASE_URL}/entreprises/`
+  console.log('[Dashboard] Fetch URL:', url)
+
   try {
-    const res = await axios.get(`${BASE_URL}/entreprises/`, {
+    const res = await axios.get(url, {
       params: { skip: 0, limit: 2000 },
     })
+
+    console.log('[Dashboard] Fetch response:', JSON.stringify(res.data, null, 2))
+
     const raw = Array.isArray(res.data) ? res.data : (res.data?.data ?? [])
     allLeads.value = adaptLeadResponse(raw)
+
+    console.log('[Dashboard] Adapted leads count:', allLeads.value.length)
   } catch (err) {
-    console.error('[Dashboard] Fetch error:', err)
+    console.error('[Dashboard] Fetch error:', JSON.stringify({
+      message: err.message,
+      status: err.response?.status,
+      data: err.response?.data,
+      url: err.config?.url,
+      baseURL: err.config?.baseURL,
+    }, null, 2))
   } finally {
     isLoading.value = false
   }
 }
 
-function reload() { fetchLeads() }
+function reload() {
+  fetchLeads()
+}
 
 onMounted(fetchLeads)
 
-// ── Filter state ─────────────────────────────────────────────────
 const segmentFilter = ref('all')
-const sourceFilter  = ref('all')
-const statusFilter  = ref('all')
+const sourceFilter = ref('all')
+const statusFilter = ref('all')
 
 const hasActiveFilters = computed(() =>
   segmentFilter.value !== 'all' ||
-  sourceFilter.value  !== 'all' ||
-  statusFilter.value  !== 'all'
+  sourceFilter.value !== 'all' ||
+  statusFilter.value !== 'all'
 )
 
 function resetFilters() {
   segmentFilter.value = 'all'
-  sourceFilter.value  = 'all'
-  statusFilter.value  = 'all'
+  sourceFilter.value = 'all'
+  statusFilter.value = 'all'
 }
 
-// ── Derived: filteredLeads ───────────────────────────────────────
 const filteredLeads = computed(() => {
   let result = allLeads.value
 
@@ -282,23 +282,33 @@ const filteredLeads = computed(() => {
   return result
 })
 
-// ── Dashboard analytics ──────────────────────────────────────────
-// Computed lazily from filteredLeads — auto-updates on filter change
 const dashboardData = computed(() => {
-  // Return safe empty structure during initial load
   if (isLoading.value && !filteredLeads.value.length) {
     return {
-      kpis:            { totalLeads: 0, averageRevenue: '—', averageCompleteness: 0, averageAge: 0 },
-      segmentSummaries:[],
-      distribution:   [],
-      funnel:          [],
+      kpis: {
+        totalLeads: 0,
+        averageRevenue: '—',
+        averageCompleteness: 0,
+        averageAge: 0,
+      },
+      segmentSummaries: [],
+      distribution: [],
+      funnel: [],
     }
   }
+
   return computeDashboardData(filteredLeads.value)
 })
 </script>
 
 <style scoped>
-.fade-enter-active, .fade-leave-active { transition: opacity 0.25s ease; }
-.fade-enter-from, .fade-leave-to       { opacity: 0; }
+.fade-enter-active,
+.fade-leave-active {
+  transition: opacity 0.25s ease;
+}
+
+.fade-enter-from,
+.fade-leave-to {
+  opacity: 0;
+}
 </style>

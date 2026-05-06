@@ -418,7 +418,7 @@ import ChartBoampQuality from '@/components/dashboard/ChartBoampQuality.vue'
 // CONFIG
 // ─────────────────────────────────────────────
 
-const BASE_URL = import.meta.env.VITE_API_URL ?? 'http://localhost:8001'
+const BASE_URL = import.meta.env.VITE_API_URL ?? 'http://10.0.2.2:8001'
 
 const TASK_LABELS = {
   scrape_boamp:       'Scraping incrémental des marchés publics BOAMP via API',

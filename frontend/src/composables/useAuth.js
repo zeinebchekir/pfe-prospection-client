@@ -1,53 +1,80 @@
-/**
- * useAuth composable — centralised auth state management.
- *
- * - user: reactive User object or null
- * - isAuthenticated: computed boolean
- * - isLoading: true while fetching session on app load
- * - error: last error message or null
- *
- * Tokens are never touched by this composable — they live exclusively
- * in HTTP-only cookies managed by the browser and backend.
- */
 import { ref, computed } from 'vue'
-import api from '@/api/axios'
+import axios from 'axios'
 
-// Module-level reactive state — shared across all component usages
+const API_URL = import.meta.env.VITE_API_URL || 'http://10.0.2.2:8000'
+
+const api = axios.create({
+  baseURL: `${API_URL}/api`,
+  withCredentials: true,
+  headers: {
+    'Content-Type': 'application/json',
+  },
+})
+
+const savedToken = localStorage.getItem('access_token')
+
+if (savedToken) {
+  api.defaults.headers.common.Authorization = `Bearer ${savedToken}`
+}
+
 const user = ref(null)
 const isLoading = ref(false)
 const error = ref(null)
 let fetchPromise = null
 
-// ── Session expiry handler ────────────────────────────────────────────────
-// Fired by axios.js when the refresh token is also expired/invalid.
-// Clears user state immediately before the hard redirect to /login.
+function saveTokens(data) {
+  if (data?.access) {
+    localStorage.setItem('access_token', data.access)
+    api.defaults.headers.common.Authorization = `Bearer ${data.access}`
+  }
+
+  if (data?.refresh) {
+    localStorage.setItem('refresh_token', data.refresh)
+  }
+}
+
+function clearTokens() {
+  localStorage.removeItem('access_token')
+  localStorage.removeItem('refresh_token')
+  delete api.defaults.headers.common.Authorization
+}
+
+function logAxiosError(label, err) {
+  console.error(label, JSON.stringify({
+    message: err.message,
+    status: err.response?.status,
+    data: err.response?.data,
+    url: err.config?.url,
+    baseURL: err.config?.baseURL,
+    fullURL: `${err.config?.baseURL || ''}${err.config?.url || ''}`,
+  }, null, 2))
+}
+
 if (typeof window !== 'undefined') {
   window.addEventListener('auth:session-expired', () => {
     user.value = null
     isLoading.value = false
     fetchPromise = null
+    clearTokens()
   })
 }
 
 export function useAuth() {
   const isAuthenticated = computed(() => user.value !== null)
 
-  /**
-   * Fetch the current user from /api/auth/me/.
-   * Called on app load to restore session from existing cookies.
-   * Silently fails if no valid session exists (sets user to null).
-   */
   async function fetchUser() {
     if (fetchPromise) return fetchPromise
 
     fetchPromise = (async () => {
       isLoading.value = true
       error.value = null
+
       try {
         const { data } = await api.get('/auth/me/')
         user.value = data.user
         return data.user
       } catch (err) {
+        logAxiosError('🚨 FETCH USER FAILED FULL:', err)
         user.value = null
         return null
       } finally {
@@ -59,27 +86,33 @@ export function useAuth() {
     return fetchPromise
   }
 
-  /**
-   * Login with email + password.
-   * Backend sets HTTP-only JWT cookies on success.
-   */
   async function login(credentials) {
     isLoading.value = true
     error.value = null
+
     try {
       const { data } = await api.post('/auth/login/', credentials)
+      console.log('✅ LOGIN RESPONSE:', JSON.stringify(data, null, 2))
+
+      saveTokens(data)
       user.value = data.user
+
       return { success: true }
     } catch (err) {
+      logAxiosError('🚨 LOGIN FAILED FULL:', err)
+
       const responseData = err.response?.data
+
       if (responseData?.code === 'ACCOUNT_INACTIVE') {
         error.value = responseData.message
         return { success: false, message: responseData.message }
       }
+
       const message =
         responseData?.errors?.message ||
         responseData?.message ||
         'Email ou mot de passe invalide.'
+
       error.value = message
       return { success: false, message }
     } finally {
@@ -87,25 +120,47 @@ export function useAuth() {
     }
   }
 
-  /**
-   * Register a new account.
-   * Backend sets HTTP-only JWT cookies on success.
-   */
   async function register(formData) {
     isLoading.value = true
     error.value = null
+
     try {
       const { data } = await api.post('/auth/register/', formData)
-      user.value = data.user
-      return { success: true }
+
+      console.log('✅ REGISTER RESPONSE:', JSON.stringify(data, null, 2))
+
+      if (data?.access) {
+        saveTokens(data)
+        user.value = data.user
+        return { success: true, needsLogin: false }
+      }
+
+      user.value = null
+      clearTokens()
+
+      return {
+        success: true,
+        needsLogin: true,
+        message: 'Compte créé avec succès. Connectez-vous maintenant.',
+      }
     } catch (err) {
-      const errors = err.response?.data?.errors || {}
-      const message = Object.entries(errors)
-        .filter(([k]) => k !== 'code' && k !== 'status')
-        .map(([field, msgs]) =>
-          Array.isArray(msgs) ? `${field}: ${msgs.join(' ')}` : `${field}: ${msgs}`
-        )
-        .join('\n') || 'Registration failed.'
+      logAxiosError('🚨 REGISTER FAILED FULL:', err)
+
+      const responseData = err.response?.data
+      const errors = responseData?.errors || {}
+
+      const message =
+        responseData?.message ||
+        Object.entries(errors)
+          .filter(([k]) => k !== 'code' && k !== 'status')
+          .map(([field, msgs]) =>
+            Array.isArray(msgs)
+              ? `${field}: ${msgs.join(' ')}`
+              : `${field}: ${msgs}`
+          )
+          .join('\n') ||
+        'Registration failed.'
+
       error.value = message
       return { success: false, message }
     } finally {
@@ -113,34 +168,32 @@ export function useAuth() {
     }
   }
 
-  /**
-   * Logout — blacklists refresh token on backend, clears cookies,
-   * and resets local user state.
-   */
   async function logout() {
     isLoading.value = true
     error.value = null
+
     try {
       await api.post('/auth/logout/')
-    } catch {
-      // Even if the server request fails, clear local state
+    } catch (err) {
+      logAxiosError('🚨 LOGOUT FAILED FULL:', err)
     } finally {
       user.value = null
+      clearTokens()
       isLoading.value = false
     }
   }
 
-  /**
-   * Update current user profile.
-   */
   async function updateProfile(data) {
     isLoading.value = true
     error.value = null
+
     try {
       const { data: responseData } = await api.patch('/auth/me/', data)
       user.value = responseData.user
       return { success: true }
     } catch (err) {
+      logAxiosError('🚨 UPDATE PROFILE FAILED FULL:', err)
+
       const message = err.response?.data?.message || 'Failed to update profile.'
       error.value = message
       return { success: false, message }
@@ -149,21 +202,26 @@ export function useAuth() {
     }
   }
 
-  /**
-   * Change current user password.
-   */
   async function changePassword(pwData) {
     isLoading.value = true
     error.value = null
+
     try {
       await api.post('/auth/change-password/', {
         old_password: pwData.currentPw,
         new_password: pwData.newPw,
-        confirm_password: pwData.confirmPw
+        confirm_password: pwData.confirmPw,
       })
+
       return { success: true }
     } catch (err) {
-      const message = err.response?.data?.error || err.response?.data?.message || 'Failed to change password.'
+      logAxiosError('🚨 CHANGE PASSWORD FAILED FULL:', err)
+
+      const message =
+        err.response?.data?.error ||
+        err.response?.data?.message ||
+        'Failed to change password.'
+
       error.value = message
       return { success: false, message }
     } finally {

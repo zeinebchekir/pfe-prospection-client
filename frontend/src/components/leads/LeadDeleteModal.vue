@@ -60,7 +60,7 @@ const props = defineProps({
 
 const emit = defineEmits(['close', 'deleted'])
 
-const BASE_URL = import.meta.env.VITE_FASTAPI_URL || 'http://localhost:8001'
+const BASE_URL = import.meta.env.VITE_FASTAPI_URL || 'http://10.0.2.2:8001'
 
 const isDeleting = ref(false)
 

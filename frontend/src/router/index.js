@@ -2,7 +2,7 @@
  * Vue Router with navigation guards.
  */
 
-import { createRouter, createWebHistory } from "vue-router"
+import { createRouter, createWebHashHistory  } from "vue-router"
 import {useAuth} from "@/composables/useAuth"
 
 // Timestamp of the last successful session verification
@@ -188,7 +188,7 @@ const routes = [
 ]
 
 const router = createRouter({
-  history: createWebHistory(),
+  history: createWebHashHistory(),
   routes,
 })
 

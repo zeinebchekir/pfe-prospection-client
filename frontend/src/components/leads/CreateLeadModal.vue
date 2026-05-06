@@ -591,9 +591,8 @@ const props = defineProps({ open: { type: Boolean, default: false } })
 const emit  = defineEmits(['close', 'created'])
 
 // ── Constants ────────────────────────────────────────────────────
-const BASE_URL = import.meta.env.VITE_FASTAPI_URL || 'http://localhost:8001'
+const BASE_URL = import.meta.env.VITE_FASTAPI_URL || 'http://10.0.2.2:8001'
 const todayISO = new Date().toISOString().split('T')[0]
-
 const tabs = [
   { key: 'general',    label: 'Informations' },
   { key: 'contact',    label: 'Contact'      },

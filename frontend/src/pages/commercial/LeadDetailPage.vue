@@ -465,57 +465,70 @@ import {
 import { toast } from 'vue-sonner'
 import { Button } from '@/components/ui/button'
 import Textarea from '@/components/ui/textarea/Textarea.vue'
-import { 
-  Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter 
+import {
+  Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter
 } from '@/components/ui/dialog'
 import { Label } from '@/components/ui/label'
 import { Input } from '@/components/ui/input'
 
-import TheSidebar    from '@/components/AppSidebar.vue'
-import SegmentBadge  from '@/components/leads/SegmentBadge.vue'
-import StatusBadge   from '@/components/leads/StatusBadge.vue'
-import ScoreRing     from '@/components/leads/ScoreRing.vue'
-import InfoRow       from '@/components/leads/InfoRow.vue'
-import MetricCard    from '@/components/leads/MetricCard.vue'
+import TheSidebar from '@/components/AppSidebar.vue'
+import SegmentBadge from '@/components/leads/SegmentBadge.vue'
+import StatusBadge from '@/components/leads/StatusBadge.vue'
+import ScoreRing from '@/components/leads/ScoreRing.vue'
+import InfoRow from '@/components/leads/InfoRow.vue'
+import MetricCard from '@/components/leads/MetricCard.vue'
 import LeadEditModal from '@/components/leads/LeadEditModal.vue'
 import LinkedInAnalysisFlow from '@/components/leads/LinkedInAnalysisFlow.vue'
 
 import axios from 'axios'
 import { adaptLead, formatDateFR } from '@/lib/leadAdapter'
 
-const route  = useRoute()
+const route = useRoute()
 const router = useRouter()
+
+const FASTAPI_URL = import.meta.env.VITE_FASTAPI_URL || 'http://10.0.2.2:8001'
+const IA_SERVICE_URL = import.meta.env.VITE_IA_SERVICE_URL || 'http://10.0.2.2:8002'
+
+console.log('[LeadDetail] FASTAPI_URL:', FASTAPI_URL)
+console.log('[LeadDetail] IA_SERVICE_URL:', IA_SERVICE_URL)
 
 const leadFromApi = ref(null)
 const isLoading = ref(true)
 
-// Local overrides for optimistic edits
-const localLead  = ref(null)
+const localLead = ref(null)
 const displayLead = computed(() => localLead.value ?? leadFromApi.value)
 
 const editOpen = ref(false)
 
 async function fetchLeadDetails() {
   isLoading.value = true
+
+  const url = `${FASTAPI_URL}/entreprises/${route.params.id}`
+  console.log('[LeadDetail] Fetch URL:', url)
+
   try {
-    const baseUrl = import.meta.env.VITE_FASTAPI_URL || 'http://localhost:8001'
-    const res = await axios.get(`${baseUrl}/entreprises/${route.params.id}`)
+    const res = await axios.get(url)
+
+    console.log('[LeadDetail] Fetch response:', JSON.stringify(res.data, null, 2))
+
     leadFromApi.value = adaptLead(res.data, 0)
   } catch (err) {
-    console.error('[LeadDetail] Fetch error:', err)
+    console.error('[LeadDetail] Fetch error:', JSON.stringify({
+      message: err.message,
+      status: err.response?.status,
+      data: err.response?.data,
+      url: err.config?.url,
+    }, null, 2))
   } finally {
     isLoading.value = false
   }
 }
 
+onMounted(fetchLeadDetails)
 
-onMounted(() => {
-  fetchLeadDetails()
-})
-
-// ---- Computed ----
 const initials = computed(() => {
   if (!displayLead.value) return ''
+
   return displayLead.value.nom
     .split(/\s+/)
     .slice(0, 2)
@@ -526,19 +539,20 @@ const initials = computed(() => {
 
 const contactCompleteness = computed(() => {
   if (!displayLead.value || displayLead.value.nbDirigeants === 0) return 0
+
   const dirs = displayLead.value.dirigeants
-  // 3 contact fields per dirigeant: email, telephone, LinkedIn
   const totalFields = dirs.length * 3
+
   const filledFields = dirs.reduce((sum, d) => {
-    return sum
-      + (d.email      ? 1 : 0)
-      + (d.telephone  ? 1 : 0)
-      + (d.linkedinUrl ? 1 : 0)
+    return sum +
+      (d.email ? 1 : 0) +
+      (d.telephone ? 1 : 0) +
+      (d.linkedinUrl ? 1 : 0)
   }, 0)
+
   return Math.round((filledFields / totalFields) * 100)
 })
 
-// ---- Constants ----
 const AVATAR_COLORS = [
   'bg-purple-50 text-purple-700',
   'bg-emerald-50 text-emerald-700',
@@ -547,21 +561,13 @@ const AVATAR_COLORS = [
   'bg-rose-50 text-rose-700',
 ]
 
-// ---- Analysis Handlers ----
 const showAnalysis = ref(false)
 
 const onAnalysisComplete = (data) => {
   showAnalysis.value = false
-  // TODO: send data to backend or update local lead implicitly
-  console.log('Analysis result:', data)
+  console.log('[LeadDetail] Analysis result:', data)
 }
 
-function onAnalysisSkip() {
-  console.log('Analyse ignorée')
-  showAnalysis.value = false
-}
-
-// ---- Email Generation Handlers ----
 const isGeneratingEmail = ref(false)
 const showEmailModal = ref(false)
 const generatedEmailSubject = ref('')
@@ -570,29 +576,39 @@ const emailCopied = ref(false)
 const emailError = ref('')
 
 const generateEmail = async () => {
-  if (!displayLead.value || !displayLead.value.infoBoamp) return;
-  
+  if (!displayLead.value || !displayLead.value.infoBoamp) return
+
   isGeneratingEmail.value = true
   emailError.value = ''
-  
+
+  const url = `${IA_SERVICE_URL}/ia/generate-email`
+  console.log('[LeadDetail] Generate email URL:', url)
+
   try {
     const payload = {
       rapport: {
         nom_entreprise: displayLead.value.nom,
-        besoin: displayLead.value.infoBoamp.besoin
+        besoin: displayLead.value.infoBoamp.besoin,
       },
-      remarques: ''
+      remarques: '',
     }
-    
-    const baseUrl = import.meta.env.VITE_IA_SERVICE_URL || 'http://localhost:8002'
-    const response = await axios.post(`${baseUrl}/ia/generate-email`, payload)
-    
+
+    const response = await axios.post(url, payload)
+
+    console.log('[LeadDetail] Generate email response:', JSON.stringify(response.data, null, 2))
+
     generatedEmailSubject.value = response.data.objet || 'Proposition de collaboration Numeryx'
     generatedEmailBody.value = response.data.corps || ''
-    
+
     showEmailModal.value = true
   } catch (err) {
-    console.error('Error generating email:', err)
+    console.error('[LeadDetail] Generate email error:', JSON.stringify({
+      message: err.message,
+      status: err.response?.status,
+      data: err.response?.data,
+      url: err.config?.url,
+    }, null, 2))
+
     emailError.value = err.response?.data?.detail || "Erreur lors de la génération de l'email."
     toast.error(emailError.value)
   } finally {
@@ -602,24 +618,27 @@ const generateEmail = async () => {
 
 const copyGeneratedEmail = async () => {
   const fullEmail = `Objet : ${generatedEmailSubject.value}\n\n${generatedEmailBody.value}`
+
   try {
     await navigator.clipboard.writeText(fullEmail)
+
     emailCopied.value = true
-    setTimeout(() => { emailCopied.value = false }, 2000)
-    toast.success("Email copié dans le presse-papiers !")
+    setTimeout(() => {
+      emailCopied.value = false
+    }, 2000)
+
+    toast.success('Email copié dans le presse-papiers !')
   } catch (err) {
-    console.error('Failed to copy', err)
-    toast.error("Erreur lors de la copie")
+    console.error('[LeadDetail] Copy failed:', err)
+    toast.error('Erreur lors de la copie')
   }
 }
 
-// ---- Handlers ----
 function handleSave(id, updates) {
   localLead.value = { ...(displayLead.value ?? {}), ...updates }
   editOpen.value = false
 }
 </script>
-
 <style scoped>
 .shadow-card {
   box-shadow: 0 1px 3px rgba(0,0,0,0.06), 0 4px 16px rgba(48,62,140,0.06);

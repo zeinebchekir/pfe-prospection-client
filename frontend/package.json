@@ -9,6 +9,8 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@capacitor/android": "^8.3.1",
+    "@capacitor/core": "^8.3.1",
     "@vee-validate/zod": "^4.15.1",
     "@vueuse/core": "^14.2.1",
     "apexcharts": "^5.10.6",
@@ -25,6 +27,7 @@
     "zod": "^3.25.76"
   },
   "devDependencies": {
+    "@capacitor/cli": "^8.3.1",
     "@tailwindcss/postcss": "^4.2.1",
     "@vitejs/plugin-vue": "^5.0.4",
     "autoprefixer": "^10.4.27",
@@ -35,6 +38,7 @@
     "radix-vue": "^1.9.17",
     "tailwind-merge": "^3.5.0",
     "tailwindcss": "^4.2.1",
+    "typescript": "^6.0.3",
     "vite": "^5.2.11"
   }
 }

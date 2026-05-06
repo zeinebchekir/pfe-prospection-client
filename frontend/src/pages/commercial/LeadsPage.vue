@@ -399,30 +399,31 @@ import { useRouter } from 'vue-router'
 import axios from 'axios'
 import {
   Building2, Plus, Loader2, SearchX, Search, Globe, MapPin, Users,
-  CheckCircle2, Eye, EyeOff, ChevronDown, ChevronUp, Database,
-  Phone, Mail, Landmark, CalendarDays, BadgeCheck,
+  CheckCircle2, Eye, EyeOff, Database, Phone, Mail, Landmark,
 } from 'lucide-vue-next'
 import { toast } from 'vue-sonner'
 
-import TheSidebar        from '@/components/AppSidebar.vue'
-import LeadKPICards      from '@/components/leads/LeadKPICards.vue'
-import LeadFiltersBar    from '@/components/leads/LeadFiltersBar.vue'
-import LeadTable         from '@/components/leads/LeadTable.vue'
-import LeadPagination    from '@/components/leads/LeadPagination.vue'
+import TheSidebar from '@/components/AppSidebar.vue'
+import LeadKPICards from '@/components/leads/LeadKPICards.vue'
+import LeadFiltersBar from '@/components/leads/LeadFiltersBar.vue'
+import LeadTable from '@/components/leads/LeadTable.vue'
+import LeadPagination from '@/components/leads/LeadPagination.vue'
 import LeadPreviewDrawer from '@/components/leads/LeadPreviewDrawer.vue'
-import LeadEditModal     from '@/components/leads/LeadEditModal.vue'
-import CreateLeadModal   from '@/components/leads/CreateLeadModal.vue'
-import LeadDeleteModal   from '@/components/leads/LeadDeleteModal.vue'
+import LeadEditModal from '@/components/leads/LeadEditModal.vue'
+import CreateLeadModal from '@/components/leads/CreateLeadModal.vue'
+import LeadDeleteModal from '@/components/leads/LeadDeleteModal.vue'
 
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle,
 } from '@/components/ui/dialog'
 
-import { useLeads }  from '@/composables/useLeads'
+import { useLeads } from '@/composables/useLeads'
 import { adaptLead, formatCA, formatDateFR } from '@/lib/leadAdapter'
 
 const router = useRouter()
-const BASE_URL = import.meta.env.VITE_FASTAPI_URL || 'http://localhost:8001'
+const BASE_URL = import.meta.env.VITE_FASTAPI_URL || 'http://10.0.2.2:8001'
+
+console.log('[Leads] FASTAPI BASE_URL:', BASE_URL)
 
 const AVATAR_COLORS = [
   'bg-blue-100 text-blue-700',
@@ -458,91 +459,119 @@ const {
   isLoading,
 } = useLeads()
 
-// ── UI state ──────────────────────────────────────────────────
-const previewLead      = ref(null)
-const editLead         = ref(null)
-const createOpen       = ref(false)
+const previewLead = ref(null)
+const editLead = ref(null)
+const createOpen = ref(false)
 const deleteLeadTarget = ref(null)
 
-// Search-preview modal state
-const isSearching      = ref(false)
+const isSearching = ref(false)
 const showPreviewModal = ref(false)
-const searchResults    = ref([])
-const lastQuery        = ref('')
-const addingIndex      = ref(-1)          // index of the row currently being saved
-const addedSirens      = ref(new Set())   // SIRENs added to DB this session
-const expandedIdx      = ref(-1)          // which company card is expanded (-1 = none)
+const searchResults = ref([])
+const lastQuery = ref('')
+const addingIndex = ref(-1)
+const addedSirens = ref(new Set())
+const expandedIdx = ref(-1)
 
-// Cross-ref against the already-loaded lead list — survives modal reopen
 const existingSirens = computed(() =>
   new Set(allLeads.value.map((l) => l.siren).filter(Boolean))
 )
 
-// True if company is already in local DB OR was added this session
 function isAlreadyKnown(company) {
   return existingSirens.value.has(company.siren) ||
-         addedSirens.value.has(company.siren)
+    addedSirens.value.has(company.siren)
 }
 
-// Returns a display label + style for a company's add-state
 function companyState(company, idx) {
   if (existingSirens.value.has(company.siren)) {
-    return { label: 'Déjà dans votre base', icon: 'db', cls: 'bg-purple-50 text-purple-700 border border-purple-200 cursor-default' }
+    return {
+      label: 'Déjà dans votre base',
+      icon: 'db',
+      cls: 'bg-purple-50 text-purple-700 border border-purple-200 cursor-default',
+    }
   }
+
   if (addedSirens.value.has(company.siren)) {
-    return { label: 'Ajouté', icon: 'check', cls: 'bg-emerald-50 text-emerald-700 border border-emerald-200 cursor-default' }
+    return {
+      label: 'Ajouté',
+      icon: 'check',
+      cls: 'bg-emerald-50 text-emerald-700 border border-emerald-200 cursor-default',
+    }
   }
+
   if (addingIndex.value === idx) {
-    return { label: '…', icon: 'loading', cls: 'bg-tacir-blue text-white opacity-60 cursor-wait' }
+    return {
+      label: '…',
+      icon: 'loading',
+      cls: 'bg-tacir-blue text-white opacity-60 cursor-wait',
+    }
   }
-  return { label: 'Ajouter', icon: 'plus', cls: 'bg-tacir-blue text-white hover:opacity-90 shadow-sm' }
+
+  return {
+    label: 'Ajouter',
+    icon: 'plus',
+    cls: 'bg-tacir-blue text-white hover:opacity-90 shadow-sm',
+  }
 }
 
-// Show banner only when: search present + not loading + 0 local results
 const showSearchBanner = computed(() =>
   !!filters.value.search.trim() &&
   !isLoading.value &&
   filteredLeads.value.length === 0
 )
 
-// ── Event handlers ─────────────────────────────────────────────
-function handleFilterUpdate(key, value) { setFilter(key, value) }
-function handleToggleArray(key, value)  { toggleArrayFilter(key, value) }
-function handleNavigate(lead)           { router.push(`/commercial/leads/${lead.id}`) }
-function handleDelete(lead)             { deleteLeadTarget.value = lead }
-function handleSave(id, updates)        { updateLead(id, updates) }
-
-// Called when LeadDeleteModal succeeds
-function handleLeadDeleted(id) {
-  allLeads.value = allLeads.value.filter(l => l.id !== id)
-  previewLead.value = null // Close drawer if it was open
+function handleFilterUpdate(key, value) {
+  setFilter(key, value)
 }
 
-// Called when CreateLeadModal succeeds — prepend new lead to list
+function handleToggleArray(key, value) {
+  toggleArrayFilter(key, value)
+}
+
+function handleNavigate(lead) {
+  router.push(`/commercial/leads/${lead.id}`)
+}
+
+function handleDelete(lead) {
+  deleteLeadTarget.value = lead
+}
+
+function handleSave(id, updates) {
+  updateLead(id, updates)
+}
+
+function handleLeadDeleted(id) {
+  allLeads.value = allLeads.value.filter((l) => l.id !== id)
+  previewLead.value = null
+}
+
 function handleLeadCreated(adaptedLead) {
   allLeads.value.unshift(adaptedLead)
 }
 
 function closePreviewModal() {
   showPreviewModal.value = false
-  // Clear only if user closed without adding anything
 }
 
-// ── Step 1 — Preview (no DB write) ────────────────────────────
 async function startSearch() {
   const query = filters.value.search.trim()
   if (!query) return
 
+  const url = `${BASE_URL}/entreprises/search_from_query/${encodeURIComponent(query)}`
+  console.log('[Leads] search URL:', url)
+
   isSearching.value = true
+
   try {
-    const res = await axios.post(`${BASE_URL}/entreprises/search_from_query/${encodeURIComponent(query)}`)
+    const res = await axios.post(url)
+
+    console.log('[Leads] search response:', JSON.stringify(res.data, null, 2))
 
     if (res.data?.status === 'preview' && Array.isArray(res.data.results)) {
-      searchResults.value    = res.data.results
-      lastQuery.value        = query
-      addedSirens.value      = new Set()
-      addingIndex.value      = -1
-      expandedIdx.value      = -1
+      searchResults.value = res.data.results
+      lastQuery.value = query
+      addedSirens.value = new Set()
+      addingIndex.value = -1
+      expandedIdx.value = -1
       showPreviewModal.value = true
     } else {
       toast.warning('Aucun résultat DataGouv', {
@@ -550,7 +579,13 @@ async function startSearch() {
       })
     }
   } catch (err) {
-    console.error('[Leads] search_from_query error:', err)
+    console.error('[Leads] search_from_query error:', JSON.stringify({
+      message: err.message,
+      status: err.response?.status,
+      data: err.response?.data,
+      url: err.config?.url,
+    }, null, 2))
+
     toast.error('Erreur de recherche', {
       description: err?.response?.data?.detail || 'Impossible de contacter DataGouv.',
     })
@@ -559,26 +594,33 @@ async function startSearch() {
   }
 }
 
-// ── Step 2 — Confirm (DB write for chosen row) ─────────────────
 async function confirmLead(company) {
   const idx = searchResults.value.indexOf(company)
   if (isAlreadyKnown(company)) return
 
+  const url = `${BASE_URL}/entreprises/confirm_lead`
+  console.log('[Leads] confirm URL:', url)
+
   addingIndex.value = idx
+
   try {
-    const res = await axios.post(`${BASE_URL}/entreprises/confirm_lead`, {
+    const res = await axios.post(url, {
       entreprise: company,
     })
 
+    console.log('[Leads] confirm response:', JSON.stringify(res.data, null, 2))
+
     if (res.data?.status === 'success' && res.data?.lead) {
-      const raw     = res.data.lead
+      const raw = res.data.lead
       const adapted = adaptLead(raw, allLeads.value.length)
 
       allLeads.value.unshift(adapted)
       addedSirens.value = new Set([...addedSirens.value, company.siren])
 
       toast.success(`Lead ajouté : ${raw.nom || company.nom}`, {
-        description: [raw.ville || company.ville, raw.secteur_activite].filter(Boolean).join(' · '),
+        description: [raw.ville || company.ville, raw.secteur_activite]
+          .filter(Boolean)
+          .join(' · '),
       })
     } else {
       toast.warning('Sauvegarde partielle', {
@@ -586,16 +628,21 @@ async function confirmLead(company) {
       })
     }
   } catch (err) {
-    console.error('[Leads] confirm_lead error:', err)
-    toast.error('Erreur lors de l\'ajout', {
-      description: err?.response?.data?.detail || 'Impossible d\'enregistrer le lead.',
+    console.error('[Leads] confirm_lead error:', JSON.stringify({
+      message: err.message,
+      status: err.response?.status,
+      data: err.response?.data,
+      url: err.config?.url,
+    }, null, 2))
+
+    toast.error('Erreur lors de l’ajout', {
+      description: err?.response?.data?.detail || 'Impossible d’enregistrer le lead.',
     })
   } finally {
     addingIndex.value = -1
   }
 }
 </script>
-
 <style scoped>
 .shadow-card {
   box-shadow: 0 1px 3px rgba(0,0,0,0.06), 0 4px 16px rgba(48,62,140,0.06);

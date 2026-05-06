@@ -384,7 +384,7 @@ watch(() => props.open, async (isOpen) => {
   // Fetch authoritative data from API
   isLoadingData.value = true
   try {
-    const baseUrl = import.meta.env.VITE_FASTAPI_URL || 'http://localhost:8001'
+    const baseUrl = import.meta.env.VITE_FASTAPI_URL || 'http://10.0.2.2:8001'
     const leadId = lead.identifiant || lead.siren || lead.id
     const res = await axios.get(`${baseUrl}/entreprises/${leadId}/modal`)
     const data = res.data
@@ -434,7 +434,7 @@ async function handleSave() {
 
   isSaving.value = true
   try {
-    const baseUrl = import.meta.env.VITE_FASTAPI_URL || 'http://localhost:8001'
+    const baseUrl = import.meta.env.VITE_FASTAPI_URL || 'http://10.0.2.2:8001'
 
     // Build clean dirigeants array (strip internal _uid)
     const dirigeants = modalDirigeants.value.map(({ _uid, ...d }) => d)

@@ -1,33 +1,33 @@
 import { ref, computed, onMounted, onUnmounted } from 'vue'
 import axios from 'axios'
-const BASE_URL = import.meta.env.VITE_API_URL ?? 'http://localhost:8001'
+const BASE_URL = import.meta.env.VITE_API_URL ?? 'http://10.0.2.2:8001'
 
 export const TASK_LABELS = {
-  scrape_boamp:       'Scraping incrémental des marchés publics BOAMP via API',
-  extract_boamp:      'Extraction et parsing JSON des champs normalisés',
-  enrich_boamp:       'Enrichissement SIRET via API INSEE / Annuaire entreprises',
-  load_raw_boamp:     'Chargement dans le schéma raw.boamp (PostgreSQL)',
-  clean_boamp:        'Déduplication, normalisation et validation des données',
-  load_clean_boamp:   'Chargement final dans le schéma clean.boamp',
-  scrape_sirene:      'Téléchargement du fichier SIRENE (data.gouv.fr) en incrémental',
-  extract_datagouv:   'Parsing CSV et mapping vers le modèle de données interne',
-  load_raw_datagouv:  'Insertion dans le schéma raw.sirene (upsert par SIRET)',
-  clean_datagouv:     'Nettoyage, normalisation des codes NAF et validation LUHN SIREN',
-  load_clean_sirene:  'Chargement final dans clean.sirene — inserts + updates',
-  rapport_final:      'Génération du rapport de synthèse et notifications',
-  cleanup:            'Nettoyage des fichiers temporaires',
+  scrape_boamp: 'Scraping incrémental des marchés publics BOAMP via API',
+  extract_boamp: 'Extraction et parsing JSON des champs normalisés',
+  enrich_boamp: 'Enrichissement SIRET via API INSEE / Annuaire entreprises',
+  load_raw_boamp: 'Chargement dans le schéma raw.boamp (PostgreSQL)',
+  clean_boamp: 'Déduplication, normalisation et validation des données',
+  load_clean_boamp: 'Chargement final dans le schéma clean.boamp',
+  scrape_sirene: 'Téléchargement du fichier SIRENE (data.gouv.fr) en incrémental',
+  extract_datagouv: 'Parsing CSV et mapping vers le modèle de données interne',
+  load_raw_datagouv: 'Insertion dans le schéma raw.sirene (upsert par SIRET)',
+  clean_datagouv: 'Nettoyage, normalisation des codes NAF et validation LUHN SIREN',
+  load_clean_sirene: 'Chargement final dans clean.sirene — inserts + updates',
+  rapport_final: 'Génération du rapport de synthèse et notifications',
+  cleanup: 'Nettoyage des fichiers temporaires',
 }
 
 export function mapState(s) {
   const MAP = {
-    success:         'ok',
-    failed:          'err',
+    success: 'ok',
+    failed: 'err',
     upstream_failed: 'err',
-    running:         'run',
-    queued:          'idle',
-    scheduled:       'idle',
-    skipped:         'idle',
-    none:            'idle',
+    running: 'run',
+    queued: 'idle',
+    scheduled: 'idle',
+    skipped: 'idle',
+    none: 'idle',
   }
   return MAP[s] ?? 'idle'
 }
@@ -42,7 +42,7 @@ export function formatDuration(sec) {
 export function formatDate(iso) {
   if (!iso) return '—'
   return new Date(iso).toLocaleTimeString('fr-FR', {
-    hour:   '2-digit',
+    hour: '2-digit',
     minute: '2-digit',
     second: '2-digit',
   })
@@ -61,18 +61,18 @@ async function apiFetch(url) {
 
 export function usePipeline(dagId, externalTaskResources) {
 
-  const state           = ref({ run: null, tasks: [], progress: 0, metrics: {} })
-  const history         = ref([])
-  const logs            = ref({})
+  const state = ref({ run: null, tasks: [], progress: 0, metrics: {} })
+  const history = ref([])
+  const logs = ref({})
   const systemResources = ref({ cpu: 0, ram: 0, disk: 0, source: 'psutil' })
-  const loading         = ref(true)
-  const error           = ref(null)
-  const connected       = ref(false)
+  const loading = ref(true)
+  const error = ref(null)
+  const connected = ref(false)
 
-  let pollTimer     = null
+  let pollTimer = null
   let resourceTimer = null
-  let streamCtrl    = null
-  let watchedTask   = null
+  let streamCtrl = null
+  let watchedTask = null
 
   // ── Computed ─────────────────────────────────────────────
 
@@ -90,23 +90,23 @@ export function usePipeline(dagId, externalTaskResources) {
   const phases = computed(() =>
     state.value.tasks.map((t, i) => {
       const res = externalTaskResources.value?.[dagId]?.[t.task_id]
-                  ?? { cpu: 0, ram: 0, disk: 0 }
+        ?? { cpu: 0, ram: 0, disk: 0 }
       return {
-        num:        i + 1,
-        name:       t.task_id,
-        sub:        TASK_LABELS[t.task_id] ?? t.task_id,
-        st:         mapState(t.state),
-        dur:        formatDuration(t.duration),
-        start:      formatDate(t.start_date),
-        end:        formatDate(t.end_date),
+        num: i + 1,
+        name: t.task_id,
+        sub: TASK_LABELS[t.task_id] ?? t.task_id,
+        st: mapState(t.state),
+        dur: formatDuration(t.duration),
+        start: formatDate(t.start_date),
+        end: formatDate(t.end_date),
         try_number: t.try_number ?? 1,
-        inp:        t.inp  ?? '—',
-        out:        t.out  ?? '—',
-        err:        t.err  ?? null,
-        logs:       logs.value[t.task_id] ?? [],
-        cpu:        res.cpu,
-        ram:        res.ram,
-        disk:       res.disk,
+        inp: t.inp ?? '—',
+        out: t.out ?? '—',
+        err: t.err ?? null,
+        logs: logs.value[t.task_id] ?? [],
+        cpu: res.cpu,
+        ram: res.ram,
+        disk: res.disk,
       }
     })
   )
@@ -115,10 +115,10 @@ export function usePipeline(dagId, externalTaskResources) {
 
   async function fetchState() {
     try {
-      const data      = await apiFetch(`/api/monitoring/state/${dagId}`)
-      state.value     = data
+      const data = await apiFetch(`/api/monitoring/state/${dagId}`)
+      state.value = data
       connected.value = true
-      error.value     = null
+      error.value = null
 
       const running = data.tasks?.find(t => t.state === 'running')
 
@@ -138,7 +138,7 @@ export function usePipeline(dagId, externalTaskResources) {
       }
 
     } catch (e) {
-      error.value     = e.message
+      error.value = e.message
       connected.value = false
     } finally {
       loading.value = false
@@ -150,7 +150,7 @@ export function usePipeline(dagId, externalTaskResources) {
   async function fetchSystemResources() {
     try {
       systemResources.value = await apiFetch('/api/monitoring/resources/system')
-    } catch {}
+    } catch { }
   }
 
   // ── Logs ─────────────────────────────────────────────────
@@ -162,7 +162,7 @@ export function usePipeline(dagId, externalTaskResources) {
         `/api/monitoring/logs/${dagId}/${state.value.run.run_id}/${taskId}`
       )
       logs.value = { ...logs.value, [taskId]: data.lines ?? [] }
-    } catch {}
+    } catch { }
   }
 
   async function loadLogs(taskId) {
@@ -175,7 +175,7 @@ export function usePipeline(dagId, externalTaskResources) {
     stopLogStream()
 
     watchedTask = taskId
-    logs.value  = { ...logs.value, [taskId]: [] }
+    logs.value = { ...logs.value, [taskId]: [] }
 
     const controller = new AbortController()
     streamCtrl = controller
@@ -184,9 +184,9 @@ export function usePipeline(dagId, externalTaskResources) {
 
     fetch(url, { signal: controller.signal })
       .then(async (response) => {
-        const reader  = response.body.getReader()
+        const reader = response.body.getReader()
         const decoder = new TextDecoder()
-        let   buffer  = ''
+        let buffer = ''
         while (true) {
           const { done, value } = await reader.read()
           if (done) break
@@ -201,7 +201,7 @@ export function usePipeline(dagId, externalTaskResources) {
                 ...logs.value,
                 [taskId]: [...(logs.value[taskId] ?? []), parsed]
               }
-            } catch {}
+            } catch { }
           }
         }
         watchedTask = null
@@ -222,9 +222,9 @@ export function usePipeline(dagId, externalTaskResources) {
   async function triggerDag(conf = {}) {
     try {
       await fetch(`${BASE_URL}/api/monitoring/trigger/${dagId}`, {
-        method:  'POST',
+        method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body:    JSON.stringify(conf),
+        body: JSON.stringify(conf),
       })
       setTimeout(fetchState, 1500)
       setTimeout(fetchState, 4000)
@@ -238,20 +238,20 @@ export function usePipeline(dagId, externalTaskResources) {
   onMounted(async () => {
     await fetchState()
     fetchHistory()
-    pollTimer     = setInterval(fetchState,           2000)
+    pollTimer = setInterval(fetchState, 2000)
     resourceTimer = setInterval(fetchSystemResources, 3000)
     fetchSystemResources()
   })
 
   onUnmounted(() => {
-    if (pollTimer)     clearInterval(pollTimer)
+    if (pollTimer) clearInterval(pollTimer)
     if (resourceTimer) clearInterval(resourceTimer)
     stopLogStream()
   })
 
   async function fetchHistory() {
     try { history.value = await apiFetch(`/api/monitoring/history/${dagId}`) }
-    catch {}
+    catch { }
   }
 
   return {
@@ -270,14 +270,14 @@ export function usePipeline(dagId, externalTaskResources) {
 
 
 export function useMonitoringETL() {
-  const kpi            = ref(null)
-  const dagSuccess     = ref([])
-  const taskDuration   = ref([])
+  const kpi = ref(null)
+  const dagSuccess = ref([])
+  const taskDuration = ref([])
   const volumeOverTime = ref([])
-  const dataQuality    = ref([])
+  const dataQuality = ref([])
   const dataQualityBoamp = ref([])
-  const loading        = ref(true)
-  const error          = ref(null)
+  const loading = ref(true)
+  const error = ref(null)
 
   let intervalId = null
 
@@ -286,19 +286,19 @@ export function useMonitoringETL() {
       const [r1, r2, r3, r4, r5, r6] = await Promise.all([
         axios.get(`${BASE_URL}/api/monitoring/kpi-summary`),
         axios.get(`${BASE_URL}/api/monitoring/dag-success-rate`, { params: { days: 30 } }),
-        axios.get(`${BASE_URL}/api/monitoring/task-duration`,    { params: { dag_id: 'sync_boamp', days: 7 } }),
+        axios.get(`${BASE_URL}/api/monitoring/task-duration`, { params: { dag_id: 'sync_boamp', days: 7 } }),
         axios.get(`${BASE_URL}/api/monitoring/volume-over-time`, { params: { days: 7 } }),
         axios.get(`${BASE_URL}/api/monitoring/data-quality`),
         axios.get(`${BASE_URL}/api/monitoring/data-quality-boamp`),
       ])
-      
-      kpi.value            = r1.data
-      dagSuccess.value     = r2.data
-      taskDuration.value   = r3.data
-      volumeOverTime.value = r4.data      
-      dataQuality.value    = r5.data
+
+      kpi.value = r1.data
+      dagSuccess.value = r2.data
+      taskDuration.value = r3.data
+      volumeOverTime.value = r4.data
+      dataQuality.value = r5.data
       dataQualityBoamp.value = r6.data
-      error.value          = null
+      error.value = null
     } catch (e) {
       error.value = e.message
     } finally {
