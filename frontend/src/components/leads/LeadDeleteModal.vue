@@ -46,7 +46,7 @@
 
 <script setup>
 import { ref } from 'vue'
-import axios from 'axios'
+import etlApi from '@/api/etlAxios'
 import { Trash2, Loader2 } from 'lucide-vue-next'
 import { toast } from 'vue-sonner'
 import {
@@ -59,8 +59,6 @@ const props = defineProps({
 })
 
 const emit = defineEmits(['close', 'deleted'])
-
-const BASE_URL = import.meta.env.VITE_FASTAPI_URL || 'http://10.0.2.2:8001'
 
 const isDeleting = ref(false)
 
@@ -78,11 +76,7 @@ async function handleDelete() {
   
   isDeleting.value = true
   try {
-    const response = await axios.delete(`${BASE_URL}/entreprises/${props.lead.id}`, {
-      headers: {
-        'Accept': 'application/json'
-      }
-    })
+    const response = await etlApi.delete(`/entreprises/${props.lead.id}`)
     
     toast.success('Lead supprimé', {
       description: response.data.message || `Lead '${props.lead.nom}' supprimé avec succès.`,

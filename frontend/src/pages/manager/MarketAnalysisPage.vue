@@ -14,16 +14,6 @@
 
           <div class="flex items-center gap-2 flex-shrink-0">
             <span
-              v-if="validationBadge"
-              class="hidden md:inline-flex items-center gap-1.5 text-[11px] font-medium px-2.5 py-1 rounded-full border"
-              :class="validationBadge.className"
-              :title="validationBadge.title"
-            >
-              <span class="font-mono font-bold">{{ validationBadge.value }}</span>
-              <span class="opacity-70">{{ validationBadge.label }}</span>
-            </span>
-
-            <span
               v-if="summary"
               class="hidden sm:inline-flex items-center gap-1.5 text-[11px] font-medium px-2.5 py-1 rounded-full bg-green-50 text-green-700 border border-green-200"
             >
@@ -186,53 +176,23 @@ async function loadData() {
     const res = await getSummary();
     summary.value = res.data;
   } catch (e) {
+    const backendMessage =
+      e.response?.data?.message ||
+      e.response?.data?.details ||
+      e.response?.data?.detail ||
+      null;
+
     if (e.response?.status === 404) {
       summary.value = null;
     } else {
-      error.value = "Impossible de charger les données. Vérifiez que le service ETL est actif (port 8001).";
+      error.value =
+        backendMessage ||
+        "Impossible de charger les données de segmentation.";
     }
   } finally {
     loading.value = false;
   }
 }
-
-function silhouetteBadgeClass(score) {
-  if (score >= 0.5) return "bg-green-50 text-green-700 border-green-200";
-  if (score >= 0.3) return "bg-amber-50 text-amber-700 border-amber-200";
-  return "bg-red-50 text-red-600 border-red-200";
-}
-
-function accuracyBadgeClass(score) {
-  if (score >= 0.9) return "bg-green-50 text-green-700 border-green-200";
-  if (score >= 0.75) return "bg-amber-50 text-amber-700 border-amber-200";
-  return "bg-red-50 text-red-600 border-red-200";
-}
-
-const validationBadge = computed(() => {
-  const validation = summary.value?.validation;
-  if (!validation) return null;
-
-  const modelType = summary.value?.model_type || validation.model_type || "kmeans";
-  if (modelType === "decision_tree") {
-    const accuracy = validation.training_accuracy;
-    if (accuracy == null) return null;
-    return {
-      value: `Acc=${Math.round(accuracy * 100)}%`,
-      label: "training",
-      className: accuracyBadgeClass(accuracy),
-      title: `Arbre de décision · profondeur ${validation.tree_depth ?? "—"} · ${validation.n_leaves ?? "—"} feuilles`,
-    };
-  }
-
-  const silhouette = validation.silhouette;
-  if (silhouette == null) return null;
-  return {
-    value: `S=${silhouette}`,
-    label: "silhouette",
-    className: silhouetteBadgeClass(silhouette),
-    title: validation.silhouette_interpretation || "",
-  };
-});
 
 async function handleRun() {
   running.value = true;
@@ -241,7 +201,11 @@ async function handleRun() {
     const res = await runClustering();
     summary.value = res.data;
   } catch (e) {
-    error.value = e.response?.data?.detail || "Erreur lors de l'analyse. Vérifiez les logs FastAPI.";
+    error.value =
+      e.response?.data?.message ||
+      e.response?.data?.details ||
+      e.response?.data?.detail ||
+      "Erreur lors de l'analyse.";
   } finally {
     running.value = false;
   }

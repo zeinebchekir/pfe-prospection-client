@@ -11,6 +11,7 @@
  * Tokens are NEVER stored in localStorage or sessionStorage.
  */
 import axios from 'axios'
+import { getDjangoApiBaseUrl } from '@/lib/apiBase'
 
 /** Read a cookie by name from document.cookie */
 function getCookie(name) {
@@ -21,8 +22,8 @@ function getCookie(name) {
 }
 
 const api = axios.create({
-  baseURL: '/api',
-  withCredentials: true, // Required to send HTTP-only cookies cross-origin
+  baseURL: getDjangoApiBaseUrl(),
+  withCredentials: true,
   headers: {
     'Content-Type': 'application/json',
     Accept: 'application/json',
@@ -34,6 +35,7 @@ const api = axios.create({
 api.interceptors.request.use((config) => {
   const csrfToken = getCookie('csrftoken')
   if (csrfToken) {
+    config.headers ||= {}
     config.headers['X-CSRFToken'] = csrfToken
   }
   return config
@@ -116,7 +118,9 @@ api.interceptors.response.use(
 
       // ── Refresh failed: both tokens are expired / invalid ──
       // Clear the user state and redirect to login.
-      forceLogout()
+      if (!originalRequest.authProbe) {
+        forceLogout()
+      }
 
       return Promise.reject(refreshError)
     }

@@ -577,7 +577,7 @@
 
 <script setup>
 import { ref, computed } from 'vue'
-import axios from 'axios'
+import etlApi from '@/api/etlAxios'
 import {
   Users, Loader2, Plus, Trash2, PlusCircle, AlertCircle, X,
   Phone, Mail, CheckCircle2, Linkedin,
@@ -591,7 +591,6 @@ const props = defineProps({ open: { type: Boolean, default: false } })
 const emit  = defineEmits(['close', 'created'])
 
 // ── Constants ────────────────────────────────────────────────────
-const BASE_URL = import.meta.env.VITE_FASTAPI_URL || 'http://10.0.2.2:8001'
 const todayISO = new Date().toISOString().split('T')[0]
 const tabs = [
   { key: 'general',    label: 'Informations' },
@@ -825,7 +824,7 @@ async function handleCreate() {
 
   isSaving.value = true
   try {
-    const res     = await axios.post(`${BASE_URL}/entreprises/add_lead`, buildPayload())
+    const res     = await etlApi.post('/entreprises/add_lead', buildPayload())
     const raw     = res.data?.lead ?? {}
     const adapted = adaptLead(raw, 0)
 

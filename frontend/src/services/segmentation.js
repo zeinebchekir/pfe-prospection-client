@@ -3,35 +3,17 @@
  * Axios service for the Segmentation & Market Analysis feature.
  * Points to the FastAPI ETL service.
  */
-
-import axios from "axios";
-
-/**
- * IMPORTANT:
- * - Android emulator → use 10.0.2.2
- * - Browser → use localhost (via .env)
- */
-const ETL_BASE =
-  import.meta.env.VITE_ETL_API_URL || "http://10.0.2.2:8001";
-
-console.log("[Segmentation] BASE URL:", ETL_BASE);
-
-const etlApi = axios.create({
-  baseURL: ETL_BASE,
-  headers: { "Content-Type": "application/json" },
-});
+import etlApi from '@/api/etlAxios'
 
 /* ─────────────────────────────────────────────
  * SEGMENT META
  * ───────────────────────────────────────────── */
 export const SEGMENT_META = {
-  0: { name: "PME technologiques", shortName: "PME", color: "#04ADBF", rec: "Offre digitale packagée" },
-  1: { name: "PME opérationnelles", shortName: "PME", color: "#56A632", rec: "Accompagnement progressif" },
-  2: { name: "PME en croissance", shortName: "PME", color: "#F29F05", rec: "Montée en gamme" },
-  3: { name: "ETI technologiques", shortName: "ETI", color: "#303E8C", rec: "Co-innovation" },
-  4: { name: "ETI établies", shortName: "ETI", color: "#2D3773", rec: "Relationship selling" },
-  5: { name: "ETI grands comptes", shortName: "ETI", color: "#C2410C", rec: "ABM dédié" },
-  6: { name: "Grands groupes", shortName: "GE", color: "#8E1C1C", rec: "Vente enterprise" },
+  0: { name: "PME énergie & retail", shortName: "PME", color: "#F29F05", rec: "Vertical niche" },
+  1: { name: "Grands groupes matures", shortName: "GE", color: "#303E8C", rec: "Enterprise focus" },
+  2: { name: "ETI établies diversifiées", shortName: "ETI", color: "#04ADBF", rec: "Relationship selling" },
+  3: { name: "Petites structures jeunes", shortName: "PME", color: "#56A632", rec: "Self-serve" },
+  4: { name: "ETI historiques – commerce de gros", shortName: "ETI", color: "#2D3773", rec: "Scalable offers" },
 };
 
 /* ─────────────────────────────────────────────
@@ -76,22 +58,16 @@ export function formatRevenue(value) {
 }
 
 /* ─────────────────────────────────────────────
- * API CALLS (WITH DEBUG LOGS)
+ * API CALLS
  * ───────────────────────────────────────────── */
 export const runClustering = () => {
-  const url = "/segmentation/run";
-  console.log("[Segmentation] POST:", `${ETL_BASE}${url}`);
-  return etlApi.post(url);
+  return etlApi.post("/segmentation/run");
 };
 
 export const getSummary = () => {
-  const url = "/segmentation/summary";
-  console.log("[Segmentation] GET:", `${ETL_BASE}${url}`);
-  return etlApi.get(url);
+  return etlApi.get("/segmentation/summary");
 };
 
 export const getLeads = (params) => {
-  const url = "/segmentation/leads";
-  console.log("[Segmentation] GET:", `${ETL_BASE}${url}`, params);
-  return etlApi.get(url, { params });
+  return etlApi.get("/segmentation/leads", { params });
 };

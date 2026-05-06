@@ -480,16 +480,18 @@ import MetricCard from '@/components/leads/MetricCard.vue'
 import LeadEditModal from '@/components/leads/LeadEditModal.vue'
 import LinkedInAnalysisFlow from '@/components/leads/LinkedInAnalysisFlow.vue'
 
-import axios from 'axios'
+import etlApi from '@/api/etlAxios'
+import axios from 'axios'  // kept for IA service calls (port 8002)
 import { adaptLead, formatDateFR } from '@/lib/leadAdapter'
 
 const route = useRoute()
 const router = useRouter()
 
-const FASTAPI_URL = import.meta.env.VITE_FASTAPI_URL || 'http://10.0.2.2:8001'
+// ETL FastAPI service — resolved via shared etlAxios client
+// IA service — direct URL from env (no proxy defined for :8002)
 const IA_SERVICE_URL = import.meta.env.VITE_IA_SERVICE_URL || 'http://10.0.2.2:8002'
 
-console.log('[LeadDetail] FASTAPI_URL:', FASTAPI_URL)
+console.log('[LeadDetail] ETL base URL:', etlApi.defaults.baseURL)
 console.log('[LeadDetail] IA_SERVICE_URL:', IA_SERVICE_URL)
 
 const leadFromApi = ref(null)
@@ -503,11 +505,11 @@ const editOpen = ref(false)
 async function fetchLeadDetails() {
   isLoading.value = true
 
-  const url = `${FASTAPI_URL}/entreprises/${route.params.id}`
-  console.log('[LeadDetail] Fetch URL:', url)
+  const url = `/entreprises/${route.params.id}`
+  console.log('[LeadDetail] Fetch URL:', etlApi.defaults.baseURL + url)
 
   try {
-    const res = await axios.get(url)
+    const res = await etlApi.get(url)
 
     console.log('[LeadDetail] Fetch response:', JSON.stringify(res.data, null, 2))
 

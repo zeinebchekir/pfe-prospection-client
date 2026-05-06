@@ -1,48 +1,71 @@
-// src/services/monitoringApi.js
+/**
+ * monitoringApi.js
+ *
+ * Service wrapper for the ETL monitoring REST API.
+ *
+ * ALL routes live in the FastAPI ETL service on port 8001,
+ * under the prefix /api/monitoring  (see monitoring.py line 16).
+ *
+ * monitoringAxios.defaults.baseURL = http://10.0.2.2:8001/api/monitoring
+ * Paths passed to monitoringAxios DO NOT include /api/monitoring.
+ *
+ * Example:
+ *   monitoringAxios.get('/state/sync_boamp')
+ *   → GET http://10.0.2.2:8001/api/monitoring/state/sync_boamp  ✓
+ */
+import monitoringAxios from '@/api/monitoringAxios'
 
-const BASE = import.meta.env.VITE_API_URL ?? 'http://localhost:8000'
+const MONITORING_BASE = monitoringAxios.defaults.baseURL
+
+// ── Safe stream URL builder ───────────────────────────────────────────────────
+// For log streaming we need the full URL (raw fetch, not Axios).
+function streamUrl(path) {
+  return MONITORING_BASE + path
+}
 
 export const monitoringApi = {
 
   async getState(dagId) {
-    const r = await fetch(`${BASE}/api/monitoring/state/${dagId}`)
-    return r.json()
+    const { data } = await monitoringAxios.get(`/state/${dagId}`)
+    return data
   },
 
   async getHistory(dagId, limit = 8) {
-    const r = await fetch(`${BASE}/api/monitoring/history/${dagId}?limit=${limit}`)
-    return r.json()
+    const { data } = await monitoringAxios.get(`/history/${dagId}`, { params: { limit } })
+    return data
   },
 
   async getLogs(dagId, runId, taskId) {
-    const r = await fetch(`${BASE}/api/monitoring/logs/${dagId}/${runId}/${taskId}`)
-    const data = await r.json()
+    const { data } = await monitoringAxios.get(`/logs/${dagId}/${runId}/${taskId}`)
     return data.lines ?? []
   },
 
   async getMetrics() {
-    const r = await fetch(`${BASE}/api/monitoring/metrics`)
-    return r.json()
+    const { data } = await monitoringAxios.get('/metrics')
+    return data
   },
 
   async triggerDag(dagId, conf = {}) {
-    const r = await fetch(`${BASE}/api/monitoring/trigger/${dagId}`, {
-      method:  'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body:    JSON.stringify(conf),
-    })
-    return r.json()
+    const { data } = await monitoringAxios.post(`/trigger/${dagId}`, conf)
+    return data
   },
 
+  // Log stream — must use raw fetch because Axios doesn't support ReadableStream
   streamLogs(dagId, runId, taskId, onLine, onDone) {
     const controller = new AbortController()
-    const url = `${BASE}/api/monitoring/logs/${dagId}/${runId}/${taskId}/stream`
+    const url = streamUrl(`/logs/${dagId}/${runId}/${taskId}/stream`)
 
-    fetch(url, { signal: controller.signal })
+    fetch(url, { signal: controller.signal, credentials: 'omit' })
       .then(async (response) => {
+        if (!response.ok) {
+          const body = await response.text().catch(() => '')
+          console.error(`[STREAM] HTTP ${response.status} — ${url}\n  Body: ${body.slice(0, 200)}`)
+          onDone()
+          return
+        }
         const reader  = response.body.getReader()
         const decoder = new TextDecoder()
-        let   buffer  = ''
+        let buffer = ''
 
         while (true) {
           const { done, value } = await reader.read()

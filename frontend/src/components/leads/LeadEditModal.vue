@@ -271,7 +271,7 @@
 
 <script setup>
 import { ref, watch } from 'vue'
-import axios from 'axios'
+import etlApi from '@/api/etlAxios'
 import { Users, Loader2, Plus, Trash2, Linkedin, Mail, Phone } from 'lucide-vue-next'
 import { toast } from 'vue-sonner'
 import {
@@ -384,9 +384,8 @@ watch(() => props.open, async (isOpen) => {
   // Fetch authoritative data from API
   isLoadingData.value = true
   try {
-    const baseUrl = import.meta.env.VITE_FASTAPI_URL || 'http://10.0.2.2:8001'
     const leadId = lead.identifiant || lead.siren || lead.id
-    const res = await axios.get(`${baseUrl}/entreprises/${leadId}/modal`)
+    const res = await etlApi.get(`/entreprises/${leadId}/modal`)
     const data = res.data
 
     const info    = data.Informations || {}
@@ -434,8 +433,6 @@ async function handleSave() {
 
   isSaving.value = true
   try {
-    const baseUrl = import.meta.env.VITE_FASTAPI_URL || 'http://10.0.2.2:8001'
-
     // Build clean dirigeants array (strip internal _uid)
     const dirigeants = modalDirigeants.value.map(({ _uid, ...d }) => d)
 
@@ -457,7 +454,7 @@ async function handleSave() {
       dirigeants,
     }
 
-    await axios.patch(`${baseUrl}/entreprises/${leadId}`, payload)
+    await etlApi.patch(`/entreprises/${leadId}`, payload)
 
     const dash = (v) => v?.trim() || '—'
     emit('save', props.lead.id, {

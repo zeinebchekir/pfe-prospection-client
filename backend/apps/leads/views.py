@@ -454,3 +454,5 @@ class LeadOpportunityTrainView(APIView):
                 "performance": _serialize_performance(performance),
             }
         )
+
+

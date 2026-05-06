@@ -396,7 +396,7 @@
 <script setup>
 import { ref, computed } from 'vue'
 import { useRouter } from 'vue-router'
-import axios from 'axios'
+import etlApi from '@/api/etlAxios'
 import {
   Building2, Plus, Loader2, SearchX, Search, Globe, MapPin, Users,
   CheckCircle2, Eye, EyeOff, Database, Phone, Mail, Landmark,
@@ -421,9 +421,7 @@ import { useLeads } from '@/composables/useLeads'
 import { adaptLead, formatCA, formatDateFR } from '@/lib/leadAdapter'
 
 const router = useRouter()
-const BASE_URL = import.meta.env.VITE_FASTAPI_URL || 'http://10.0.2.2:8001'
-
-console.log('[Leads] FASTAPI BASE_URL:', BASE_URL)
+console.log('[Leads] ETL base URL:', etlApi.defaults.baseURL)
 
 const AVATAR_COLORS = [
   'bg-blue-100 text-blue-700',
@@ -556,13 +554,13 @@ async function startSearch() {
   const query = filters.value.search.trim()
   if (!query) return
 
-  const url = `${BASE_URL}/entreprises/search_from_query/${encodeURIComponent(query)}`
-  console.log('[Leads] search URL:', url)
+  const url = `/entreprises/search_from_query/${encodeURIComponent(query)}`
+  console.log('[Leads] search URL:', etlApi.defaults.baseURL + url)
 
   isSearching.value = true
 
   try {
-    const res = await axios.post(url)
+    const res = await etlApi.post(url)
 
     console.log('[Leads] search response:', JSON.stringify(res.data, null, 2))
 
@@ -598,13 +596,13 @@ async function confirmLead(company) {
   const idx = searchResults.value.indexOf(company)
   if (isAlreadyKnown(company)) return
 
-  const url = `${BASE_URL}/entreprises/confirm_lead`
-  console.log('[Leads] confirm URL:', url)
+  const url = `/entreprises/confirm_lead`
+  console.log('[Leads] confirm URL:', etlApi.defaults.baseURL + url)
 
   addingIndex.value = idx
 
   try {
-    const res = await axios.post(url, {
+    const res = await etlApi.post(url, {
       entreprise: company,
     })
 

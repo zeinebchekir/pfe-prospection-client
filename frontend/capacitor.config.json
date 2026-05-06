@@ -3,6 +3,7 @@
   "appName": "Qualifix",
   "webDir": "dist",
   "server": {
+    "hostname": "10.0.2.2",
     "androidScheme": "http",
     "cleartext": true
   },

@@ -4,6 +4,7 @@ Django settings base – shared across all environments.
 from pathlib import Path
 from datetime import timedelta
 from decouple import config, Csv
+from django.core.exceptions import ImproperlyConfigured
 
 BASE_DIR = Path(__file__).resolve().parent.parent.parent
 
@@ -34,8 +35,8 @@ INSTALLED_APPS = [
 ]
 
 MIDDLEWARE = [
+    "corsheaders.middleware.CorsMiddleware",
     "django.middleware.security.SecurityMiddleware",
-    "corsheaders.middleware.CorsMiddleware",   # Must be before CommonMiddleware
     "django.contrib.sessions.middleware.SessionMiddleware",
     "django.middleware.common.CommonMiddleware",
     "django.middleware.csrf.CsrfViewMiddleware",
@@ -164,7 +165,8 @@ AUTH_COOKIE_ACCESS = "access_token"
 AUTH_COOKIE_REFRESH = "refresh_token"
 AUTH_COOKIE_SECURE = config("COOKIE_SECURE", default=False, cast=bool)
 AUTH_COOKIE_HTTP_ONLY = True
-AUTH_COOKIE_SAMESITE = "Lax"
+AUTH_COOKIE_SAMESITE = config("AUTH_COOKIE_SAMESITE", default="Lax")
+AUTH_COOKIE_DOMAIN = config("AUTH_COOKIE_DOMAIN", default=None)
 AUTH_COOKIE_ACCESS_MAX_AGE = 60 * 10         # 10 minutes
 AUTH_COOKIE_REFRESH_MAX_AGE = 60 * 60 * 24 * 7  # 7 days
 
@@ -172,7 +174,17 @@ AUTH_COOKIE_REFRESH_MAX_AGE = 60 * 60 * 24 * 7  # 7 days
 # CORS
 # ---------------------------------------------------------------------------
 CORS_ALLOW_CREDENTIALS = True
-CORS_ALLOWED_ORIGINS = config("CORS_ALLOWED_ORIGINS", cast=Csv(), default="http://localhost:5173")
+CORS_ALLOWED_ORIGINS = config(
+    "CORS_ALLOWED_ORIGINS",
+    cast=Csv(),
+    default=(
+        "http://localhost,"
+        "http://localhost:5173,"
+        "http://127.0.0.1:5173,"
+        "http://10.0.2.2,"
+        "http://10.0.2.2:5173"
+    ),
+)
 CORS_ALLOW_HEADERS = [
     "accept",
     "accept-encoding",
@@ -188,8 +200,27 @@ CORS_ALLOW_HEADERS = [
 # ---------------------------------------------------------------------------
 # CSRF
 # ---------------------------------------------------------------------------
-CSRF_TRUSTED_ORIGINS = config("CSRF_TRUSTED_ORIGINS", cast=Csv(), default="http://localhost:5173,http://localhost:8000")
-CSRF_COOKIE_SAMESITE = "Lax"
+CSRF_TRUSTED_ORIGINS = config(
+    "CSRF_TRUSTED_ORIGINS",
+    cast=Csv(),
+    default=(
+        "http://localhost,"
+        "http://localhost:5173,"
+        "http://localhost:8000,"
+        "http://127.0.0.1:5173,"
+        "http://127.0.0.1:8000,"
+        "http://10.0.2.2,"
+        "http://10.0.2.2:5173,"
+        "http://10.0.2.2:8000"
+    ),
+)
+CSRF_COOKIE_SAMESITE = config("CSRF_COOKIE_SAMESITE", default="Lax")
 CSRF_COOKIE_HTTPONLY = False   # Axios needs to read it to send in header
 SESSION_COOKIE_HTTPONLY = True
-SESSION_COOKIE_SAMESITE = "Lax"
+SESSION_COOKIE_SAMESITE = config("SESSION_COOKIE_SAMESITE", default="Lax")
+
+if AUTH_COOKIE_SAMESITE.lower() == "none" and not AUTH_COOKIE_SECURE:
+    raise ImproperlyConfigured(
+        "AUTH_COOKIE_SAMESITE=None requires COOKIE_SECURE=True because browsers reject "
+        "cross-site cookies without the Secure attribute."
+    )

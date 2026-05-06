@@ -1,5 +1,5 @@
 import { ref, computed, watch, onMounted } from 'vue'
-import axios from 'axios'
+import etlApi from '@/api/etlAxios'
 import { adaptLeadResponse } from '@/lib/leadAdapter'
 
 export const INITIAL_FILTERS = {
@@ -21,9 +21,7 @@ export const INITIAL_FILTERS = {
 export const UNIQUE_SEGMENTS = ['PME', 'ETI', 'GE', 'Micro', 'Inconnu']
 export const UNIQUE_STATUSES = ['Nouveau', 'Qualifié', 'Opportunité']
 
-const BASE_URL = import.meta.env.VITE_FASTAPI_URL || 'http://10.0.2.2:8001'
-
-console.log('[useLeads] FASTAPI BASE_URL:', BASE_URL)
+console.log('[useLeads] ETL base URL:', etlApi.defaults.baseURL)
 
 function countActiveFilters(f) {
   let c = 0
@@ -52,11 +50,10 @@ export function useLeads() {
   async function fetchLeads() {
     isLoading.value = true
 
-    const url = `${BASE_URL}/entreprises/`
-    console.log('[useLeads] Fetch URL:', url)
+    console.log('[useLeads] Fetching:', etlApi.defaults.baseURL + '/entreprises/')
 
     try {
-      const res = await axios.get(url, {
+      const res = await etlApi.get('/entreprises/', {
         params: { skip: 0, limit: 10000 },
       })
 

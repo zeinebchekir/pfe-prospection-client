@@ -23,6 +23,8 @@ def set_auth_cookies(response, access_token: str, refresh_token: str | None = No
         "samesite": settings.AUTH_COOKIE_SAMESITE,
         "path": "/",
     }
+    if settings.AUTH_COOKIE_DOMAIN:
+        cookie_kwargs["domain"] = settings.AUTH_COOKIE_DOMAIN
 
     response.set_cookie(
         key=settings.AUTH_COOKIE_ACCESS,
@@ -44,5 +46,14 @@ def unset_auth_cookies(response) -> None:
     """
     Delete JWT cookies by setting them to empty strings with max_age=0.
     """
-    response.delete_cookie(settings.AUTH_COOKIE_ACCESS, path="/")
-    response.delete_cookie(settings.AUTH_COOKIE_REFRESH, path="/")
+    delete_kwargs = {
+        "path": "/",
+        "samesite": settings.AUTH_COOKIE_SAMESITE,
+    }
+    if settings.AUTH_COOKIE_SECURE:
+        delete_kwargs["secure"] = True
+    if settings.AUTH_COOKIE_DOMAIN:
+        delete_kwargs["domain"] = settings.AUTH_COOKIE_DOMAIN
+
+    response.delete_cookie(settings.AUTH_COOKIE_ACCESS, **delete_kwargs)
+    response.delete_cookie(settings.AUTH_COOKIE_REFRESH, **delete_kwargs)

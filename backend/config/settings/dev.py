@@ -6,7 +6,11 @@ from decouple import config
 
 DEBUG = True
 
-ALLOWED_HOSTS = config("ALLOWED_HOSTS", cast=lambda v: [s.strip() for s in v.split(",")], default="localhost,127.0.0.1")
+ALLOWED_HOSTS = config(
+    "ALLOWED_HOSTS",
+    cast=lambda v: [s.strip() for s in v.split(",")],
+    default="localhost,127.0.0.1,10.0.2.2",
+)
 
 # Relax CORS for local development
 CORS_ALLOW_ALL_ORIGINS = False  # still restrict to the configured origins

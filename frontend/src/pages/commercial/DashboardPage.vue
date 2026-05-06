@@ -182,7 +182,7 @@
 
 <script setup>
 import { ref, computed, onMounted } from 'vue'
-import axios from 'axios'
+import etlApi from '@/api/etlAxios'
 import { BarChart3, RefreshCw, X } from 'lucide-vue-next'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 
@@ -197,9 +197,7 @@ import DashboardPipeline from '@/components/dashboard/DashboardPipeline.vue'
 import { adaptLeadResponse } from '@/lib/leadAdapter'
 import { computeDashboardData } from '@/lib/dashboardData'
 
-const BASE_URL = import.meta.env.VITE_FASTAPI_URL || 'http://10.0.2.2:8001'
-
-console.log('[Dashboard] FASTAPI BASE_URL:', BASE_URL)
+console.log('[Dashboard] ETL base URL:', etlApi.defaults.baseURL)
 
 const todayLabel = new Date().toLocaleDateString('fr-FR', {
   day: 'numeric',
@@ -213,11 +211,10 @@ const isLoading = ref(false)
 async function fetchLeads() {
   isLoading.value = true
 
-  const url = `${BASE_URL}/entreprises/`
-  console.log('[Dashboard] Fetch URL:', url)
+  console.log('[Dashboard] Fetching:', etlApi.defaults.baseURL + '/entreprises/')
 
   try {
-    const res = await axios.get(url, {
+    const res = await etlApi.get('/entreprises/', {
       params: { skip: 0, limit: 2000 },
     })
 

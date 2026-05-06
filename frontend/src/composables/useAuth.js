@@ -1,43 +1,10 @@
 import { ref, computed } from 'vue'
-import axios from 'axios'
-
-const API_URL = import.meta.env.VITE_API_URL || 'http://10.0.2.2:8000'
-
-const api = axios.create({
-  baseURL: `${API_URL}/api`,
-  withCredentials: true,
-  headers: {
-    'Content-Type': 'application/json',
-  },
-})
-
-const savedToken = localStorage.getItem('access_token')
-
-if (savedToken) {
-  api.defaults.headers.common.Authorization = `Bearer ${savedToken}`
-}
+import api from '@/api/axios'
 
 const user = ref(null)
 const isLoading = ref(false)
 const error = ref(null)
 let fetchPromise = null
-
-function saveTokens(data) {
-  if (data?.access) {
-    localStorage.setItem('access_token', data.access)
-    api.defaults.headers.common.Authorization = `Bearer ${data.access}`
-  }
-
-  if (data?.refresh) {
-    localStorage.setItem('refresh_token', data.refresh)
-  }
-}
-
-function clearTokens() {
-  localStorage.removeItem('access_token')
-  localStorage.removeItem('refresh_token')
-  delete api.defaults.headers.common.Authorization
-}
 
 function logAxiosError(label, err) {
   console.error(label, JSON.stringify({
@@ -55,7 +22,6 @@ if (typeof window !== 'undefined') {
     user.value = null
     isLoading.value = false
     fetchPromise = null
-    clearTokens()
   })
 }
 
@@ -70,7 +36,7 @@ export function useAuth() {
       error.value = null
 
       try {
-        const { data } = await api.get('/auth/me/')
+        const { data } = await api.get('/auth/me/', { authProbe: true })
         user.value = data.user
         return data.user
       } catch (err) {
@@ -94,7 +60,6 @@ export function useAuth() {
       const { data } = await api.post('/auth/login/', credentials)
       console.log('✅ LOGIN RESPONSE:', JSON.stringify(data, null, 2))
 
-      saveTokens(data)
       user.value = data.user
 
       return { success: true }
@@ -129,18 +94,11 @@ export function useAuth() {
 
       console.log('✅ REGISTER RESPONSE:', JSON.stringify(data, null, 2))
 
-      if (data?.access) {
-        saveTokens(data)
-        user.value = data.user
-        return { success: true, needsLogin: false }
-      }
-
-      user.value = null
-      clearTokens()
-
+      user.value = data.user
       return {
         success: true,
-        needsLogin: true,
+        needsLogin: false,
+        user: data.user,
         message: 'Compte créé avec succès. Connectez-vous maintenant.',
       }
     } catch (err) {
@@ -178,7 +136,6 @@ export function useAuth() {
       logAxiosError('🚨 LOGOUT FAILED FULL:', err)
     } finally {
       user.value = null
-      clearTokens()
       isLoading.value = false
     }
   }

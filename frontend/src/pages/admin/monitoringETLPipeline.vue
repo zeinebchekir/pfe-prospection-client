@@ -414,11 +414,37 @@ import ChartDurationBottlenecks from '@/components/dashboard/ChartDurationBottle
 import ChartVolumeTrends from '@/components/dashboard/ChartVolumeTrends.vue'
 import ChartQualityCompleteness from '@/components/dashboard/ChartQualityCompleteness.vue'
 import ChartBoampQuality from '@/components/dashboard/ChartBoampQuality.vue'
+import monitoringAxios from '@/api/monitoringAxios'
 // ─────────────────────────────────────────────
 // CONFIG
 // ─────────────────────────────────────────────
+// ALL monitoring routes live in the ETL FastAPI service (:8001),
+// NOT in Django (:8000). monitoringAxios.defaults.baseURL =
+// http://10.0.2.2:8001/api/monitoring  (Capacitor native)
+// Paths below do NOT include /api/monitoring.
+const MONITORING_BASE = monitoringAxios.defaults.baseURL
+console.log('[monitoringETLPipeline] Monitoring base URL:', MONITORING_BASE)
 
-const BASE_URL = import.meta.env.VITE_API_URL ?? 'http://10.0.2.2:8001'
+// Safe fetch helper with JSON guard
+async function safeFetch(path) {
+  const url = MONITORING_BASE + path
+  let response
+  try {
+    response = await fetch(url, { credentials: 'omit' })
+  } catch (netErr) {
+    throw new Error(`[monitoring] Network error — ${url}: ${netErr.message}`)
+  }
+  if (!response.ok) {
+    const body = await response.text().catch(() => '')
+    throw new Error(`[monitoring] HTTP ${response.status} — ${url}\n  Body: ${body.slice(0, 300)}`)
+  }
+  const ct = response.headers.get('content-type') ?? ''
+  if (!ct.includes('application/json')) {
+    const body = await response.text().catch(() => '')
+    throw new Error(`[monitoring] Non-JSON response — ${url}\n  Content-Type: ${ct}\n  Body: ${body.slice(0, 300)}`)
+  }
+  return response.json()
+}
 
 const TASK_LABELS = {
   scrape_boamp:       'Scraping incrémental des marchés publics BOAMP via API',
@@ -565,18 +591,14 @@ function formatTime(isoString) {
 
 async function fetchPipelineState(dagId) {
   try {
-    const res  = await fetch(`${BASE_URL}/api/monitoring/state/${dagId}`)
-    if (!res.ok) throw new Error(`HTTP ${res.status}`)
-    const data = await res.json()
-
+    // Path: /state/{dag_id} → http://10.0.2.2:8001/api/monitoring/state/{dag_id}
+    const data = await safeFetch(`/state/${dagId}`)
     connectionStatus.value[dagId] = true
-    await applyStateToReactive(dagId, data)   // ← await ajouté
-    await fetchTodayRuns(dagId)           // ← ajoute ça
-
-
+    await applyStateToReactive(dagId, data)
+    await fetchTodayRuns(dagId)
   } catch (e) {
     connectionStatus.value[dagId] = false
-    console.error(`[POLL ${dagId}]`, e.message)
+    console.error(`[POLL ${dagId}]`, e.message.split('\n')[0])
   }
 }
 
@@ -672,12 +694,11 @@ async function applyStateToReactive(dagId, data) {
 
 async function fetchTaskResources(dagId, runId, taskId) {
   try {
-    const res  = await fetch(
-      `${BASE_URL}/api/monitoring/resources/task/${dagId}/${runId}/${taskId}`
-    )
-    if (!res.ok) return null
-    return await res.json()
-  } catch {
+    // Path: /resources/task/{dag_id}/{run_id}/{task_id}
+    // → http://10.0.2.2:8001/api/monitoring/resources/task/...
+    return await safeFetch(`/resources/task/${dagId}/${runId}/${taskId}`)
+  } catch (e) {
+    console.warn('[monitoring] Task resources unavailable:', e.message.split('\n')[0])
     return null
   }
 }
@@ -686,11 +707,11 @@ async function fetchTaskResources(dagId, runId, taskId) {
 
 async function fetchTodayRuns(dagId) {
   try {
-    const res  = await fetch(`${BASE_URL}/api/monitoring/runs/today/${dagId}`)
-    const data = await res.json()
+    // Path: /runs/today/{dag_id} → http://10.0.2.2:8001/api/monitoring/runs/today/{dag_id}
+    const data = await safeFetch(`/runs/today/${dagId}`)
     todayRuns[dagId] = data
   } catch (e) {
-    console.error(`[TODAY RUNS ${dagId}]`, e.message)
+    console.warn(`[TODAY RUNS ${dagId}]`, e.message.split('\n')[0])
   }
 }
 // ─────────────────────────────────────────────
@@ -699,12 +720,12 @@ async function fetchTodayRuns(dagId) {
 
 async function fetchLogsSnapshot(dagId, runId, taskId) {
   try {
-    const res  = await fetch(
-      `${BASE_URL}/api/monitoring/logs/${dagId}/${runId}/${taskId}`
-    )
-    const data = await res.json()
+    // Path: /logs/{dag_id}/{run_id}/{task_id}
+    // → http://10.0.2.2:8001/api/monitoring/logs/...
+    const data = await safeFetch(`/logs/${dagId}/${runId}/${taskId}`)
     return data.lines ?? []
-  } catch {
+  } catch (e) {
+    console.warn('[monitoring] Log snapshot failed:', e.message.split('\n')[0])
     return []
   }
 }
@@ -724,9 +745,11 @@ function startLogStream(dagId, runId, taskId) {
   const phase = pipelines[dagId].phases.find(p => p.name === taskId)
   if (phase) phase.logs = []
 
-  const url = `${BASE_URL}/api/monitoring/logs/${dagId}/${runId}/${taskId}/stream`
+  // Path: /logs/{dag_id}/{run_id}/{task_id}/stream
+  // → http://10.0.2.2:8001/api/monitoring/logs/.../stream
+  const url = `${MONITORING_BASE}/logs/${dagId}/${runId}/${taskId}/stream`
 
-  fetch(url, { signal: controller.signal })
+  fetch(url, { signal: controller.signal, credentials: 'omit' })
     .then(async (response) => {
       const reader  = response.body.getReader()
       const decoder = new TextDecoder()
@@ -842,12 +865,8 @@ async function handleStart(dagId) {
   simulatingPipelines.add(dagId)
 
   try {
-    const res  = await fetch(`${BASE_URL}/api/monitoring/trigger/${dagId}`, {
-      method:  'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body:    JSON.stringify({}),
-    })
-    const data = await res.json()
+    // Path: /trigger/{dag_id} → http://10.0.2.2:8001/api/monitoring/trigger/{dag_id}
+    const { data } = await monitoringAxios.post(`/trigger/${dagId}`, {})
     console.log(`[TRIGGER ${dagId}]`, data)
 
     // Forcer un poll immédiat après déclenchement
@@ -988,11 +1007,11 @@ const TASK_XCOM_MAP = {
 async function fetchRunMetrics(dagId, runId) {
   if (!runId || runId === '—') return {}
   try {
-    const res  = await fetch(`${BASE_URL}/api/monitoring/metrics/${dagId}/${runId}`)
-    if (!res.ok) return {}
-    const data = await res.json()
+    // Path: /metrics/{dag_id}/{run_id} → http://10.0.2.2:8001/api/monitoring/metrics/...
+    const data = await safeFetch(`/metrics/${dagId}/${runId}`)
     return data.metrics ?? {}
-  } catch {
+  } catch (e) {
+    console.warn('[monitoring] Run metrics unavailable:', e.message.split('\n')[0])
     return {}
   }
 }
@@ -1005,14 +1024,14 @@ async function fetchRunMetrics(dagId, runId) {
 
 async function fetchGlobalMetrics() {
   try {
-    const res  = await fetch(`${BASE_URL}/api/monitoring/metrics`)
-    const data = await res.json()
+    // Path: /metrics → http://10.0.2.2:8001/api/monitoring/metrics
+    const data = await safeFetch('/metrics')
     globalMetrics.value = {
       inserted_today: data.inserted_today ?? 0,
       updated_today:  data.updated_today  ?? 0,
     }
   } catch (e) {
-    console.error('[METRICS]', e.message)
+    console.warn('[METRICS]', e.message.split('\n')[0])
   }
 }
 // ─────────────────────────────────────────────
