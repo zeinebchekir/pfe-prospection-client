@@ -66,6 +66,7 @@ x-airflow-common:
     AIRFLOW__CORE__EXECUTION_API_SERVER_URL: 'http://airflow-apiserver:8080/execution/'
     AIRFLOW__API_AUTH__JWT_SECRET: ${AIRFLOW__API_AUTH__JWT_SECRET:-airflow_jwt_secret}
     AIRFLOW__API_AUTH__JWT_ISSUER: ${AIRFLOW__API_AUTH__JWT_ISSUER:-airflow}
+    FASTAPI_INTERNAL_URL: "http://fastapi:8000"
 
     # 🔥 ADD THIS LINE (THE FIX)
     PYTHONPATH: /opt/airflow/ETL_pipeline
@@ -354,10 +355,15 @@ services:
       AIRFLOW_URL: http://airflow-apiserver:8080   # ← nom du service Docker
       AIRFLOW_USER: airflow
       AIRFLOW_PASSWORD: airflow
+      USER_MANAGEMENT_URL: http://web:8000   # ← nom du service Django
       AIRFLOW__CORE__FERNET_KEY: 097a1o3NNpZrDZgFJY3GhZOYDk9alwSLybr_qtLnLEw=
     depends_on:
       - postgres
+    
     restart: always
+    networks:
+      - default          # réseau interne ETL (postgres, airflow, etc.)
+      - crmpfe_network   # ← pour joindre Django "web"
 
   airflow-cli:
     <<: *airflow-common
@@ -459,3 +465,9 @@ volumes:
   pgadmin-data:
   prometheus-data:    # ← ajouter
   airflow-shared-tmp:
+networks:
+  default:
+    driver: bridge
+  crmpfe_network:
+    external: true
+    name: pfe-prospection-client_crmpfe_network

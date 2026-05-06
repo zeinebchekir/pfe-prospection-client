@@ -3,21 +3,11 @@
     <TheSidebar />
 
     <div class="flex-1 flex flex-col min-w-0">
-      <header class="h-16 border-b border-border bg-white sticky top-0 z-40 px-6 flex items-center justify-between shadow-sm">
-        <div class="flex items-center gap-3">
-          <div class="md:hidden w-10" />
-          <div>
-            <h2 class="text-sm font-semibold text-tacir-darkblue">Gestion des Utilisateurs</h2>
-            <p class="text-[11px] text-tacir-darkgray">Administration équipe</p>
-          </div>
-        </div>
-
-        <div class="flex items-center gap-4">
-          <Button @click="openCreateModal" class="h-9 px-4 bg-tacir-blue hover:bg-tacir-darkblue text-white rounded-lg gap-2 shadow-sm transition-all active:scale-95 text-xs font-bold">
-            <Plus class="w-3.5 h-3.5" /> Ajouter un membre
-          </Button>
-        </div>
-      </header>
+      <PageHeader
+        title="Gestion des Utilisateurs"
+        subtitle="Administration équipe"
+        :actions="[{ label: 'Ajouter un membre', icon: Plus, variant: 'primary', onClick: openCreateModal }]"
+      />
 
       <main class="p-4 md:p-8 space-y-6 overflow-y-auto">
         <!-- Filters -->
@@ -358,6 +348,7 @@ import {
   Target, RefreshCw as RefreshIcon, BarChart3, CheckCircle2,
   UserPlus, Edit3, Mail, Key, User, Check, ChevronLeft, ChevronRight
 } from 'lucide-vue-next'
+import PageHeader from '@/components/shared/PageHeader.vue'
 import TheSidebar from '@/components/AppSidebar.vue'
 import api from '@/api/axios'
 import { Button } from '@/components/ui/button'

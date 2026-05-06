@@ -17,3 +17,4 @@ ollama
 openai
 pydantic
 groq
+pywebpush

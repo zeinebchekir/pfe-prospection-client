@@ -1,16 +1,31 @@
 import os
+import logging
 import traceback
+import requests
 from datetime import datetime
 
-LOGS_DIR = "/opt/airflow/exports/etl_logs"
+# ── Config ────────────────────────────────────────────────────────────────────
+LOGS_DIR            = "/opt/airflow/exports/etl_logs"
+FASTAPI_INTERNAL_URL = os.getenv("FASTAPI_INTERNAL_URL", "http://fastapi:8000")
+
 os.makedirs(LOGS_DIR, exist_ok=True)
 
+logger = logging.getLogger(__name__)
 
+
+# ── Helpers ───────────────────────────────────────────────────────────────────
 def _log_path(dag_id: str, run_id: str) -> str:
     """Un fichier de log par DAG par jour — plusieurs runs dedans."""
     today = datetime.now().strftime("%Y-%m-%d")
     return os.path.join(LOGS_DIR, f"{dag_id}__{today}.txt")
 
+
+def _append(path: str, content: str):
+    with open(path, "a", encoding="utf-8") as f:
+        f.write(content)
+
+
+# ── Log functions ─────────────────────────────────────────────────────────────
 def log_task_start(dag_id: str, run_id: str, task_id: str):
     path = _log_path(dag_id, run_id)
     now  = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
@@ -45,6 +60,12 @@ def log_task_failure(dag_id: str, run_id: str, task_id: str,
     lines.append("\n")
     _append(path, "".join(lines))
 
+    # Notification SSE — passe aussi le nom du fichier log pour le lien frontend
+    import os as _os
+    log_file = _os.path.basename(path)   # ex: sync_boamp__2026-05-04.txt
+    notify_failure(dag_id, task_id, exc, log_file)
+
+
 def log_dag_header(dag_id: str, run_id: str):
     path = _log_path(dag_id, run_id)
     now  = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
@@ -55,6 +76,7 @@ def log_dag_header(dag_id: str, run_id: str):
         f"{'─' * 70}\n\n"
     )
     _append(path, header)
+
 
 def log_dag_footer(dag_id: str, run_id: str,
                    total_tasks: int, failed_tasks: list):
@@ -80,6 +102,23 @@ def log_dag_footer(dag_id: str, run_id: str,
     _append(path, footer)
 
 
-def _append(path: str, content: str):
-    with open(path, "a", encoding="utf-8") as f:
-        f.write(content)
+# ── Notification SSE ──────────────────────────────────────────────────────────
+def notify_failure(dag_id: str, task_id: str, exc: Exception, log_file: str = ""):
+    """
+    Appelé depuis log_task_failure().
+    POST vers FastAPI /notifications/send qui répond immédiatement (queued).
+    Ne bloque jamais le pipeline — timeout court de 5 s suffit.
+    """
+    try:
+        requests.post(
+            f"{FASTAPI_INTERNAL_URL}/notifications/send",
+            json={
+                "dag_id":   dag_id,
+                "task_id":  task_id,
+                "message":  f"{type(exc).__name__}: {str(exc)[:150]}",
+                "log_file": log_file,
+            },
+            timeout=5,
+        )
+    except Exception as e:
+        logger.warning(f"[notify_failure] Impossible d'envoyer la notification SSE : {e}")

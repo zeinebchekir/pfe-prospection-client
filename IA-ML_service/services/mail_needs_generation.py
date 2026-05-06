@@ -212,6 +212,7 @@ def call_ollama_email(messages: list[dict], max_tokens: int = 2000) -> str:
                 "model": MODEL_NAME,
                 "messages": messages,
                 "stream": False,
+                "keep_alive": 0,
                 # No "format": "json" here — intentional, see docstring
                 "options": {
                     "temperature": 0.1,

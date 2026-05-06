@@ -1,11 +1,14 @@
 import requests
 import os
+from dotenv import load_dotenv
+
+load_dotenv()
 def get_linkedin_posts(company_url: str, max_posts: int = 10):
     posts=[]
     endpoint = "https://api.apify.com/v2/acts/harvestapi~linkedin-company-posts/run-sync-get-dataset-items"
     
     params = {
-        "token": os.getenv("APIFY_API_TOKEN"),
+        "token": os.getenv("APIFY_TOKEN"),
         "format": "json"
     }
     
@@ -52,7 +55,7 @@ def get_linkedin_informations(company_url: str):
     endpoint = "https://api.apify.com/v2/acts/harvestapi~linkedin-company/run-sync-get-dataset-items"
     
     params = {
-        "token": os.getenv("APIFY_API_TOKEN"),
+        "token": os.getenv("APIFY_TOKEN"),
         "format": "json"
     }
     

@@ -10,3 +10,4 @@ Alembic==1.13.1
 httpx
 psutil
 reportlab
+pywebpush

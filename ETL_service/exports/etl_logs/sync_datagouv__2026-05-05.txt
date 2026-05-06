@@ -1,0 +1,163 @@
+[2026-05-05 09:19:09]  ▶  DÉBUT      scrape_sirene
+[2026-05-05 09:19:24]  ▶  DÉBUT      scrape_sirene
+[2026-05-05 09:19:40]  ✗  ÉCHEC      scrape_sirene  (31.5s)
+            Exception  : ConnectionError: [SIRENE_INSEE] ❌ Échec après 4 tentatives (timeout/connexion) : HTTPSConnectionPool(host='api.insee.fr', port=443): Max retries exceeded with url: /api-sirene/3.11/siren?q=dateDernierTraitementUniteLegale:%5B2026-05-04T14:06:47%20TO%20*%5D&nombre=200&curseur=*&champs=siren,dateDernierTraitementUniteLegale,denominationUniteLegale,etatAdministratifUniteLegale (Caused by NameResolutionError("<urllib3.connection.HTTPSConnection object at 0x7fb99e257e30>: Failed to resolve 'api.insee.fr' ([Errno -2] Name or service not known)"))
+            Traceback  :
+              Traceback (most recent call last):
+                File "/home/airflow/.local/lib/python3.12/site-packages/urllib3/connection.py", line 198, in _new_conn
+                  sock = connection.create_connection(
+                         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+                File "/home/airflow/.local/lib/python3.12/site-packages/urllib3/util/connection.py", line 60, in create_connection
+                  for res in socket.getaddrinfo(host, port, family, socket.SOCK_STREAM):
+                             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+                File "/usr/local/lib/python3.12/socket.py", line 978, in getaddrinfo
+                  for res in _socket.getaddrinfo(host, port, family, type, proto, flags):
+                             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+              socket.gaierror: [Errno -2] Name or service not known
+              
+              The above exception was the direct cause of the following exception:
+              
+              Traceback (most recent call last):
+                File "/home/airflow/.local/lib/python3.12/site-packages/urllib3/connectionpool.py", line 787, in urlopen
+                  response = self._make_request(
+                             ^^^^^^^^^^^^^^^^^^^
+                File "/home/airflow/.local/lib/python3.12/site-packages/urllib3/connectionpool.py", line 488, in _make_request
+                  raise new_e
+                File "/home/airflow/.local/lib/python3.12/site-packages/urllib3/connectionpool.py", line 464, in _make_request
+                  self._validate_conn(conn)
+                File "/home/airflow/.local/lib/python3.12/site-packages/urllib3/connectionpool.py", line 1093, in _validate_conn
+                  conn.connect()
+                File "/home/airflow/.local/lib/python3.12/site-packages/urllib3/connection.py", line 704, in connect
+                  self.sock = sock = self._new_conn()
+                                     ^^^^^^^^^^^^^^^^
+                File "/home/airflow/.local/lib/python3.12/site-packages/urllib3/connection.py", line 205, in _new_conn
+                  raise NameResolutionError(self.host, self, e) from e
+              urllib3.exceptions.NameResolutionError: <urllib3.connection.HTTPSConnection object at 0x7fb99e257e30>: Failed to resolve 'api.insee.fr' ([Errno -2] Name or service not known)
+              
+              The above exception was the direct cause of the following exception:
+              
+              Traceback (most recent call last):
+                File "/home/airflow/.local/lib/python3.12/site-packages/requests/adapters.py", line 667, in send
+                  resp = conn.urlopen(
+                         ^^^^^^^^^^^^^
+                File "/home/airflow/.local/lib/python3.12/site-packages/urllib3/connectionpool.py", line 841, in urlopen
+                  retries = retries.increment(
+                            ^^^^^^^^^^^^^^^^^^
+                File "/home/airflow/.local/lib/python3.12/site-packages/urllib3/util/retry.py", line 519, in increment
+                  raise MaxRetryError(_pool, url, reason) from reason  # type: ignore[arg-type]
+                  ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+              urllib3.exceptions.MaxRetryError: HTTPSConnectionPool(host='api.insee.fr', port=443): Max retries exceeded with url: /api-sirene/3.11/siren?q=dateDernierTraitementUniteLegale:%5B2026-05-04T14:06:47%20TO%20*%5D&nombre=200&curseur=*&champs=siren,dateDernierTraitementUniteLegale,denominationUniteLegale,etatAdministratifUniteLegale (Caused by NameResolutionError("<urllib3.connection.HTTPSConnection object at 0x7fb99e257e30>: Failed to resolve 'api.insee.fr' ([Errno -2] Name or service not known)"))
+              
+              During handling of the above exception, another exception occurred:
+              
+              Traceback (most recent call last):
+                File "/opt/airflow/ETL_pipeline/scrapers/base_scraper.py", line 39, in fetch_data
+                  response = self.session.send(prep,timeout=TIMEOUT)
+                             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+                File "/home/airflow/.local/lib/python3.12/site-packages/requests/sessions.py", line 703, in send
+                  r = adapter.send(request, **kwargs)
+                      ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+                File "/home/airflow/.local/lib/python3.12/site-packages/requests/adapters.py", line 700, in send
+                  raise ConnectionError(e, request=request)
+              requests.exceptions.ConnectionError: HTTPSConnectionPool(host='api.insee.fr', port=443): Max retries exceeded with url: /api-sirene/3.11/siren?q=dateDernierTraitementUniteLegale:%5B2026-05-04T14:06:47%20TO%20*%5D&nombre=200&curseur=*&champs=siren,dateDernierTraitementUniteLegale,denominationUniteLegale,etatAdministratifUniteLegale (Caused by NameResolutionError("<urllib3.connection.HTTPSConnection object at 0x7fb99e257e30>: Failed to resolve 'api.insee.fr' ([Errno -2] Name or service not known)"))
+              
+              During handling of the above exception, another exception occurred:
+              
+              Traceback (most recent call last):
+                File "/opt/airflow/dags/dag_initial_load.py", line 81, in wrapper
+                  result = func(**context)
+                           ^^^^^^^^^^^^^^^
+                File "/opt/airflow/dags/dag_initial_load.py", line 184, in scrape_sirene
+                  raw = SireneService(token=token).source_scraping(last_sync)
+                        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+                File "/opt/airflow/ETL_pipeline/scrapers/sirene.py", line 37, in source_scraping
+                  results= self._paginer(filtre)
+                           ^^^^^^^^^^^^^^^^^^^^^
+                File "/opt/airflow/ETL_pipeline/scrapers/sirene.py", line 58, in _paginer
+                  data = self.fetch_data(url,skip_encoding=True)
+                         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+                File "/opt/airflow/ETL_pipeline/scrapers/base_scraper.py", line 75, in fetch_data
+                  raise ConnectionError(
+              ConnectionError: [SIRENE_INSEE] ❌ Échec après 4 tentatives (timeout/connexion) : HTTPSConnectionPool(host='api.insee.fr', port=443): Max retries exceeded with url: /api-sirene/3.11/siren?q=dateDernierTraitementUniteLegale:%5B2026-05-04T14:06:47%20TO%20*%5D&nombre=200&curseur=*&champs=siren,dateDernierTraitementUniteLegale,denominationUniteLegale,etatAdministratifUniteLegale (Caused by NameResolutionError("<urllib3.connection.HTTPSConnection object at 0x7fb99e257e30>: Failed to resolve 'api.insee.fr' ([Errno -2] Name or service not known)"))
+
+[2026-05-05 09:19:54]  ✗  ÉCHEC      scrape_sirene  (30.2s)
+            Exception  : ConnectionError: [SIRENE_INSEE] ❌ Échec après 4 tentatives (timeout/connexion) : HTTPSConnectionPool(host='api.insee.fr', port=443): Max retries exceeded with url: /api-sirene/3.11/siren?q=dateDernierTraitementUniteLegale:%5B2026-05-04T14:06:47%20TO%20*%5D&nombre=200&curseur=*&champs=siren,dateDernierTraitementUniteLegale,denominationUniteLegale,etatAdministratifUniteLegale (Caused by NameResolutionError("<urllib3.connection.HTTPSConnection object at 0x7fb99d962390>: Failed to resolve 'api.insee.fr' ([Errno -2] Name or service not known)"))
+            Traceback  :
+              Traceback (most recent call last):
+                File "/home/airflow/.local/lib/python3.12/site-packages/urllib3/connection.py", line 198, in _new_conn
+                  sock = connection.create_connection(
+                         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+                File "/home/airflow/.local/lib/python3.12/site-packages/urllib3/util/connection.py", line 60, in create_connection
+                  for res in socket.getaddrinfo(host, port, family, socket.SOCK_STREAM):
+                             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+                File "/usr/local/lib/python3.12/socket.py", line 978, in getaddrinfo
+                  for res in _socket.getaddrinfo(host, port, family, type, proto, flags):
+                             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+              socket.gaierror: [Errno -2] Name or service not known
+              
+              The above exception was the direct cause of the following exception:
+              
+              Traceback (most recent call last):
+                File "/home/airflow/.local/lib/python3.12/site-packages/urllib3/connectionpool.py", line 787, in urlopen
+                  response = self._make_request(
+                             ^^^^^^^^^^^^^^^^^^^
+                File "/home/airflow/.local/lib/python3.12/site-packages/urllib3/connectionpool.py", line 488, in _make_request
+                  raise new_e
+                File "/home/airflow/.local/lib/python3.12/site-packages/urllib3/connectionpool.py", line 464, in _make_request
+                  self._validate_conn(conn)
+                File "/home/airflow/.local/lib/python3.12/site-packages/urllib3/connectionpool.py", line 1093, in _validate_conn
+                  conn.connect()
+                File "/home/airflow/.local/lib/python3.12/site-packages/urllib3/connection.py", line 704, in connect
+                  self.sock = sock = self._new_conn()
+                                     ^^^^^^^^^^^^^^^^
+                File "/home/airflow/.local/lib/python3.12/site-packages/urllib3/connection.py", line 205, in _new_conn
+                  raise NameResolutionError(self.host, self, e) from e
+              urllib3.exceptions.NameResolutionError: <urllib3.connection.HTTPSConnection object at 0x7fb99d962390>: Failed to resolve 'api.insee.fr' ([Errno -2] Name or service not known)
+              
+              The above exception was the direct cause of the following exception:
+              
+              Traceback (most recent call last):
+                File "/home/airflow/.local/lib/python3.12/site-packages/requests/adapters.py", line 667, in send
+                  resp = conn.urlopen(
+                         ^^^^^^^^^^^^^
+                File "/home/airflow/.local/lib/python3.12/site-packages/urllib3/connectionpool.py", line 841, in urlopen
+                  retries = retries.increment(
+                            ^^^^^^^^^^^^^^^^^^
+                File "/home/airflow/.local/lib/python3.12/site-packages/urllib3/util/retry.py", line 519, in increment
+                  raise MaxRetryError(_pool, url, reason) from reason  # type: ignore[arg-type]
+                  ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+              urllib3.exceptions.MaxRetryError: HTTPSConnectionPool(host='api.insee.fr', port=443): Max retries exceeded with url: /api-sirene/3.11/siren?q=dateDernierTraitementUniteLegale:%5B2026-05-04T14:06:47%20TO%20*%5D&nombre=200&curseur=*&champs=siren,dateDernierTraitementUniteLegale,denominationUniteLegale,etatAdministratifUniteLegale (Caused by NameResolutionError("<urllib3.connection.HTTPSConnection object at 0x7fb99d962390>: Failed to resolve 'api.insee.fr' ([Errno -2] Name or service not known)"))
+              
+              During handling of the above exception, another exception occurred:
+              
+              Traceback (most recent call last):
+                File "/opt/airflow/ETL_pipeline/scrapers/base_scraper.py", line 39, in fetch_data
+                  response = self.session.send(prep,timeout=TIMEOUT)
+                             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+                File "/home/airflow/.local/lib/python3.12/site-packages/requests/sessions.py", line 703, in send
+                  r = adapter.send(request, **kwargs)
+                      ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+                File "/home/airflow/.local/lib/python3.12/site-packages/requests/adapters.py", line 700, in send
+                  raise ConnectionError(e, request=request)
+              requests.exceptions.ConnectionError: HTTPSConnectionPool(host='api.insee.fr', port=443): Max retries exceeded with url: /api-sirene/3.11/siren?q=dateDernierTraitementUniteLegale:%5B2026-05-04T14:06:47%20TO%20*%5D&nombre=200&curseur=*&champs=siren,dateDernierTraitementUniteLegale,denominationUniteLegale,etatAdministratifUniteLegale (Caused by NameResolutionError("<urllib3.connection.HTTPSConnection object at 0x7fb99d962390>: Failed to resolve 'api.insee.fr' ([Errno -2] Name or service not known)"))
+              
+              During handling of the above exception, another exception occurred:
+              
+              Traceback (most recent call last):
+                File "/opt/airflow/dags/dag_initial_load.py", line 81, in wrapper
+                  result = func(**context)
+                           ^^^^^^^^^^^^^^^
+                File "/opt/airflow/dags/dag_initial_load.py", line 184, in scrape_sirene
+                  raw = SireneService(token=token).source_scraping(last_sync)
+                        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+                File "/opt/airflow/ETL_pipeline/scrapers/sirene.py", line 37, in source_scraping
+                  results= self._paginer(filtre)
+                           ^^^^^^^^^^^^^^^^^^^^^
+                File "/opt/airflow/ETL_pipeline/scrapers/sirene.py", line 58, in _paginer
+                  data = self.fetch_data(url,skip_encoding=True)
+                         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+                File "/opt/airflow/ETL_pipeline/scrapers/base_scraper.py", line 75, in fetch_data
+                  raise ConnectionError(
+              ConnectionError: [SIRENE_INSEE] ❌ Échec après 4 tentatives (timeout/connexion) : HTTPSConnectionPool(host='api.insee.fr', port=443): Max retries exceeded with url: /api-sirene/3.11/siren?q=dateDernierTraitementUniteLegale:%5B2026-05-04T14:06:47%20TO%20*%5D&nombre=200&curseur=*&champs=siren,dateDernierTraitementUniteLegale,denominationUniteLegale,etatAdministratifUniteLegale (Caused by NameResolutionError("<urllib3.connection.HTTPSConnection object at 0x7fb99d962390>: Failed to resolve 'api.insee.fr' ([Errno -2] Name or service not known)"))
+
+[2026-05-05 16:54:18]  ▶  DÉBUT      scrape_sirene

@@ -1,0 +1,90 @@
+[2026-05-04 07:35:12]  ▶  DÉBUT      scrape_boamp
+[2026-05-04 07:35:13]  ✓  SUCCÈS     scrape_boamp  (0.8s)
+            → cpu_used: 0.0%
+            → ram_used_mb: 275.3 MB
+            → ram_delta_mb: 5.1 MB
+            → total_raw: 21
+            → watermark_start: 2026-05-04T07:35:12
+
+[2026-05-04 07:35:16]  ▶  DÉBUT      extract_boamp
+[2026-05-04 07:35:16]  ✓  SUCCÈS     extract_boamp  (0.1s)
+            → cpu_used: 0.0%
+            → ram_used_mb: 272.9 MB
+            → ram_delta_mb: 1.2 MB
+            → total_extracted: 21
+
+[2026-05-04 07:35:18]  ▶  DÉBUT      enrich_boamp
+[2026-05-04 07:37:30]  ✓  SUCCÈS     enrich_boamp  (131.7s)
+            → cpu_used: 0.0%
+            → ram_used_mb: 272.8 MB
+            → ram_delta_mb: 1.0 MB
+
+[2026-05-04 07:37:32]  ▶  DÉBUT      load_raw_boamp
+[2026-05-04 07:37:32]  ✓  SUCCÈS     load_raw_boamp  (0.2s)
+            → cpu_used: 0.0%
+            → ram_used_mb: 273.9 MB
+            → ram_delta_mb: 2.5 MB
+
+[2026-05-04 07:37:34]  ▶  DÉBUT      clean_boamp
+[2026-05-04 07:37:35]  ✓  SUCCÈS     clean_boamp  (0.1s)
+            → cpu_used: 0.0%
+            → ram_used_mb: 271.7 MB
+            → ram_delta_mb: 0.3 MB
+
+[2026-05-04 07:37:36]  ▶  DÉBUT      load_clean_boamp
+[2026-05-04 07:37:37]  ✓  SUCCÈS     load_clean_boamp  (0.4s)
+            → cpu_used: 0.0%
+            → ram_used_mb: 273.7 MB
+            → ram_delta_mb: 2.9 MB
+
+[2026-05-04 07:37:39]  ▶  DÉBUT      rapport_final
+[2026-05-04 07:37:40]  ✓  SUCCÈS     rapport_final  (0.7s)
+            → cpu_used: 0.0%
+            → ram_used_mb: 274.7 MB
+            → ram_delta_mb: 2.3 MB
+
+[2026-05-04 09:43:32]  ▶  DÉBUT      scrape_boamp
+[2026-05-04 09:43:33]  ✓  SUCCÈS     scrape_boamp  (0.7s)
+            → cpu_used: 0.0%
+            → ram_used_mb: 269.1 MB
+            → ram_delta_mb: 3.4 MB
+            → total_raw: 0
+            → watermark_start: 2026-05-04T09:43:32
+
+[2026-05-04 09:43:35]  ▶  DÉBUT      extract_boamp
+[2026-05-04 09:43:35]  ✓  SUCCÈS     extract_boamp  (0.1s)
+            → cpu_used: 0.0%
+            → ram_used_mb: 267.7 MB
+            → ram_delta_mb: 0.1 MB
+            → total_extracted: 0
+
+[2026-05-04 09:43:38]  ▶  DÉBUT      enrich_boamp
+[2026-05-04 09:43:38]  ✓  SUCCÈS     enrich_boamp  (0.1s)
+            → cpu_used: 0.0%
+            → ram_used_mb: 271.7 MB
+            → ram_delta_mb: 0.0 MB
+
+[2026-05-04 09:43:41]  ▶  DÉBUT      load_raw_boamp
+[2026-05-04 09:43:41]  ✓  SUCCÈS     load_raw_boamp  (0.1s)
+            → cpu_used: 0.0%
+            → ram_used_mb: 265.8 MB
+            → ram_delta_mb: 0.0 MB
+
+[2026-05-04 09:43:44]  ▶  DÉBUT      clean_boamp
+[2026-05-04 09:43:44]  ✓  SUCCÈS     clean_boamp  (0.1s)
+            → cpu_used: 0.0%
+            → ram_used_mb: 265.2 MB
+            → ram_delta_mb: 0.0 MB
+
+[2026-05-04 09:43:46]  ▶  DÉBUT      load_clean_boamp
+[2026-05-04 09:43:47]  ✓  SUCCÈS     load_clean_boamp  (0.1s)
+            → cpu_used: 0.0%
+            → ram_used_mb: 268.6 MB
+            → ram_delta_mb: 0.1 MB
+
+[2026-05-04 09:43:49]  ▶  DÉBUT      rapport_final
+[2026-05-04 09:43:50]  ✓  SUCCÈS     rapport_final  (0.3s)
+            → cpu_used: 0.0%
+            → ram_used_mb: 269.1 MB
+            → ram_delta_mb: 2.3 MB
+

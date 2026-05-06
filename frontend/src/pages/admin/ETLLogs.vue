@@ -4,22 +4,11 @@
 
     <div class="flex-1 flex flex-col min-w-0 h-screen">
       <!-- ── STICKY HEADER ── -->
-      <header class="h-16 border-b border-border bg-white sticky top-0 z-40 px-6 flex items-center justify-between shadow-sm shrink-0">
-        <div class="flex items-center gap-3">
-          <div class="md:hidden w-10" />
-          <div>
-            <h2 class="text-sm font-semibold text-tacir-darkblue">ETL Logs Viewer</h2>
-            <p class="text-[11px] text-tacir-darkgray">Consultation et suivi des logs de la pipeline ETL Airflow</p>
-          </div>
-        </div>
-
-        <div class="flex items-center gap-3">
-          <span class="hidden sm:inline-flex items-center gap-1.5 bg-tacir-blue/8 text-tacir-blue border border-tacir-blue/15 text-[10px] font-semibold uppercase tracking-widest px-3 py-1 rounded-full">
-            <span class="w-1.5 h-1.5 rounded-full bg-tacir-lightblue animate-pulse" />
-            ADMIN
-          </span>
-        </div>
-      </header>
+      <PageHeader
+        title="ETL Logs Viewer"
+        subtitle="Consultation et suivi des logs de la pipeline ETL Airflow"
+        :badge="{ label: 'ADMIN' }"
+      />
 
       <!-- ── MAIN CONTENT ── -->
       <main class="p-4 md:p-6 flex flex-col lg:flex-row gap-6 flex-1 min-h-0 overflow-hidden">
@@ -117,7 +106,9 @@
 </template>
 
 <script setup>
-import { ref, computed, nextTick } from 'vue'
+import PageHeader from '@/components/shared/PageHeader.vue'
+import { ref, computed, nextTick, onMounted, watch } from 'vue'
+import { useRoute } from 'vue-router'
 import axios from 'axios'
 import TheSidebar from '@/components/AppSidebar.vue'
 import { Card, CardHeader, CardContent } from '@/components/ui/card'
@@ -128,7 +119,8 @@ import {
   FileText, RotateCcw, RefreshCw, Download
 } from 'lucide-vue-next'
 
-const API = import.meta.env.VITE_API_URL || 'http://localhost:8001'
+const API   = import.meta.env.VITE_API_URL || 'http://localhost:8001'
+const route = useRoute()
 
 const files = ref([])
 const selectedFile = ref(null)
@@ -239,4 +231,20 @@ const hasError = computed(() => {
 })
 
 fetchFiles()
+
+// Pré-sélectionne le fichier passé via ?file= (lien depuis la notification)
+onMounted(async () => {
+  await fetchFiles()
+  const fileParam = route.query.file
+  if (fileParam && files.value.includes(fileParam)) {
+    await selectFile(fileParam)
+  }
+})
+
+// Re-sélectionne si la query change (navigation depuis plusieurs notifications)
+watch(() => route.query.file, async (newFile) => {
+  if (newFile && files.value.includes(newFile)) {
+    await selectFile(newFile)
+  }
+})
 </script>

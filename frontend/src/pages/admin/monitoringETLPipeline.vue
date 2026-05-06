@@ -5,20 +5,17 @@
     <div class="flex-1 flex flex-col min-w-0">
 
       <!-- ── STICKY HEADER ── -->
-      <header class="h-16 border-b border-border bg-white sticky top-0 z-40 px-6 flex items-center justify-between shadow-sm">
-        <div class="flex items-center gap-3">
-          <div class="md:hidden w-10" />
-          <div>
-            <h2 class="text-sm font-semibold text-tacir-darkblue">Monitoring ETL Pipeline</h2>
-            <p class="text-[11px] text-tacir-darkgray">Supervision des pipelines de données · Temps réel</p>
-          </div>
-        </div>
-
-        <div class="flex items-center gap-3">
+      <PageHeader
+        title="Monitoring ETL Pipeline"
+        subtitle="Supervision des pipelines de données · Temps réel"
+        :badge="{ label: 'ADMIN' }"
+      >
+        <template #actions>
           <!-- <Button @click="router.push('/admin/reports')" variant="outline" size="sm" class="hidden sm:flex items-center gap-2 border-border/60 text-tacir-darkblue bg-tacir-lightgray/20 hover:bg-tacir-lightgray/50">
             <Database class="w-3.5 h-3.5 text-tacir-darkgray" />
             <span class="text-xs font-semibold">Reports List</span>
           </Button> -->
+          
 
           <Button @click="router.push('/admin/etllogs')" variant="outline" size="sm" class="hidden sm:flex items-center gap-2 border-border/60 text-tacir-darkblue bg-tacir-lightgray/20 hover:bg-tacir-lightgray/50">
             <FileText class="w-3.5 h-3.5 text-tacir-darkgray" />
@@ -30,12 +27,8 @@
             <span class="font-mono text-xs font-bold text-tacir-darkblue tabular-nums">{{ liveClock }}</span>
             <span class="w-1.5 h-1.5 rounded-full bg-tacir-lightblue animate-pulse"></span>
           </div>
-          <span class="hidden sm:inline-flex items-center gap-1.5 bg-tacir-blue/8 text-tacir-blue border border-tacir-blue/15 text-[10px] font-semibold uppercase tracking-widest px-3 py-1 rounded-full">
-            <span class="w-1.5 h-1.5 rounded-full bg-tacir-lightblue animate-pulse" />
-            ADMIN
-          </span>
-        </div>
-      </header>
+        </template>
+      </PageHeader>
 
       <!-- ── MAIN CONTENT ── -->
       <main class="p-4 md:p-6 space-y-6 overflow-y-auto">
@@ -414,6 +407,7 @@ import {
   Terminal, ChevronDown, AlertTriangle,
   RefreshCw, Database, ArrowUpDown, Timer
 } from 'lucide-vue-next'
+import PageHeader from '@/components/shared/PageHeader.vue'
 import { usePipeline } from '@/composables/usePipeline'
 import ChartStatusByDag from '@/components/dashboard/ChartStatusByDag.vue'
 import ChartDurationBottlenecks from '@/components/dashboard/ChartDurationBottlenecks.vue'

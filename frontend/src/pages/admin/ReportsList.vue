@@ -4,22 +4,11 @@
 
     <div class="flex-1 flex flex-col min-w-0">
       <!-- ── STICKY HEADER ── -->
-      <header class="h-16 border-b border-border bg-white sticky top-0 z-40 px-6 flex items-center justify-between shadow-sm">
-        <div class="flex items-center gap-3">
-          <div class="md:hidden w-10" />
-          <div>
-            <h2 class="text-sm font-semibold text-tacir-darkblue">Reports List</h2>
-            <p class="text-[11px] text-tacir-darkgray">Consultation et téléchargement des rapports PDF</p>
-          </div>
-        </div>
-
-        <div class="flex items-center gap-3">
-          <span class="hidden sm:inline-flex items-center gap-1.5 bg-tacir-blue/8 text-tacir-blue border border-tacir-blue/15 text-[10px] font-semibold uppercase tracking-widest px-3 py-1 rounded-full">
-            <span class="w-1.5 h-1.5 rounded-full bg-tacir-lightblue animate-pulse" />
-            ADMIN
-          </span>
-        </div>
-      </header>
+      <PageHeader
+        title="Reports List"
+        subtitle="Consultation et téléchargement des rapports PDF"
+        :badge="{ label: 'ADMIN' }"
+      />
 
       <!-- ── MAIN CONTENT ── -->
       <main class="p-4 md:p-6 space-y-6 overflow-y-auto">
@@ -119,7 +108,7 @@ import {
 import {
   FileText, RotateCcw, Eye, Download
 } from 'lucide-vue-next'
-
+import PageHeader from '@/components/shared/PageHeader.vue'
 const BASE_URL = import.meta.env.VITE_API_URL ?? 'http://localhost:8001'
 
 const reports = ref([])

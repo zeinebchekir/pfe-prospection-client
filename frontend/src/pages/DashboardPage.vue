@@ -22,14 +22,13 @@
             <span class="w-1.5 h-1.5 rounded-full bg-tacir-lightblue animate-pulse" />
             {{ user?.role }}
           </span>
-          <button class="relative w-9 h-9 flex items-center justify-center rounded-lg hover:bg-tacir-lightgray text-tacir-darkgray transition-colors">
-            <Bell class="h-4 w-4" />
-            <span class="absolute top-1.5 right-1.5 w-2 h-2 bg-tacir-lightblue rounded-full" />
-          </button>
+          
           <RouterLink to="/profil" class="w-8 h-8 rounded-lg gradient-brand flex items-center justify-center text-white text-xs font-bold cursor-pointer hover:opacity-90 transition-opacity">
             {{ userInitial }}
           </RouterLink>
+          <NotificationBell />
         </div>
+       
       </header>
 
       <!-- Page content -->
@@ -233,10 +232,13 @@
 </template>
 
 <script setup>
+
 import { computed } from 'vue'
 import { useRouter, RouterLink } from 'vue-router'
 import { useAuth } from '@/composables/useAuth'
 import TheSidebar from '@/components/AppSidebar.vue'
+import NotificationBell from '@/components/ui/notifications/notificationsBell.vue'
+
 
 import {
   Bell, TrendingUp, Users, Target, RefreshCw,

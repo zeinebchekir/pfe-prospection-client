@@ -71,6 +71,7 @@ services:
       - web
     networks:
       - crmpfe_network
+    shm_size: '256mb'  
   ia-ml:
     build:
       context: ./IA-ML_service

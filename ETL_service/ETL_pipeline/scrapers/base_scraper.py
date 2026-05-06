@@ -25,6 +25,7 @@ class BaseScraper(ABC):
 
     def fetch_data(self, url, params=None, method="GET", json_data=None, retries=4, skip_encoding=False):
         """Appel HTTP sécurisé avec retry automatique sur 429."""
+        TIMEOUT = (30, 60)
         print(f"[{self.nom_source}] 📡 {method} → {url}")
 
         for tentative in range(retries):  # ← la boucle qui définit 'tentative'
@@ -35,7 +36,7 @@ class BaseScraper(ABC):
                     req  = Request(method="GET", url=url, headers=dict(self.session.headers))
                     prep = self.session.prepare_request(req)
                     prep.url = url  # ← écrase l'URL encodée par l'URL brute
-                    response = self.session.send(prep)
+                    response = self.session.send(prep,timeout=TIMEOUT)
                 
                 elif method.upper() == "GET":
                     # comportement existant — inchangé
@@ -61,9 +62,20 @@ class BaseScraper(ABC):
                         f"(tentative {tentative + 1}/{retries})")
                     time.sleep(attente)
                     # on continue la boucle pour retry
-                else:
-                    print(f"[{self.nom_source}] ❌ Erreur réseau : {e}")
-                    return None  # erreur non-429 → pas de retry
+
+                elif isinstance(e, (requests.exceptions.ConnectTimeout,
+                    requests.exceptions.ReadTimeout,
+                    requests.exceptions.ConnectionError)):
+                    print(f"[{self.nom_source}] ⏱️  Timeout/Connexion coupée "
+                        f"(tentative {tentative + 1}/{retries}) : {e}")
+                    if tentative < retries - 1:
+                        time.sleep(5 * (tentative + 1))
+                    else:
+                        # ✅ Dernière tentative — on lève une exception au lieu de retourner None
+                        raise ConnectionError(
+                            f"[{self.nom_source}] ❌ Échec après {retries} tentatives "
+                            f"(timeout/connexion) : {e}"
+                        ) # erreur non-429 → pas de retry
 
             except ValueError as e:
                 print(f"[{self.nom_source}] ❌ Réponse non-JSON : {e}")

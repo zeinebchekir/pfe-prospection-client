@@ -119,43 +119,59 @@ class DataGouvService(BaseScraper):
         return None
     
     def get_data_from_siren(self, items: list[dict]) -> list[dict]:
-        clean_data = []  
-        success_sirens = [] # 🟢 Liste pour les SIREN trouvés
-        failed_sirens = []  # 🔴 Liste pour les SIREN en échec / introuvables
+        clean_data     = []
+        success_sirens = []
+        failed_sirens  = []
+
+        none_consecutifs = 0
+        MAX_NONE_CONSECUTIFS = 5  # réseau coupé = fetch_data retourne None
 
         for i, item in enumerate(items):
             siren = item.get("siren")
             if not siren:
                 continue
 
-            # On interroge l'API pour ce SIREN spécifique
             data = self.fetch_data(
                 self.base_url,
                 params={"q": siren, "per_page": 1}
             )
 
-            # On vérifie si data existe ET si la clé "results" contient quelque chose
-            if data and data.get("results"):
-                resultats = data.get("results")
-                clean_data += resultats
-                success_sirens.append(siren) # ✅ Succès !
-            else:
-                failed_sirens.append(siren)  # ❌ Échec (API vide ou erreur)
+            if data is None:
+                # ← réseau coupé ou erreur serveur — fetch_data a déjà loggué
+                none_consecutifs += 1
+                failed_sirens.append(siren)
+                print(f"[{self.nom_source}] ⚠️  Réponse None "
+                    f"({none_consecutifs}/{MAX_NONE_CONSECUTIFS})")
 
-            # Log de progression tous les 50 éléments
+                if none_consecutifs >= MAX_NONE_CONSECUTIFS:
+                    raise ConnectionError(
+                        f"Réseau indisponible — {MAX_NONE_CONSECUTIFS} appels "
+                        f"consécutifs sans réponse. "
+                        f"{i+1}/{len(items)} SIREN traités."
+                    )
+
+            elif data.get("results"):
+                # ← API répond ET il y a des résultats
+                clean_data += data.get("results")
+                success_sirens.append(siren)
+                none_consecutifs = 0  # remet le compteur
+
+            else:
+                # ← API répond mais aucun résultat pour ce SIREN — cas normal
+                none_consecutifs = 0  # remet aussi le compteur
+                print(f"[{self.nom_source}] ℹ️  Aucun résultat pour {siren} — normal")
+
             if (i + 1) % 50 == 0:
                 print(f"[{self.nom_source}] ⚙️  {i+1}/{len(items)} enrichis")
 
             time.sleep(self.delai)
-        
-        # --- 📊 AFFICHAGE DU BILAN FINAL ---
+
         print("\n" + "=" * 50)
-        print(f"[{self.nom_source}] 📊 BILAN DE L'ENRICHISSEMENT")
-        print(f"✅ {len(success_sirens)} Succès : {', '.join(success_sirens)}")
-        
+        print(f"[{self.nom_source}] 📊 BILAN")
+        print(f"✅ {len(success_sirens)} avec données")
+        print(f"ℹ️  {len(items) - len(success_sirens) - len(failed_sirens)} sans résultat (normal)")
         if failed_sirens:
-            print(f"❌ {len(failed_sirens)} Échecs : {', '.join(failed_sirens)}")
+            print(f"❌ {len(failed_sirens)} erreurs réseau")
         print("=" * 50 + "\n")
 
-        return clean_data 
-        # ← toujours défini    
+        return clean_data

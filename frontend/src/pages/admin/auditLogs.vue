@@ -3,22 +3,11 @@
     <TheSidebar />
 
     <div class="flex-1 flex flex-col min-w-0">
-      <header class="h-16 border-b border-border bg-white sticky top-0 z-40 px-6 flex items-center justify-between shadow-sm">
-        <div class="flex items-center gap-3">
-          <div class="md:hidden w-10" />
-          <div>
-            <h2 class="text-sm font-semibold text-tacir-darkblue">Logs d'audit</h2>
-            <p class="text-[11px] text-tacir-darkgray">Sécurité système</p>
-          </div>
-        </div>
-
-        <div class="flex items-center gap-3">
-          <span class="hidden sm:inline-flex items-center gap-1.5 bg-tacir-blue/8 text-tacir-blue border border-tacir-blue/15 text-[10px] font-semibold uppercase tracking-widest px-3 py-1 rounded-full">
-            <span class="w-1.5 h-1.5 rounded-full bg-tacir-lightblue animate-pulse" />
-            ADMIN
-          </span>
-        </div>
-      </header>
+      <PageHeader
+        title="Logs d'audit"
+        subtitle="Sécurité système"
+        :badge="{ label: 'ADMIN' }"
+      />
 
       <main class="p-4 md:p-8 space-y-6 overflow-y-auto">
         <!-- Filters -->
@@ -198,6 +187,7 @@ import {
   Zap, FileText, LayoutDashboard, Target, BarChart3, CheckCircle2,
   ChevronLeft, ChevronRight
 } from 'lucide-vue-next'
+import PageHeader from '@/components/shared/PageHeader.vue'
 import TheSidebar from '@/components/AppSidebar.vue'
 import api from '@/api/axios'
 import { Button } from '@/components/ui/button'

@@ -15,7 +15,7 @@ BOAMP rows     → company + lead fields populated, DataGouv-only fields (ca, ta
 from alembic.util.sqla_compat import AUTOINCREMENT_DEFAULT
 from sqlalchemy import (
     Column, String, Text, Float, Integer,
-    DateTime, Date, func, ForeignKey,
+    DateTime, Date, func, ForeignKey,Boolean
 )
 from sqlalchemy.dialects.postgresql import JSONB
 from db.database import Base
@@ -85,7 +85,7 @@ class Entreprise(Base):
     """
     __tablename__ = "entreprise"
 
-    identifiant    = Column(Integer, primary_key=True,autoincrement=True)
+    identifiant    = Column(String(25), primary_key=True)
 
     # Link back to the raw staging row (nullable — bulk loads may skip it)
     raw_lead_id    = Column(Integer, ForeignKey("raw_leads.id"), nullable=True, index=True)
@@ -155,3 +155,13 @@ class RapportPDF(Base):
     pdf_bytes      = Column(LargeBinary, nullable=False)
     file_size_kb   = Column(Integer, nullable=False)
     
+
+class Notification(Base):
+    __tablename__ = "notifications"
+
+    id         = Column(Integer, primary_key=True, index=True)
+    dag_id     = Column(Text, nullable=False)
+    task_id    = Column(Text, nullable=False)
+    message    = Column(Text, nullable=False)
+    created_at = Column(DateTime, server_default=func.now())
+    is_read    = Column(Boolean, default=False)

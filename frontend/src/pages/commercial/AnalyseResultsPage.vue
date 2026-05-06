@@ -224,7 +224,7 @@
                     ]"
                   >
                     <span v-if="msg.role === 'assistant'" class="line-clamp-2">
-                      ✅ Email mis à jour
+                      {{ msg.content }}
                     </span>
                     <span v-else>{{ msg.content }}</span>
                   </div>
