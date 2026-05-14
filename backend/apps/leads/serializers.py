@@ -1,7 +1,7 @@
 from django.utils import timezone
 from rest_framework import serializers
 
-from .models import LeadOpportunity, LeadScoringPerformance
+from .models import LeadOpportunity
 
 
 class LeadOpportunitySerializer(serializers.ModelSerializer):
@@ -28,11 +28,6 @@ class LeadOpportunitySerializer(serializers.ModelSerializer):
             "last_activity",
             "last_notable_activity",
             "interaction_history",
-            "lead_score_probability",
-            "lead_score_predicted",
-            "lead_temperature",
-            "model_version",
-            "scored_at",
             "imported_at",
             "is_commercial_created",
         ]
@@ -97,23 +92,3 @@ class LeadOpportunityWriteSerializer(serializers.ModelSerializer):
         instance.last_modified_date = timezone.now()
         instance.save()
         return instance
-
-
-class LeadScoringPerformanceSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = LeadScoringPerformance
-        fields = [
-            "model_name",
-            "model_version",
-            "best_model",
-            "stack_name",
-            "accuracy",
-            "precision",
-            "recall",
-            "f1_score",
-            "roc_auc",
-            "threshold",
-            "training_dataset_size",
-            "feature_count",
-            "last_training_date",
-        ]

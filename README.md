@@ -237,19 +237,18 @@ Test coverage:
 
 ---
 
-## Lead Scoring - Mise en route pour les membres Git
+## Analyse Comportementale
 
-Cette partie explique comment lancer correctement la fonctionnalite **Lead Scoring** apres avoir recupere la branche Git.
+### Commandes apres `git pull`
 
-### 1. Recuperer le code
+Executer ces commandes dans cet ordre :
 
 ```bash
+cd \pfe-prospection-client
 git pull origin ia-ml-service
 ```
 
-### 2. Verifier le fichier `.env`
-
-Le fichier `.env` doit exister a la racine du projet. Il doit contenir au minimum les variables suivantes :
+Verifier que le fichier `.env` existe a la racine du projet avec au minimum :
 
 ```env
 SECRET_KEY=your-secret-key
@@ -258,93 +257,71 @@ DB_USER=crmpfe_user
 DB_PASSWORD=crmpfe_password
 DB_HOST=db
 DB_PORT=5432
-LEAD_SCORING_SERVICE_URL=http://ia-ml:8002
 ```
 
-### 3. Base vide ou base deja chargee
+Verifier que le dataset existe ici :
 
-Le service de scoring utilise la table PostgreSQL suivante :
+```text
+data/train.csv
+```
+
+Si `data/train.csv` n'existe pas, copier le fichier CSV dans ce dossier avant de continuer.
+
+Lancer ensuite la commande unique :
+
+```bash
+python scripts/setup_analyse_comportementale.py
+```
+
+Cette commande fait automatiquement :
+
+- creation du reseau Docker `etl_service_default` si besoin ;
+- build et demarrage des conteneurs ;
+- attente de `db`, `web`, `frontend`, `ia-ml` ;
+- creation des tables Analyse Comportementale ;
+- chargement de `data/train.csv` ;
+- recalcul des features, scores, segments et notifications ;
+- redemarrage de `ia-ml` et `frontend`.
+
+Tables creees et chargees :
 
 ```sql
-public.lead_opportunity
+public.leads_activity
+public.lead_sessions_raw
+public.lead_behavior_features
+public.lead_scores
+public.lead_notifications
 ```
 
-Si la base contient deja cette table avec des donnees, passer directement a l'etape Docker.
+### Verifier l'execution
 
-Si la base est totalement vide, il faut d'abord creer ou importer la table `lead_opportunity`, puis charger les donnees. La migration actuelle ajoute les colonnes de scoring avec `ALTER TABLE`, donc elle suppose que `lead_opportunity` existe deja.
-
-Ordre conseille pour une nouvelle base :
-
-```bash
-docker compose up -d db
-```
-
-Ensuite, creer/importer la table `lead_opportunity` et charger les donnees via pgAdmin, psql, un dump SQL, ou le script utilise par l'equipe.
-
-### 4. Lancer le projet
-
-```bash
-docker compose up -d --build
-```
-
-Cette commande construit les services, lance PostgreSQL, lance le backend Django, applique les migrations, lance le frontend, et lance le service IA/ML `ia-ml`.
-
-Verifier ensuite que les services sont actifs :
+Verifier les conteneurs :
 
 ```bash
 docker compose ps
 ```
 
-Les services importants sont :
-
-- `db`
-- `web`
-- `frontend`
-- `ia-ml`
-
-### 5. Conditions pour entrainer le modele
-
-Avant de lancer l'entrainement, la table `lead_opportunity` doit contenir assez de donnees exploitables :
-
-- au moins `100` lignes ;
-- la colonne cible `lead_score` remplie ;
-- au moins deux classes dans `lead_score`, par exemple des lignes avec `0` et des lignes avec `1`.
-
-Si ces conditions ne sont pas respectees, l'entrainement du modele echouera.
-
-### 6. Entrainer le modele Lead Scoring
-
-L'entrainement peut etre lance depuis la page **Opportunites** dans l'application, ou via l'API backend :
-
-```http
-POST /api/leads/opportunities/train/
-```
-
-Apres l'entrainement, le service IA/ML cree automatiquement les artefacts du modele dans :
-
-```text
-IA-ML_service/artifacts/lead_scoring/
-```
-
-Ce dossier est ignore par Git. Chaque membre doit donc generer son modele localement.
-
-### 7. Verifier que tout marche
-
-Pour verifier le bon fonctionnement :
-
-- ouvrir la page **Opportunites** ;
-- verifier que les leads sont affiches ;
-- lancer l'entrainement si aucun modele n'existe ;
-- verifier que les champs de scoring sont remplis : `lead_score_predicted`, `lead_temperature`, `model_version`, `scored_at` ;
-- creer ou modifier un lead et verifier qu'il est score automatiquement.
-
-### Resume rapide
+Tester l'API :
 
 ```bash
-git pull origin ia-ml-service
-docker compose up -d db
-# creer/importer lead_opportunity + charger les donnees si la base est vide
-docker compose up -d --build
-# lancer l'entrainement du modele depuis Opportunites
+curl.exe http://localhost:8002/analyse-comportementale/kpis
+curl.exe "http://localhost:8002/analyse-comportementale/top-leads?limit=10"
 ```
 
+Interfaces utiles :
+
+```text
+Frontend : http://localhost:5174
+API IA-ML : http://localhost:8002/docs
+pgAdmin : http://localhost:5051
+```
+
+Dans l'application, ouvrir **Opportunites** et verifier les KPI, graphiques, leads, details et notifications.
+
+### Relancer seulement le chargement
+
+```bash
+python scripts/init_leads_activity.py
+```
+
+Cette commande est idempotente : elle ne duplique pas les sessions deja importees.

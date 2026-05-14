@@ -2,7 +2,7 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from .routers import LLM_generation, enrich_lead, lead_scoring, linkedin_posts, linkedin_url
+from .routers import LLM_generation, analyse_comportementale, enrich_lead, linkedin_posts, linkedin_url
 
 
 app = FastAPI(title="Prospection LinkedIn API")
@@ -21,7 +21,11 @@ app.add_middleware(
 
 app.include_router(linkedin_url.router, prefix="/linkedin", tags=["LinkedIn URL"])
 app.include_router(linkedin_posts.router, prefix="/linkedin", tags=["LinkedIn Posts"])
-app.include_router(lead_scoring.router, prefix="/lead-scoring", tags=["Lead Scoring"])
+app.include_router(
+    analyse_comportementale.router,
+    prefix="/analyse-comportementale",
+    tags=["Analyse Comportementale"],
+)
 app.include_router(LLM_generation.router, prefix="/ia", tags=["Analyse Lead"])
 app.include_router(enrich_lead.router, prefix="/enrich", tags=["LinkedIn URL"])
 
