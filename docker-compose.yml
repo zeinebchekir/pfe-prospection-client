@@ -79,7 +79,24 @@ services:
   # ─────────────────────────────────────────────────────────────────────────────
   #  CORE INFRASTRUCTURE
   # ─────────────────────────────────────────────────────────────────────────────
-
+  # Ajouter ce service dans la section services
+  db_iaml:
+    image: postgres:15-alpine
+    container_name: qualifixproject_db_iaml
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${IAML_DB_NAME:-iaml_db}
+      POSTGRES_USER: ${IAML_DB_USER:-iaml_user}
+      POSTGRES_PASSWORD: ${IAML_DB_PASSWORD:-iaml_pass}
+    volumes:
+      - iaml_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${IAML_DB_USER:-iaml_user} -d ${IAML_DB_NAME:-iaml_db}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - iaml_net   # réseau privé avec ia-ml uniquement
   # Django Postgres — Application database
   db:
     image: postgres:15-alpine
@@ -500,6 +517,7 @@ services:
         condition: service_healthy
     networks:
       - etl_net
+      - backend_net
 
   # ─────────────────────────────────────────────────────────────────────────────
   #  IA-ML — AI/Machine Learning Service
@@ -520,6 +538,7 @@ services:
       - ./IA-ML_service/models:/app/models
     env_file: .env
     environment:
+      DATABASE_URL: postgresql://${IAML_DB_USER:-iaml_user}:${IAML_DB_PASSWORD:-iaml_pass}@db_iaml:5432/${IAML_DB_NAME:-iaml_db}
       ETL_SERVICE_URL: ${ETL_SERVICE_URL:-http://etl-fastapi:8000}
       OLLAMA_URL: ${OLLAMA_URL:-http://host.docker.internal:11434}
       OLLAMA_MODEL: ${OLLAMA_MODEL:-gemma3:4b}
@@ -527,21 +546,22 @@ services:
       APIFY_TOKEN: ${APIFY_TOKEN:-}
       SERPER_API_KEY: ${SERPER_API_KEY:-}
     healthcheck:
-      test: [ "CMD", "curl", "--fail", "http://localhost:8002/health" ]
+      test: ["CMD", "curl", "--fail", "http://localhost:8002/health"]
       interval: 30s
       timeout: 10s
       retries: 5
       start_period: 15s
     depends_on:
-      db:
+      db_iaml:                        # ← sa propre DB, plus db Django
         condition: service_healthy
       etl-fastapi:
         condition: service_healthy
     dns:
       - 8.8.8.8
     networks:
-      - backend_net
-      - etl_net
+      - iaml_net       # sa propre DB
+      - backend_net    # parler à Django web
+      - etl_net        # parler à etl-fastapi
 
   # ─────────────────────────────────────────────────────────────────────────────
   #  MONITORING
@@ -622,6 +642,8 @@ volumes:
   # Monitoring
   prometheus_data:
     name: qualifixproject_prometheus_data
+  iaml_pgdata:
+    name: qualifixproject_iaml_pgdata
 
 # ═══════════════════════════════════════════════════════════════════════════════
 #  NETWORKS
@@ -633,3 +655,6 @@ networks:
   etl_net:
     driver: bridge
     name: qualifixproject_etl
+  iaml_net:
+    driver: bridge
+    name: qualifixproject_iaml
