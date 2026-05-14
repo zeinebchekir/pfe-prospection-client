@@ -1,0 +1,87 @@
+[2026-05-10 11:33:20]  ▶  DÉBUT      scrape_sirene
+[2026-05-10 16:02:16]  ✗  ÉCHEC      scrape_sirene  (16135.3s)
+            Exception  : ConnectionError: [API_GOUV_RECHERCHE] ❌ Échec après 4 tentatives (timeout/connexion) : HTTPSConnectionPool(host='recherche-entreprises.api.gouv.fr', port=443): Max retries exceeded with url: /search?q=103854659&per_page=1 (Caused by NameResolutionError("<urllib3.connection.HTTPSConnection object at 0x7f48934beae0>: Failed to resolve 'recherche-entreprises.api.gouv.fr' ([Errno -2] Name or service not known)"))
+            Traceback  :
+              Traceback (most recent call last):
+                File "/home/airflow/.local/lib/python3.12/site-packages/urllib3/connection.py", line 198, in _new_conn
+                  sock = connection.create_connection(
+                         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+                File "/home/airflow/.local/lib/python3.12/site-packages/urllib3/util/connection.py", line 60, in create_connection
+                  for res in socket.getaddrinfo(host, port, family, socket.SOCK_STREAM):
+                             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+                File "/usr/local/lib/python3.12/socket.py", line 978, in getaddrinfo
+                  for res in _socket.getaddrinfo(host, port, family, type, proto, flags):
+                             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+              socket.gaierror: [Errno -2] Name or service not known
+              
+              The above exception was the direct cause of the following exception:
+              
+              Traceback (most recent call last):
+                File "/home/airflow/.local/lib/python3.12/site-packages/urllib3/connectionpool.py", line 787, in urlopen
+                  response = self._make_request(
+                             ^^^^^^^^^^^^^^^^^^^
+                File "/home/airflow/.local/lib/python3.12/site-packages/urllib3/connectionpool.py", line 488, in _make_request
+                  raise new_e
+                File "/home/airflow/.local/lib/python3.12/site-packages/urllib3/connectionpool.py", line 464, in _make_request
+                  self._validate_conn(conn)
+                File "/home/airflow/.local/lib/python3.12/site-packages/urllib3/connectionpool.py", line 1093, in _validate_conn
+                  conn.connect()
+                File "/home/airflow/.local/lib/python3.12/site-packages/urllib3/connection.py", line 704, in connect
+                  self.sock = sock = self._new_conn()
+                                     ^^^^^^^^^^^^^^^^
+                File "/home/airflow/.local/lib/python3.12/site-packages/urllib3/connection.py", line 205, in _new_conn
+                  raise NameResolutionError(self.host, self, e) from e
+              urllib3.exceptions.NameResolutionError: <urllib3.connection.HTTPSConnection object at 0x7f48934beae0>: Failed to resolve 'recherche-entreprises.api.gouv.fr' ([Errno -2] Name or service not known)
+              
+              The above exception was the direct cause of the following exception:
+              
+              Traceback (most recent call last):
+                File "/home/airflow/.local/lib/python3.12/site-packages/requests/adapters.py", line 667, in send
+                  resp = conn.urlopen(
+                         ^^^^^^^^^^^^^
+                File "/home/airflow/.local/lib/python3.12/site-packages/urllib3/connectionpool.py", line 841, in urlopen
+                  retries = retries.increment(
+                            ^^^^^^^^^^^^^^^^^^
+                File "/home/airflow/.local/lib/python3.12/site-packages/urllib3/util/retry.py", line 519, in increment
+                  raise MaxRetryError(_pool, url, reason) from reason  # type: ignore[arg-type]
+                  ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+              urllib3.exceptions.MaxRetryError: HTTPSConnectionPool(host='recherche-entreprises.api.gouv.fr', port=443): Max retries exceeded with url: /search?q=103854659&per_page=1 (Caused by NameResolutionError("<urllib3.connection.HTTPSConnection object at 0x7f48934beae0>: Failed to resolve 'recherche-entreprises.api.gouv.fr' ([Errno -2] Name or service not known)"))
+              
+              During handling of the above exception, another exception occurred:
+              
+              Traceback (most recent call last):
+                File "/opt/airflow/ETL_pipeline/scrapers/base_scraper.py", line 43, in fetch_data
+                  response = self.session.get(url, params=params)
+                             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+                File "/home/airflow/.local/lib/python3.12/site-packages/requests/sessions.py", line 602, in get
+                  return self.request("GET", url, **kwargs)
+                         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+                File "/home/airflow/.local/lib/python3.12/site-packages/requests/sessions.py", line 589, in request
+                  resp = self.send(prep, **send_kwargs)
+                         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+                File "/home/airflow/.local/lib/python3.12/site-packages/requests/sessions.py", line 703, in send
+                  r = adapter.send(request, **kwargs)
+                      ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+                File "/home/airflow/.local/lib/python3.12/site-packages/requests/adapters.py", line 700, in send
+                  raise ConnectionError(e, request=request)
+              requests.exceptions.ConnectionError: HTTPSConnectionPool(host='recherche-entreprises.api.gouv.fr', port=443): Max retries exceeded with url: /search?q=103854659&per_page=1 (Caused by NameResolutionError("<urllib3.connection.HTTPSConnection object at 0x7f48934beae0>: Failed to resolve 'recherche-entreprises.api.gouv.fr' ([Errno -2] Name or service not known)"))
+              
+              During handling of the above exception, another exception occurred:
+              
+              Traceback (most recent call last):
+                File "/opt/airflow/dags/dag_initial_load.py", line 81, in wrapper
+                  result = func(**context)
+                           ^^^^^^^^^^^^^^^
+                File "/opt/airflow/dags/dag_initial_load.py", line 184, in scrape_sirene
+                  raw = SireneService(token=token).source_scraping(last_sync)
+                        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+                File "/opt/airflow/ETL_pipeline/scrapers/sirene.py", line 39, in source_scraping
+                  data=self.source.get_data_from_siren(results)
+                       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+                File "/opt/airflow/ETL_pipeline/scrapers/dataGouv.py", line 134, in get_data_from_siren
+                  data = self.fetch_data(
+                         ^^^^^^^^^^^^^^^^
+                File "/opt/airflow/ETL_pipeline/scrapers/base_scraper.py", line 75, in fetch_data
+                  raise ConnectionError(
+              ConnectionError: [API_GOUV_RECHERCHE] ❌ Échec après 4 tentatives (timeout/connexion) : HTTPSConnectionPool(host='recherche-entreprises.api.gouv.fr', port=443): Max retries exceeded with url: /search?q=103854659&per_page=1 (Caused by NameResolutionError("<urllib3.connection.HTTPSConnection object at 0x7f48934beae0>: Failed to resolve 'recherche-entreprises.api.gouv.fr' ([Errno -2] Name or service not known)"))
+

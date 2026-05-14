@@ -539,6 +539,8 @@ import { adaptLead, formatDateFR } from '@/lib/leadAdapter'
 
 const route  = useRoute()
 const router = useRouter()
+const dirigeantsEmailList = ref([])
+const selectedEmailTo = ref('')
 
 const leadFromApi = ref(null)
 const isLoading = ref(true)
@@ -669,7 +671,8 @@ const generateEmail = async () => {
   
   isGeneratingEmail.value = true
   emailError.value = ''
-  
+  const dirigeantsAvecEmail = (displayLead.value.dirigeants || []).filter((d) => d.email)
+
   try {
     const payload = {
       rapport: {
@@ -684,7 +687,9 @@ const generateEmail = async () => {
     
     generatedEmailSubject.value = response.data.objet || 'Proposition de collaboration Numeryx'
     generatedEmailBody.value = response.data.corps || ''
-    
+
+    dirigeantsEmailList.value = dirigeantsAvecEmail
+    selectedEmailTo.value = dirigeantsAvecEmail[0]?.email || displayLead.value.email || ''
     showEmailModal.value = true
   } catch (err) {
     console.error('Error generating email:', err)

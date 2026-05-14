@@ -249,22 +249,6 @@
                 </Card>
                 
                 <!-- Enrich CTA -->
-                <div v-if="companyInfo && !infoError" class="flex flex-col items-center mt-2 mb-6">
-                  <Button 
-                    @click="openEnrichModal"
-                    :disabled="enrichSuccess"
-                    :class="[
-                      'w-full max-w-sm h-11 shadow-sm transition-all duration-300',
-                      enrichSuccess 
-                        ? 'bg-emerald-600 hover:bg-emerald-700 text-white opacity-100 disabled:opacity-100' 
-                        : 'bg-primary hover:bg-primary/90 text-white'
-                    ]"
-                  >
-                    <CheckCircle2 v-if="enrichSuccess" class="w-4 h-4 mr-2" />
-                    <span v-else class="mr-2">✚</span>
-                    {{ enrichSuccess ? '✔ Entreprise enrichie' : 'Enrichir cette entreprise' }}
-                  </Button>
-                </div>
               </div>
 
               <div class="space-y-4">
@@ -311,80 +295,6 @@
           :class="{ 'opacity-50 cursor-not-allowed': !isValidLinkedinUrl }"
         >
           Continuer avec cette URL
-        </Button>
-      </DialogFooter>
-    </DialogContent>
-  </Dialog>
-
-  <!-- Enrichment Modal -->
-  <Dialog :open="showEnrichModal" @update:open="showEnrichModal = $event">
-    <DialogContent class="max-w-4xl max-h-[90vh] overflow-hidden flex flex-col">
-      <DialogHeader class="px-6 py-4 border-b">
-        <DialogTitle class="flex items-center gap-2">
-          Enrichissement des données
-        </DialogTitle>
-        <DialogDescription>
-          Comparez les données existantes avec les nouvelles informations extraites de LinkedIn. Sélectionnez les champs que vous souhaitez mettre à jour.
-        </DialogDescription>
-      </DialogHeader>
-
-      <div class="flex-1 overflow-y-auto p-6 bg-muted/10 relative">
-        <div v-if="isLoadingExisting" class="absolute inset-0 flex flex-col items-center justify-center bg-background/80 z-10 backdrop-blur-sm">
-          <Loader2 class="w-8 h-8 animate-spin text-primary mb-2" />
-          <span class="text-sm text-muted-foreground">Récupération des données existantes...</span>
-        </div>
-
-        <div class="border rounded-lg bg-background overflow-hidden shadow-sm">
-          <table class="w-full text-sm text-left">
-            <thead class="bg-muted/50 border-b">
-              <tr>
-                <th class="w-10 px-4 py-3 text-center"></th>
-                <th class="px-4 py-3 font-semibold text-muted-foreground w-1/4">Champ</th>
-                <th class="px-4 py-3 font-semibold text-muted-foreground w-1/3 border-l">Données actuelles</th>
-                <th class="px-4 py-3 font-semibold text-primary w-1/3 border-l">Nouvelles données</th>
-              </tr>
-            </thead>
-            <tbody class="divide-y">
-              <tr v-for="field in enrichmentFields" :key="field.key" class="hover:bg-muted/20 transition-colors">
-                <td class="px-4 py-3 text-center">
-                  <Checkbox 
-                    :id="`chk-${field.key}`"
-                    :checked="selectedFields.includes(field.key)"
-                    @update:checked="val => toggleFieldSelection(field.key, val)"
-                    :disabled="!isDifferent(field.key)"
-                  />
-                </td>
-                <td class="px-4 py-3 font-medium">
-                  <label :for="`chk-${field.key}`" :class="{ 'cursor-pointer': isDifferent(field.key) }">{{ field.label }}</label>
-                </td>
-                <td class="px-4 py-3 text-muted-foreground border-l align-top break-words whitespace-pre-wrap max-w-xs">
-                  {{ formatValue(existingCompanyData[field.dbKey || field.key]) }}
-                </td>
-                <td class="px-4 py-3 border-l align-top break-words whitespace-pre-wrap max-w-xs"
-                    :class="[
-                      isDifferent(field.key) ? 'bg-amber-50/50 text-amber-900 border-l-amber-200' : 'text-muted-foreground',
-                      !getNewValue(field.key) ? 'italic opacity-60' : ''
-                    ]">
-                  {{ formatValue(getNewValue(field.key)) || 'Non disponible' }}
-                </td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
-      </div>
-
-      <DialogFooter class="px-6 py-4 border-t bg-background flex flex-row justify-end gap-3 z-10">
-        <Button variant="outline" @click="showEnrichModal = false" :disabled="isEnriching">
-          Annuler
-        </Button>
-        <Button 
-          variant="default" 
-          @click="submitEnrichment" 
-          :disabled="selectedFields.length === 0 || isEnriching"
-          class="bg-blue-600 hover:bg-blue-700 text-white"
-        >
-          <Loader2 v-if="isEnriching" class="w-4 h-4 mr-2 animate-spin" />
-          {{ isEnriching ? 'Mise à jour...' : 'Enrichir les champs sélectionnés' }}
         </Button>
       </DialogFooter>
     </DialogContent>
@@ -508,8 +418,8 @@ const startAnalysisFlow = () => {
   
   // Etape 1: Vérifier les sources avant tout appel API
   const sources = props.lead?.sources || {}
-  const hasLinkedinSource = Object.values(sources).includes('linkedin')
-
+  const hasLinkedinSource = Object.entries(sources)
+  .some(([key, val]) => key !== 'linkedin_url' && val === 'linkedin')
   if (hasLinkedinSource) {
     // Branch A: Données existantes trouvées
     // Peupler directement companyInfo avec les données du lead
@@ -520,7 +430,9 @@ const startAnalysisFlow = () => {
       taille: props.lead?.tailleEntreprise || props.lead?.taille_entrep,
       ca: props.lead?.ca,
       website: props.lead?.website_url,
-      phone: props.lead?.telephone
+      phone: props.lead?.telephone,
+      segment: props.lead?.segment,  // ← "Unité non employeuse"
+
     }
   }
 
@@ -591,10 +503,11 @@ const startFetchingData = (preComputedHasLinkedinSource?: boolean) => {
   postsError.value = null
   infoError.value = null
   finalPosts.value = []
-  
-  // Re-evaluate if not passed
+
   const sources = props.lead?.sources || {}
-  const hasLinkedinSource = preComputedHasLinkedinSource !== undefined ? preComputedHasLinkedinSource : Object.values(sources).includes('linkedin')
+  const hasLinkedinSource = preComputedHasLinkedinSource !== undefined
+    ? preComputedHasLinkedinSource
+    : Object.entries(sources).some(([key, val]) => key !== 'linkedin_url' && val === 'linkedin')
 
   let simProgress = 75
   const interval = setInterval(() => {
@@ -608,35 +521,36 @@ const startFetchingData = (preComputedHasLinkedinSource?: boolean) => {
 
   setTimeout(async () => {
     if (foundUrl.value) {
-      // Posts API is ALWAYS executed
       const pPosts = fetchLinkedInPosts(foundUrl.value).catch(err => {
         postsError.value = "Impossible de récupérer les publications."
         return []
       })
-      
-      // Enrichment API is ONLY executed if no linkedin data in sources
-      let pInfo: Promise<any>;
+
+      let pInfo: Promise<any>
       if (hasLinkedinSource && companyInfo.value) {
-        // We already have companyInfo populated directly from props.lead
         pInfo = Promise.resolve(companyInfo.value)
       } else {
         pInfo = fetchLinkedInInfo(foundUrl.value).then(async (info) => {
-          // "After a successful enrichment API call, update the sources field by setting each populated field to 'linkedin'"
           if (info && props.companyId) {
-             const baseUrl = import.meta.env.VITE_FASTAPI_URL || 'http://localhost:8001'
-             const patchPayload: any = {}
-             if (info.description) patchPayload.description = info.description
-             if (info.nb_locaux) patchPayload.nb_locaux = info.nb_locaux
-             if (info.date_creation_entreprise) patchPayload.date_creation_entreprise = info.date_creation_entreprise
-             if (info.taille) patchPayload.taille_entreprise = info.taille
-             if (info.ca) patchPayload.ca_affiche = info.ca
-             // Note: the backend route maps fields to columns and updates sources automatically if they change.
-             // (See update_entreprise in entreprise.py: `sources_actuelles[champ] = "linkedin"`)
-             try {
-                await axios.patch(`${baseUrl}/entreprises/${props.companyId}`, patchPayload)
-             } catch (e) {
-                console.error("Failed to patch sources after enrichment", e)
-             }
+            const baseUrl = import.meta.env.VITE_FASTAPI_URL || 'http://localhost:8001'
+            const patchPayload: any = {}
+
+            if (info.description) patchPayload.description = info.description
+            // nb_locaux : uniquement si null en base
+            if (info.nb_locaux && !props.lead?.nb_locaux && !props.lead?.nbLocaux) {
+              patchPayload.nb_locaux = info.nb_locaux
+            }
+            if (info.date_creation_entreprise) patchPayload.date_creation_entreprise = info.date_creation_entreprise
+            if (info.taille) patchPayload.taille_entreprise = info.taille
+            if (info.ca) patchPayload.ca_affiche = info.ca
+            // Ajout website_url
+            if (info.website) patchPayload.website_url = info.website
+
+            try {
+              await axios.patch(`${baseUrl}/entreprises/${props.companyId}`, patchPayload)
+            } catch (e) {
+              console.error("Failed to patch sources after enrichment", e)
+            }
           }
           return info
         }).catch(err => {
@@ -649,7 +563,7 @@ const startFetchingData = (preComputedHasLinkedinSource?: boolean) => {
       finalPosts.value = postsRes
       companyInfo.value = infoRes
     }
-    
+
     clearInterval(interval)
     progressValue.value = 100
     setTimeout(() => { currentStep.value = 4 }, 500)
@@ -670,19 +584,23 @@ const generateAnalysis = async () => {
     nom: props.companyName,
     secteur: props.lead?.secteurActivite || '',
     chiffre_affaires: props.lead?.ca ||null,
-    taille: props.lead?.tailleEntreprise || '',
-    nb_employes: '', 
+    taille: companyInfo.value?.taille || props.lead?.tailleEntreprise || '',
+    segment:props.lead?.segment || '', 
     nb_locales: props.lead?.nbLocaux || 1,
     posts: finalPosts.value.slice(0, 10),
     specialities: companyInfo.value?.specialities || [],
     description: companyInfo.value?.description || '',
-
+    
+  
   }
 
   try {
     const response = await axios.post('http://localhost:8002/ia/analyze', payload)
     sessionStorage.setItem('analysisResult', JSON.stringify(response.data))
     sessionStorage.setItem('analysisLead', JSON.stringify(props.lead || { nom: props.companyName }))
+    
+    const dirigeantsAvecEmail = (props.lead?.dirigeants || []).filter((d: any) => d.email)
+    sessionStorage.setItem('analysisDirigeants', JSON.stringify(dirigeantsAvecEmail))
     emit('update:isOpen', false)
     router.push({ name: 'AnalyseResults' })
   } catch (error) {

@@ -252,25 +252,25 @@
             </Card>
 
             <!-- ── PHASE CARDS ── -->
-            <!-- <Transition
+             <Transition
               enter-active-class="transition-all duration-500 ease-in-out origin-top"
               enter-from-class="grid-rows-[0fr] opacity-0"
               enter-to-class="grid-rows-[1fr] opacity-100"
               leave-active-class="transition-all duration-300 ease-in-out origin-top"
               leave-from-class="grid-rows-[1fr] opacity-100"
               leave-to-class="grid-rows-[0fr] opacity-0"
-            > -->
-              <!-- <div v-show="expandedPipelines.has(pid)" class="grid">
+            >
+               <div v-show="expandedPipelines.has(pid)" class="grid">
                 <div class="space-y-0 min-h-0">
                   <template v-for="(phase, idx) in pipelines[pid].phases" :key="phase.name">
 
-                <Card
+                <!-- <Card
                   class="border-border shadow-sm rounded-2xl bg-white overflow-hidden"
                   :class="phaseBorderClass(phase.st)"
                 >
-                  <CardContent class="p-4">
+                  <CardContent class="p-4"> -->
 
-                    Phase header -->
+                    <!-- Phase header -->
                     <!-- <div class="flex items-start gap-2.5 mb-3">
                       <div
                         class="w-7 h-7 rounded-full flex items-center justify-center text-[11px] font-black flex-shrink-0 mt-0.5"
@@ -355,10 +355,10 @@
                         class="w-3 h-3 ml-auto transition-transform duration-200"
                         :class="openLogs.has(pid + ':' + phase.name) ? 'rotate-180' : ''"
                       />
-                    </button> -->
+                    </button>
 
-                    <!-- Log terminal -->
-                    <!-- <div
+                     Log terminal 
+                    <div
                       v-if="openLogs.has(pid + ':' + phase.name)"
                       class="mt-2 bg-slate-900 rounded-lg p-2.5 font-mono overflow-y-auto max-h-48"
                     >
@@ -373,18 +373,18 @@
                       </div>
                     </div> -->
 
-                  <!-- </CardContent> -->
-                <!-- </Card> --> 
+                  <!-- </CardContent> 
+                </Card> -->
 
                 <!-- Connector -->
                 <!-- <div v-if="idx < pipelines[pid].phases.length - 1" class="flex justify-center py-0.5">
                   <ChevronDown class="w-3.5 h-3.5 text-tacir-darkgray/30" />
-                </div>
+                </div> -->
 
                   </template>
                 </div>
               </div>
-            </Transition> -->
+            </Transition>  
 
           </div>
         </div>

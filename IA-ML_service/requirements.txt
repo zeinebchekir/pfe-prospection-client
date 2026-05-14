@@ -18,3 +18,4 @@ openai
 pydantic
 groq
 pywebpush
+Alembic==1.13.1

@@ -16,7 +16,25 @@ services:
       retries: 5
     networks:
       - crmpfe_network
-               
+  # Base de données dédiée au service IA-ML
+  db_iaml:
+    image: postgres:15-alpine
+    container_name: crmpfe_db_iaml
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${IAML_DB_NAME:-iaml_db}
+      POSTGRES_USER: ${IAML_DB_USER:-iaml_user}
+      POSTGRES_PASSWORD: ${IAML_DB_PASSWORD:-iaml_pass}
+    volumes:
+      - iaml_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${IAML_DB_USER:-iaml_user} -d ${IAML_DB_NAME:-iaml_db}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - iaml_network
+      - etl_network  # Permet à l'ETL de lire/écrire ici si besoin             
 
   pgadmin:
     image: dpage/pgadmin4
@@ -72,34 +90,33 @@ services:
     networks:
       - crmpfe_network
     shm_size: '256mb'  
+
   ia-ml:
     build:
       context: ./IA-ML_service
       dockerfile: dockerfile
-    extra_hosts:
-      - "host.docker.internal:host-gateway"
-    ports:
-      - "8002:8002"
-    volumes:
-      - ./IA-ML_service:/app   
-      - ./IA-ML_service/models:/app/models  # modèle partagé, pas recopié
-           # ← ton code
-    env_file: .env
+    container_name: crmpfe_iaml
+    restart: unless-stopped
     depends_on:
-      db:
+      db_iaml:
         condition: service_healthy
+    environment:
+      # L'URL pointe maintenant vers le nom du service "db_iaml"
+      DATABASE_URL: postgresql://${IAML_DB_USER:-iaml_user}:${IAML_DB_PASSWORD:-iaml_pass}@db_iaml:5432/${IAML_DB_NAME:-iaml_db}
     networks:
-      - crmpfe_network
-      - etl_network 
-    dns:
-      - 8.8.8.8
+      - iaml_network     # Pour parler à sa DB
+      - crmpfe_network   # Pour parler au Web (Django)
+      - etl_network      # Pour être joint par Airflow/FastAPI de l'autre compose
 volumes:
   postgres_data:
   static_volume:
   ollama_data:
+  iaml_pgdata:
 
 networks:
   crmpfe_network:
+    driver: bridge
+  iaml_network:
     driver: bridge
   etl_network:
     external: true

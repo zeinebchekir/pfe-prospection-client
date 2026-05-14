@@ -9,7 +9,7 @@ load_dotenv()
 
 logger = logging.getLogger(__name__)
 
-SERPER_API_KEYS = os.getenv("SERPER_API_KEY")
+SERPER_API_KEYS = [k.strip() for k in os.getenv("SERPER_API_KEY").split(",") if k.strip()]
 
 CURRENT_KEY_IDX = 0
 SERPER_API_EXHAUSTED = False
@@ -25,7 +25,7 @@ def get_linkedin_url(nom_entreprise: str, pays: str = "france") -> str | None:
         return None
 
     # ✅ Query corrigée : pas de guillemets globaux, site: ciblé, nom entre guillemets seul
-    query = f'site:linkedin.com/company "{nom_entreprise}"'
+    query = f'site:linkedin.com/company "{nom_entreprise} {pays}"'
     # Exemples de résultats :
     # → https://www.linkedin.com/company/matmut/
     # → https://fr.linkedin.com/company/matmut

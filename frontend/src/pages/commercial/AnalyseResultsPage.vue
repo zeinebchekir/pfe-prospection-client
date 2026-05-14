@@ -172,6 +172,30 @@
         </DialogHeader>
         
         <div class="space-y-4 px-6 py-4 flex-1 overflow-y-auto">
+          <div v-if="dirigeantsEmailList.length > 0 || lead?.email" class="space-y-2">
+            <Label>Destinataire</Label>
+            <select
+              v-model="selectedEmailTo"
+              class="w-full h-9 rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm focus:outline-none focus:ring-1 focus:ring-ring"
+            >
+              <!-- ✅ Email de l'entreprise en premier -->
+              <option v-if="lead?.email" :value="lead.email">
+                🏢 {{ lead.nom }} — {{ lead.email }}
+              </option>
+
+              <!-- Dirigeants avec email -->
+              <option
+                v-for="d in dirigeantsEmailList"
+                :key="d.email"
+                :value="d.email"
+              >
+                👤 {{ d.fullName || (d.prenom + ' ' + d.nom) }} — {{ d.email }}
+              </option>
+            </select>
+            <p class="text-[11px] text-muted-foreground">
+              Seuls les contacts avec un email renseigné sont affichés.
+            </p>
+          </div>
           <div class="space-y-2">
             <Label for="email-subject">Objet</Label>
             <Input id="email-subject" v-model="generatedEmailSubject" />
@@ -207,7 +231,7 @@
             </div>
 
             <!-- Conversation bubbles (last 3 user+assistant pairs, skip first assistant = original email) -->
-            <div v-if="chatHistory.length > 1" class="px-4 py-3 space-y-2 max-h-40 overflow-y-auto">
+            <div v-if="chatHistory.length > 1" class="px-4 py-3 space-y-3 max-h-80 overflow-y-auto">
               <template v-for="(msg, i) in chatHistory.slice(1).slice(-6)" :key="i">
                 <div
                   :class="[
@@ -217,15 +241,18 @@
                 >
                   <div
                     :class="[
-                      'max-w-[80%] text-[11px] leading-relaxed px-3 py-2 rounded-xl',
+                      'max-w-[90%] text-[11px] leading-relaxed px-3 py-2 rounded-xl',
                       msg.role === 'user'
                         ? 'bg-blue-600 text-white rounded-br-sm'
-                        : 'bg-white border border-border text-foreground rounded-bl-sm'
+                        : 'bg-white border border-border text-foreground rounded-bl-sm shadow-sm'
                     ]"
                   >
-                    <span v-if="msg.role === 'assistant'" class="line-clamp-2">
-                      {{ msg.content }}
-                    </span>
+                    <div v-if="msg.role === 'assistant'" class="space-y-1.5 whitespace-pre-wrap">
+                      <div v-if="parseAssistantMsg(msg.content).objet" class="font-semibold pb-1 border-b border-border/50">
+                        Objet : {{ parseAssistantMsg(msg.content).objet }}
+                      </div>
+                      <div>{{ parseAssistantMsg(msg.content).corps }}</div>
+                    </div>
                     <span v-else>{{ msg.content }}</span>
                   </div>
                 </div>
@@ -262,25 +289,30 @@
             <Button variant="outline" @click="showEmailModal = false">
               Fermer
             </Button>
-            <Button @click="copyGeneratedEmail" class="gap-2">
+            <Button @click="copyGeneratedEmail" variant="outline" class="gap-2">
               <Check v-if="emailCopied" class="w-4 h-4" />
               <Copy v-else class="w-4 h-4" />
               {{ emailCopied ? 'Copié !' : 'Copier' }}
             </Button>
+            <Button @click="openInOutlook" class="gap-2 bg-blue-600 hover:bg-blue-700 text-white">
+              <Mail class="w-4 h-4" />
+              Ouvrir dans Outlook
+            </Button>
           </div>
-        </DialogFooter>
+      </DialogFooter>
       </DialogContent>
     </Dialog>
   </div>
 </template>
 
 <script setup>
+
 import { ref, onMounted, computed } from 'vue'
 import { useRouter } from 'vue-router'
 import {
   ArrowLeft, Loader2, Target, ThumbsUp, ThumbsDown, 
   CheckCircle2, AlertTriangle, Mail, Copy, Check, Sparkles,
-  Send, RotateCcw, Bot
+  Send, RotateCcw, Bot,ExternalLink
 } from 'lucide-vue-next'
 import { toast } from 'vue-sonner'
 import TheSidebar from '@/components/AppSidebar.vue'
@@ -314,16 +346,37 @@ const originalEmail = ref({ subject: '', body: '' })
 const chatInput = ref('')
 const isAdjusting = ref(false)
 
+const parseAssistantMsg = (content) => {
+  try {
+    const parsed = typeof content === 'string' ? JSON.parse(content) : content;
+    return {
+      objet: parsed.objet || '',
+      corps: parsed.corps || ''
+    };
+  } catch (e) {
+    return { objet: '', corps: content };
+  }
+}
+const dirigeantsEmailList = ref([])
+const selectedEmailTo = ref('')
 onMounted(() => {
   try {
     const storedResult = sessionStorage.getItem('analysisResult')
     const storedLead = sessionStorage.getItem('analysisLead')
+    const storedDirigeants = sessionStorage.getItem('analysisDirigeants') // ✅
+    
     if (storedResult) {
       result.value = JSON.parse(storedResult)
       emailCorps.value = result.value.email_prospection?.corps || ''
     }
     if (storedLead) {
       lead.value = JSON.parse(storedLead)
+    }
+    if (storedDirigeants) {
+      const dirs = JSON.parse(storedDirigeants)
+      dirigeantsEmailList.value = dirs
+      // ✅ email entreprise en premier si existe, sinon premier dirigeant
+      selectedEmailTo.value = lead.value?.email || dirs[0]?.email || ''
     }
   } catch (e) {
     console.error("Erreur de parsing des données d'analyse", e)
@@ -504,7 +557,12 @@ const parsedBesoins = computed(() => {
   }
   return [];
 });
-
+const openInOutlook = () => {
+  const subject = encodeURIComponent(generatedEmailSubject.value)
+  const body = encodeURIComponent(generatedEmailBody.value)
+  const outlookUrl = `https://outlook.office.com/mail/deeplink/compose?to=${encodeURIComponent(selectedEmailTo.value)}&subject=${subject}&body=${body}`
+  window.open(outlookUrl, '_blank')
+}
 const getServiceColor = (service) => {
   const s = (service || '').toLowerCase();
   if (s.includes('cyber')) return 'bg-red-50 text-red-700 border-red-200';

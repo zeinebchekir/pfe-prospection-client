@@ -33,10 +33,10 @@ Your task: analyze a target company's LinkedIn data and produce a structured JSO
 === INPUT FORMAT ===
 You will receive:
 - name: company name
-- category: SME or Large
 - revenue: annual revenue
-- size: headcount range
 - sector: industry
+- segment: segment
+- taille : size in employees
 - posts: last 10 LinkedIn posts (array of strings)
 
 === GROUNDING RULE (MANDATORY) ===
@@ -212,12 +212,12 @@ def call_ollama_email(messages: list[dict], max_tokens: int = 2000) -> str:
                 "model": MODEL_NAME,
                 "messages": messages,
                 "stream": False,
-                "keep_alive": 0,
+                "keep_alive": "24h",
                 # No "format": "json" here — intentional, see docstring
                 "options": {
                     "temperature": 0.1,
                     "num_predict": max_tokens,
-                    "num_ctx": 8192,
+                    "num_ctx": 1024,
                     "repeat_penalty": 1.1,
                     "top_p": 0.9
                 }
@@ -313,6 +313,8 @@ def analyze_company(company_data: dict) -> dict:
                 "revenue": company_data["chiffre_affaires"],
                 "sector": company_data["secteur"],
                 "description": company_data.get("description", "Non renseignée"),
+                "segment": company_data.get("segment", "Non renseignée"),
+                "taille_en_employes": company_data.get("taille", "Non renseignée"),
                 "posts": posts_list,
                 "specialities": company_data.get("specialities", []),
             }, ensure_ascii=False)
