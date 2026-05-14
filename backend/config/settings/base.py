@@ -13,7 +13,6 @@ BASE_DIR = Path(__file__).resolve().parent.parent.parent
 SECRET_KEY = config("SECRET_KEY")
 AUTH_USER_MODEL = "users.User"
 FRONTEND_URL = config("FRONTEND_URL", default="http://localhost:5173")
-LEAD_SCORING_SERVICE_URL = config("LEAD_SCORING_SERVICE_URL", default="http://ia-ml:8002")
 
 INSTALLED_APPS = [
     "django.contrib.admin",

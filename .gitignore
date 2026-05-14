@@ -39,3 +39,6 @@ Thumbs.db
 IA-ML_service/.env
 IA-ML_service/artifacts/
 IA-ML_service/catboost_info/
+
+# Large local datasets
+data/train.csv
