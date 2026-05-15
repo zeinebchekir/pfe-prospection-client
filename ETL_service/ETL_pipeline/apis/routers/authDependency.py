@@ -19,6 +19,8 @@ async def get_current_user(request: Request) -> dict:
     Transmet le cookie HTTP-only tel quel — Django fait la validation.
     """
     token = request.cookies.get(COOKIE_NAME)
+    print(f"[AUTH] Cookie reçu: {COOKIE_NAME}={token}")  # ← ajouter
+
     if not token:
         print("token est null")
         raise HTTPException(status_code=401, detail="Non authentifié")

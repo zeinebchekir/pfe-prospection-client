@@ -1,9 +1,17 @@
 # main.py
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from contextlib import asynccontextmanager
+from db.database import Base, engine  # ← importer Base et engine
+from db.models import Potential_linkedin  # ← ajouter
+from .routers import LLM_generation, analyse_comportementale, enrich_lead, linkedin_posts, linkedin_url, potential_linkedin
+from db.database import create_tables
 
-from .routers import LLM_generation, analyse_comportementale, enrich_lead, linkedin_posts, linkedin_url
-
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    create_tables()  # ← crée toutes les tables
+    print("[STARTUP] Tables IA-ML créées.")
+    yield
 
 app = FastAPI(title="Prospection LinkedIn API")
 app.add_middleware(
@@ -28,7 +36,7 @@ app.include_router(
 )
 app.include_router(LLM_generation.router, prefix="/ia", tags=["Analyse Lead"])
 app.include_router(enrich_lead.router, prefix="/enrich", tags=["LinkedIn URL"])
-
+app.include_router(potential_linkedin.router, tags=["Potential LinkedIn"])
 
 @app.get("/health")
 async def health():

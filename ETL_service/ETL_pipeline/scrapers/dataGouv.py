@@ -136,7 +136,7 @@ class DataGouvService(BaseScraper):
         total = 0
         total_pages = 0
 
-        while page <= max_pages:
+        while page <= 10:
             params_page = {**params, "page": page, "per_page": self.per_page}
             data = None
 

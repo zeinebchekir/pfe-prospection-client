@@ -9,7 +9,7 @@ from .authDependency import require_admin,get_current_user
 from sqlalchemy.orm import Session
 from db.database import get_db
 from db.models import Notification
-
+from fastapi import HTTPException
 router = APIRouter(prefix="/notifications", tags=["Notifications"])
 
 # ── File d'attente globale ──────────────────────────────────────────────────

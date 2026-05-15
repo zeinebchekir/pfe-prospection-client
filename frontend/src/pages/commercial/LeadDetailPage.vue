@@ -595,8 +595,7 @@ const safeDecode = (url) => {
 async function fetchLeadDetails() {
   isLoading.value = true
   try {
-    const baseUrl = import.meta.env.VITE_FASTAPI_URL || 'http://localhost:8001'
-    const res = await axios.get(`${baseUrl}/entreprises/${route.params.id}`)
+    const res = await axios.get(`/entreprises/${route.params.id}`)
     leadFromApi.value = adaptLead(res.data, 0)
   } catch (err) {
     console.error('[LeadDetail] Fetch error:', err)
@@ -682,8 +681,7 @@ const generateEmail = async () => {
       remarques: ''
     }
     
-    const baseUrl = import.meta.env.VITE_IA_SERVICE_URL || 'http://localhost:8002'
-    const response = await axios.post(`${baseUrl}/ia/generate-email`, payload)
+    const response = await axios.post(`/ia/generate-email`, payload)
     
     generatedEmailSubject.value = response.data.objet || 'Proposition de collaboration Numeryx'
     generatedEmailBody.value = response.data.corps || ''

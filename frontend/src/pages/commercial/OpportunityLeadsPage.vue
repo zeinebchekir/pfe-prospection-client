@@ -1,5 +1,4 @@
 <template>
-  <div>
   <div class="flex min-h-screen bg-tacir-lightgray/30">
     <TheSidebar />
 
@@ -19,11 +18,76 @@
           <Badge variant="outline" class="hidden border-tacir-blue/20 bg-tacir-blue/5 text-tacir-blue sm:inline-flex">
             {{ kpis.total_leads }} leads
           </Badge>
+          <div class="relative">
+            <button
+              class="relative inline-flex h-9 w-9 items-center justify-center rounded-md border border-input bg-white text-tacir-darkblue transition-colors hover:bg-accent"
+              title="Notifications"
+              @click="showNotifications = !showNotifications"
+            >
+              <Bell class="h-4 w-4" />
+              <span
+                v-if="notifications.length"
+                class="absolute -right-1.5 -top-1.5 flex h-5 min-w-5 items-center justify-center rounded-full bg-red-600 px-1 text-[10px] font-bold leading-none text-white"
+              >
+                {{ notifications.length > 99 ? '99+' : notifications.length }}
+              </span>
+            </button>
+
+            <div
+              v-if="showNotifications"
+              class="absolute right-0 top-11 z-50 w-[min(92vw,420px)] overflow-hidden rounded-md border border-border bg-white shadow-xl"
+            >
+              <div class="flex items-center justify-between border-b border-border px-4 py-3">
+                <div>
+                  <p class="text-sm font-semibold text-tacir-darkblue">Notifications</p>
+                  <p class="text-xs text-muted-foreground">{{ notifications.length }} alertes commerciales</p>
+                </div>
+                <button class="rounded-md border border-input p-1.5 hover:bg-accent" @click="showNotifications = false">
+                  <X class="h-3.5 w-3.5" />
+                </button>
+              </div>
+
+              <div class="max-h-96 overflow-y-auto">
+                <button
+                  v-for="notification in notifications"
+                  :key="notification.id"
+                  class="block w-full border-b border-border/70 px-4 py-3 text-left transition-colors hover:bg-muted/40"
+                  @click="openNotification(notification)"
+                >
+                  <div class="flex items-center justify-between gap-3">
+                    <span class="text-xs font-semibold text-tacir-darkblue">
+                      {{ notificationTypeLabel(notification.notification_type) }}
+                    </span>
+                    <div class="flex shrink-0 items-center gap-2">
+                      <span
+                        v-if="scoreTrendValue(notification) !== null"
+                        :class="scoreTrendClass(notification)"
+                      >
+                        {{ scoreTrendLabel(notification) }}
+                      </span>
+                      <span class="text-[11px] text-muted-foreground">
+                        {{ formatDate(notification.last_visit_date) }}
+                      </span>
+                    </div>
+                  </div>
+                  <p class="mt-1 line-clamp-2 text-xs leading-5 text-muted-foreground">
+                    {{ notification.message }}
+                  </p>
+                </button>
+
+                <p v-if="!notifications.length" class="px-4 py-8 text-center text-sm text-muted-foreground">
+                  Aucune notification.
+                </p>
+              </div>
+            </div>
+          </div>
           <button
-            class="inline-flex h-9 items-center justify-center rounded-md bg-tacir-blue px-4 text-sm font-semibold text-white transition-opacity hover:opacity-90"
-            @click="showCreateDialog = true"
+            class="inline-flex h-9 items-center gap-2 rounded-md border border-input px-4 text-sm font-semibold transition-colors hover:bg-accent disabled:cursor-not-allowed disabled:opacity-60"
+            :disabled="isRecalculating"
+            @click="recalculate"
           >
-            Ajouter un lead
+            <RefreshCcw :class="['h-4 w-4', isRecalculating ? 'animate-spin' : '']" />
+            Recalculer
           </button>
         </div>
       </header>
@@ -58,25 +122,72 @@
               </CardContent>
             </Card>
 
-            <Card class="border-border/80">
-              <CardContent class="space-y-4 p-5">
-                <div>
-                  <p class="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">Nombre de leads</p>
-                  <p class="mt-1 text-xs text-muted-foreground">Repartition des leads chauds, tiedes et froids.</p>
+            <Card class="border-border/80 xl:col-span-3">
+              <CardContent class="p-5">
+                <div class="flex items-center justify-between gap-3">
+                  <ChartTitle :title="`Evolution des visites par ${visitPeriod === 'year' ? 'annee' : 'mois'}`" />
+                  <div class="inline-flex rounded-md border border-input bg-white p-0.5">
+                    <button
+                      v-for="period in visitPeriods"
+                      :key="period.value"
+                      :class="[
+                        'h-7 rounded px-3 text-xs font-semibold transition-colors',
+                        visitPeriod === period.value ? 'bg-tacir-blue text-white' : 'text-muted-foreground hover:bg-accent',
+                      ]"
+                      @click="setVisitPeriod(period.value)"
+                    >
+                      {{ period.label }}
+                    </button>
+                  </div>
                 </div>
+                <div class="mt-5 flex h-56 items-end gap-2 overflow-x-auto pb-2">
+                  <div
+                    v-for="row in visitsEvolution"
+                    :key="row.period_label || row.period_start"
+                    class="flex h-full min-w-12 flex-1 flex-col justify-end gap-2"
+                    :title="`${row.period_label}: ${row.visits} visites`"
+                  >
+                    <span class="text-center text-[11px] font-semibold text-tacir-darkblue">
+                      {{ compactNumber(row.visits) }}
+                    </span>
+                    <div
+                      class="mx-auto w-full rounded-t bg-tacir-blue/70"
+                      :style="`{ height: ${barHeight(row.visits, visitsMax)}% }`"
+                    />
+                    <span class="truncate text-center text-[11px] text-muted-foreground">
+                      {{ row.period_label }}
+                    </span>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
 
-                <div class="grid grid-cols-3 gap-3">
-                  <div class="rounded-xl border border-emerald-200 bg-emerald-50/80 px-3 py-3">
-                    <p class="text-[11px] font-semibold uppercase tracking-wide text-emerald-700">Chaud</p>
-                    <p class="mt-2 text-2xl font-bold text-emerald-900">{{ leadCounts.hot }}</p>
-                  </div>
-                  <div class="rounded-xl border border-amber-200 bg-amber-50/80 px-3 py-3">
-                    <p class="text-[11px] font-semibold uppercase tracking-wide text-amber-700">Tiede</p>
-                    <p class="mt-2 text-2xl font-bold text-amber-900">{{ leadCounts.warm }}</p>
-                  </div>
-                  <div class="rounded-xl border border-rose-200 bg-rose-50/80 px-3 py-3">
-                    <p class="text-[11px] font-semibold uppercase tracking-wide text-rose-700">Froid</p>
-                    <p class="mt-2 text-2xl font-bold text-rose-900">{{ leadCounts.cold }}</p>
+            <Card class="border-border/80 xl:col-span-2">
+              <CardContent class="p-5">
+                <ChartTitle title="Repartition appareils" />
+                <div class="mt-5 grid gap-5 sm:grid-cols-[180px_1fr] sm:items-center">
+                  <div
+                    class="mx-auto h-44 w-44 rounded-full"
+                    :style="devicePieStyle"
+                    title="Repartition appareils"
+                  />
+                  <div class="space-y-3">
+                    <div
+                      v-for="(row, index) in deviceDistribution"
+                      :key="row.device_category"
+                      class="flex items-center justify-between gap-3 text-xs"
+                    >
+                      <div class="flex min-w-0 items-center gap-2">
+                        <span
+                          class="h-3 w-3 shrink-0 rounded-full"
+                          :style="{ backgroundColor: deviceColor(index) }"
+                        />
+                        <span class="truncate font-semibold text-tacir-darkblue">{{ row.device_category }}</span>
+                      </div>
+                      <span class="shrink-0 text-muted-foreground">
+                        {{ compactNumber(row.count) }} / {{ formatPercent(row.count / deviceTotal) }}
+                      </span>
+                    </div>
                   </div>
                 </div>
               </CardContent>
@@ -97,7 +208,7 @@
                     </span>
                     <div
                       class="mx-auto w-full rounded-t bg-emerald-500/75"
-                      :style="{ height: `${barHeight(row.count, scoreMax)}%` }"
+                      :style="`{ height: ${barHeight(row.count, scoreMax)}% }`"
                     />
                     <span class="truncate text-center text-[11px] text-muted-foreground">
                       {{ Number(row.bucket) }}-{{ Number(row.bucket) + 9 }}
@@ -106,222 +217,308 @@
                 </div>
               </CardContent>
             </Card>
-          </div>
+          </section>
 
-          <Card class="border-border/80">
-            <CardContent class="space-y-4 p-4 md:p-5">
-              <div class="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
-                <div class="relative w-full xl:max-w-xl">
-                  <Search class="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-                  <Input
-                    v-model="search"
-                    class="pl-9"
-                    placeholder="Rechercher par entreprise, contact, email, poste, pays, secteur ou source"
-                    @input="handleSearchInput"
-                  />
+          <section>
+            <Card class="border-border/80">
+              <CardContent class="p-0">
+                <div class="flex flex-col gap-3 border-b border-border p-4 md:flex-row md:items-center md:justify-between">
+                  <div>
+                    <h2 class="text-sm font-semibold text-tacir-darkblue">Top Leads</h2>
+                    <p class="text-xs text-muted-foreground">Classement par score comportemental /100.</p>
+                  </div>
+                  <div class="flex items-center gap-2">
+                    <button
+                      v-for="limit in [10, 20]"
+                      :key="limit"
+                      :class="[
+                        'h-8 rounded-md border px-3 text-xs font-semibold',
+                        topLimit === limit ? 'border-tacir-blue bg-tacir-blue text-white' : 'border-input bg-white hover:bg-accent',
+                      ]"
+                      @click="setTopLimit(limit)"
+                    >
+                      Top {{ limit }}
+                    </button>
+                  </div>
                 </div>
 
-                <div class="flex flex-wrap items-center justify-between gap-3">
-                  <p class="text-xs text-muted-foreground">
-                    <span class="font-semibold text-foreground">Filtres actifs :</span>
-                    {{ activeFiltersLabel }}
-                  </p>
-                  <button
-                    v-if="hasActiveFilters"
-                    class="inline-flex h-9 items-center gap-2 rounded-md border border-input px-4 text-sm font-medium transition-colors hover:bg-accent"
-                    @click="resetFilters"
+                <div class="overflow-x-auto">
+                  <table class="w-full min-w-[820px] text-sm">
+                    <thead class="border-b border-border bg-muted/40 text-left text-[11px] uppercase tracking-wide text-muted-foreground">
+                      <tr>
+                        <th class="px-4 py-3">Rang</th>
+                        <th class="px-4 py-3">full_visitor_id</th>
+                        <th class="px-4 py-3">Score</th>
+                        <th class="px-4 py-3">Segment</th>
+                        <th class="px-4 py-3">Sessions</th>
+                        <th class="px-4 py-3">Derniere visite</th>
+                        <th class="px-4 py-3">Appareil</th>
+                        <th class="px-4 py-3">Bounce rate</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      <tr
+                        v-for="lead in topLeads"
+                        :key="lead.full_visitor_id"
+                        class="cursor-pointer border-b border-border/70 transition-colors hover:bg-muted/40"
+                        @click="openLead(lead.full_visitor_id)"
+                      >
+                        <td class="px-4 py-3 font-semibold">{{ lead.rank_position }}</td>
+                        <td class="px-4 py-3 font-mono text-xs">{{ lead.full_visitor_id }}</td>
+                        <td class="px-4 py-3 font-semibold">{{ formatScore(lead.lead_score_100) }}</td>
+                        <td class="px-4 py-3"><SegmentBadge :segment="lead.segment" /></td>
+                        <td class="px-4 py-3">{{ lead.nombre_sessions }}</td>
+                        <td class="px-4 py-3">{{ formatDate(lead.last_visit_date) }}</td>
+                        <td class="px-4 py-3">{{ lead.device_category || '-' }}</td>
+                        <td class="px-4 py-3">{{ formatPercent(lead.bounce_rate) }}</td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+              </CardContent>
+            </Card>
+          </section>
+
+          <Card class="border-border/80">
+            <CardContent class="p-0">
+              <div class="flex flex-col gap-3 border-b border-border p-4 md:flex-row md:items-center md:justify-between">
+                <div>
+                  <h2 class="text-sm font-semibold text-tacir-darkblue">Leads comportementaux</h2>
+                  <p class="text-xs text-muted-foreground">{{ leads.total }} leads analyses</p>
+                </div>
+                <div class="flex flex-col gap-2 sm:flex-row">
+                  <div class="relative">
+                    <Search class="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                    <input
+                      v-model="search"
+                      class="h-9 w-full rounded-md border border-input bg-white pl-9 pr-3 text-sm outline-none focus:border-tacir-blue sm:w-72"
+                      placeholder="Rechercher full_visitor_id"
+                      @input="handleSearchInput"
+                    />
+                  </div>
+                  <select
+                    v-model="segmentFilter"
+                    class="h-9 rounded-md border border-input bg-white px-3 text-sm outline-none focus:border-tacir-blue"
+                    @change="reloadLeads"
                   >
-                    <RotateCcw class="h-4 w-4" />
-                    Reinitialiser
-                  </button>
+                    <option value="">Tous segments</option>
+                    <option value="HOT">HOT</option>
+                    <option value="WARM">WARM</option>
+                    <option value="COLD">COLD</option>
+                  </select>
+                  <select
+                    v-model="deviceFilter"
+                    class="h-9 rounded-md border border-input bg-white px-3 text-sm outline-none focus:border-tacir-blue"
+                    @change="reloadLeads"
+                  >
+                    <option value="">Tous appareils</option>
+                    <option
+                      v-for="device in deviceFilterOptions"
+                      :key="device"
+                      :value="device"
+                    >
+                      {{ device }}
+                    </option>
+                  </select>
                 </div>
               </div>
 
-              <div class="grid gap-3 md:grid-cols-2 xl:grid-cols-6">
-                <div class="space-y-1.5">
-                  <p class="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Type</p>
-                  <Select v-model="filters.temperature" @update:modelValue="handleFilterChange">
-                    <SelectTrigger class="h-10 rounded-md bg-white text-sm">
-                      <SelectValue placeholder="Tous les types" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="ALL">Tous les types</SelectItem>
-                      <SelectItem value="HOT">Chaud</SelectItem>
-                      <SelectItem value="WARM">Tiede</SelectItem>
-                      <SelectItem value="COLD">Froid</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
+              <div class="overflow-x-auto">
+                <table class="w-full min-w-[820px] text-sm">
+                  <thead class="border-b border-border bg-muted/40 text-left text-[11px] uppercase tracking-wide text-muted-foreground">
+                    <tr>
+                      <th class="px-4 py-3">Rang</th>
+                      <th class="px-4 py-3">Lead</th>
+                      <th class="px-4 py-3">Score</th>
+                      <th class="px-4 py-3">Segment</th>
+                      <th class="px-4 py-3">Sessions</th>
+                      <th class="px-4 py-3">Derniere visite</th>
+                      <th class="px-4 py-3">Appareil</th>
+                      <th class="px-4 py-3">Bounce</th>
+                      <th class="px-4 py-3">Détails</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <tr
+                      v-for="lead in leads.results"
+                      :key="lead.full_visitor_id"
+                      class="cursor-pointer border-b border-border/70 transition-colors hover:bg-muted/40"
+                      @click="openLead(lead.full_visitor_id)"
+                    >
+                      <td class="px-4 py-3 font-semibold">{{ lead.rank_position }}</td>
+                      <td class="px-4 py-3 font-mono text-xs">{{ lead.full_visitor_id }}</td>
+                      <td class="px-4 py-3 font-semibold">{{ formatScore(lead.lead_score_100) }}</td>
+                      <td class="px-4 py-3"><SegmentBadge :segment="lead.segment" /></td>
+                      <td class="px-4 py-3">{{ lead.nombre_sessions }}</td>
+                      <td class="px-4 py-3">{{ formatDate(lead.last_visit_date) }}</td>
+                      <td class="px-4 py-3">{{ lead.device_category || '-' }}</td>
+                      <td class="px-4 py-3">{{ formatPercent(lead.bounce_rate) }}</td>
+                      <td class="px-4 py-3">
+                        <button
+                          class="h-8 rounded-md border border-input px-3 text-xs font-semibold transition-colors hover:bg-accent"
+                          @click.stop="openLead(lead.full_visitor_id)"
+                        >
+                          Détails
+                        </button>
+                      </td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
 
-                <div class="space-y-1.5">
-                  <p class="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Score</p>
-                  <Select v-model="filters.scoreOrder" @update:modelValue="handleFilterChange">
-                    <SelectTrigger class="h-10 rounded-md bg-white text-sm">
-                      <SelectValue placeholder="Tri du score" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="default">Tri par defaut</SelectItem>
-                      <SelectItem value="desc">Score decroissant</SelectItem>
-                      <SelectItem value="asc">Score croissant</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-
-                <div class="space-y-1.5">
-                  <p class="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Pays</p>
-                  <Select v-model="filters.country" @update:modelValue="handleFilterChange">
-                    <SelectTrigger class="h-10 rounded-md bg-white text-sm">
-                      <SelectValue placeholder="Tous les pays" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="ALL">Tous les pays</SelectItem>
-                      <SelectItem
-                        v-for="country in formOptions.countries"
-                        :key="country"
-                        :value="country"
-                      >
-                        {{ country }}
-                      </SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-
-                <div class="space-y-1.5">
-                  <p class="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Job Title</p>
-                  <Select v-model="filters.jobTitle" @update:modelValue="handleFilterChange">
-                    <SelectTrigger class="h-10 rounded-md bg-white text-sm">
-                      <SelectValue placeholder="Tous les postes" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="ALL">Tous les postes</SelectItem>
-                      <SelectItem
-                        v-for="jobTitle in formOptions.job_titles"
-                        :key="jobTitle"
-                        :value="jobTitle"
-                      >
-                        {{ jobTitle }}
-                      </SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-
-                <div class="space-y-1.5">
-                  <p class="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Taille entreprise</p>
-                  <Select v-model="filters.companySize" @update:modelValue="handleFilterChange">
-                    <SelectTrigger class="h-10 rounded-md bg-white text-sm">
-                      <SelectValue placeholder="Toutes les tailles" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="ALL">Toutes les tailles</SelectItem>
-                      <SelectItem
-                        v-for="companySize in formOptions.company_sizes"
-                        :key="companySize"
-                        :value="companySize"
-                      >
-                        {{ companySize }}
-                      </SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-
-                <div class="space-y-1.5">
-                  <p class="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Industry</p>
-                  <Select v-model="filters.industry" @update:modelValue="handleFilterChange">
-                    <SelectTrigger class="h-10 rounded-md bg-white text-sm">
-                      <SelectValue placeholder="Tous les secteurs" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="ALL">Tous les secteurs</SelectItem>
-                      <SelectItem
-                        v-for="industry in formOptions.industries"
-                        :key="industry"
-                        :value="industry"
-                      >
-                        {{ industry }}
-                      </SelectItem>
-                    </SelectContent>
-                  </Select>
+              <div class="flex items-center justify-between p-4">
+                <p class="text-xs text-muted-foreground">Page {{ leads.page }} / {{ leads.total_pages }}</p>
+                <div class="flex gap-2">
+                  <button class="h-8 rounded-md border px-3 text-xs font-semibold disabled:opacity-50" :disabled="page <= 1" @click="changePage(page - 1)">
+                    Precedent
+                  </button>
+                  <button class="h-8 rounded-md border px-3 text-xs font-semibold disabled:opacity-50" :disabled="page >= leads.total_pages" @click="changePage(page + 1)">
+                    Suivant
+                  </button>
                 </div>
               </div>
             </CardContent>
           </Card>
-
-          <div class="relative overflow-hidden rounded-xl border border-border bg-white shadow-card">
-            <div
-              v-if="isLoading"
-              class="absolute inset-0 z-10 flex items-center justify-center bg-white/70 backdrop-blur-sm"
-            >
-              <div class="flex flex-col items-center gap-2">
-                <Loader2 class="h-8 w-8 animate-spin text-tacir-blue" />
-                <span class="text-sm font-medium text-tacir-darkgray">Chargement des opportunites...</span>
-              </div>
-            </div>
-
-            <OpportunityLeadTable
-              :leads="opportunityLeads"
-              :loading="isLoading"
-              @edit="openEditDialog"
-              @delete="openDeleteDialog"
-            />
-
-            <div class="px-4 pb-4">
-              <LeadPagination
-                :page="page"
-                :total-pages="totalPages"
-                :total-items="totalItems"
-                :page-size="pageSize"
-                @page-change="handlePageChange"
-                @size-change="handlePageSizeChange"
-              />
-            </div>
-          </div>
-
-          <OpportunityPerformancePanel
-            :performance="performance"
-            :loading="isPerformanceLoading"
-            :training="isTraining"
-            @train="handleTrainModel"
-          />
         </div>
       </main>
     </div>
   </div>
 
-  <OpportunityLeadFormDialog
-    v-model:open="showCreateDialog"
-    :saving="isSavingLead"
-    mode="create"
-    list-id-prefix="opportunity-create"
-    :options-loading="isFormOptionsLoading"
-    :job-title-options="formOptions.job_titles"
-    :industry-options="formOptions.industries"
-    :lead-source-options="formOptions.lead_sources"
-    :last-activity-options="formOptions.last_activities"
-    :last-notable-activity-options="formOptions.last_notable_activities"
-    @submit="handleCreateLead"
-  />
+  <div v-if="selectedLead" class="fixed inset-0 z-50 bg-black/30" @click.self="selectedLead = null">
+    <aside class="ml-auto h-full w-full max-w-3xl overflow-y-auto bg-white shadow-xl">
+      <div class="sticky top-0 z-10 flex items-center justify-between border-b border-border bg-white p-5">
+        <div>
+          <p class="text-xs uppercase tracking-wide text-muted-foreground">Detail Lead</p>
+          <h2 class="font-mono text-sm font-semibold text-tacir-darkblue">{{ selectedLead.full_visitor_id }}</h2>
+        </div>
+        <button class="rounded-md border border-input p-2 hover:bg-accent" @click="selectedLead = null">
+          <X class="h-4 w-4" />
+        </button>
+      </div>
 
-  <OpportunityLeadFormDialog
-    v-model:open="showEditDialog"
-    :saving="isUpdatingLead"
-    mode="edit"
-    list-id-prefix="opportunity-edit"
-    :lead="editingLead"
-    :options-loading="isFormOptionsLoading"
-    :job-title-options="formOptions.job_titles"
-    :industry-options="formOptions.industries"
-    :lead-source-options="formOptions.lead_sources"
-    :last-activity-options="formOptions.last_activities"
-    :last-notable-activity-options="formOptions.last_notable_activities"
-    @submit="handleUpdateLead"
-  />
+      <div class="space-y-5 p-5">
+        <section class="grid gap-3 sm:grid-cols-3">
+          <MetricCard label="Score" :value="formatScore(selectedLead.lead_score_100)" />
+          <MetricCard label="Segment" :value="selectedLead.segment" />
+          <MetricCard label="Recency" :value="formatScore(selectedLead.recency_score)" />
+          <MetricCard label="Sessions" :value="selectedLead.nombre_sessions" />
+          <MetricCard label="Premiere visite" :value="formatDate(selectedLead.first_visit_date)" />
+          <MetricCard label="Derniere visite" :value="formatDate(selectedLead.last_visit_date)" />
+        </section>
 
-  <OpportunityLeadDeleteDialog
-    v-model:open="showDeleteDialog"
-    :deleting="isDeletingLead"
-    :lead="deletingLead"
-    @confirm="handleDeleteLead"
-  />
+        <Card class="border-border/80">
+          <CardContent class="grid gap-3 p-5 sm:grid-cols-2">
+            <InfoRow label="Activite suspecte" :value="selectedLead.suspicious_activity ? 'Oui' : 'Non'" />
+            <InfoRow label="Appareil" :value="selectedLead.device_category" />
+            <InfoRow label="Navigateur" :value="selectedLead.browser" />
+            <InfoRow label="Pays" :value="selectedLead.country" />
+            <InfoRow label="Ville" :value="selectedLead.city" />
+            <InfoRow label="Source trafic" :value="selectedLead.traffic_source" />
+            <InfoRow label="Hits moyens" :value="formatNumber(selectedLead.avg_hits_per_session)" />
+            <InfoRow label="Pageviews moyens" :value="formatNumber(selectedLead.avg_pageviews_per_session)" />
+            <InfoRow label="Bounce rate" :value="formatPercent(selectedLead.bounce_rate)" />
+            <InfoRow label="Temps moyen" :value="formatSeconds(selectedLead.avg_time_on_site)" />
+          </CardContent>
+        </Card>
+
+        <Card class="border-border/80">
+          <CardContent class="p-5">
+            <div class="flex items-center justify-between gap-3">
+              <div>
+                <h3 class="text-sm font-semibold text-tacir-darkblue">Pourquoi ce segment ?</h3>
+                <p class="text-xs text-muted-foreground">
+                  Explication basee sur le score comportemental et les penalites appliquees.
+                </p>
+              </div>
+              <SegmentBadge :segment="selectedLead.segment" />
+            </div>
+            <div class="mt-4 space-y-3">
+              <div
+                v-for="reason in leadReasons(selectedLead)"
+                :key="reason.label"
+                class="rounded-md border border-border bg-muted/20 p-3"
+              >
+                <div class="flex items-center justify-between gap-3">
+                  <p class="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                    {{ reason.label }}
+                  </p>
+                  <span :class="reasonToneClass(reason.tone)">
+                    {{ reason.value }}
+                  </span>
+                </div>
+                <p class="mt-1 text-sm leading-5 text-tacir-darkblue">
+                  {{ reason.description }}
+                </p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card class="border-border/80">
+          <CardContent class="p-0">
+            <div class="border-b border-border p-4">
+              <h3 class="text-sm font-semibold text-tacir-darkblue">Historique sessions</h3>
+            </div>
+            <div class="overflow-x-auto">
+              <table class="w-full min-w-[680px] text-sm">
+                <thead class="border-b border-border bg-muted/40 text-left text-[11px] uppercase tracking-wide text-muted-foreground">
+                  <tr>
+                    <th class="px-4 py-3">Date</th>
+                    <th class="px-4 py-3">Heure</th>
+                    <th class="px-4 py-3">Browser</th>
+                    <th class="px-4 py-3">Device</th>
+                    <th class="px-4 py-3">Hits</th>
+                    <th class="px-4 py-3">Pageviews</th>
+                    <th class="px-4 py-3">Bounce</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr v-for="session in selectedLead.sessions" :key="session.session_id" class="border-b border-border/70">
+                    <td class="px-4 py-3">{{ formatDate(session.visit_date) }}</td>
+                    <td class="px-4 py-3">{{ session.visit_hour ?? '-' }}h</td>
+                    <td class="px-4 py-3">{{ session.browser || '-' }}</td>
+                    <td class="px-4 py-3">{{ session.device_category || '-' }}</td>
+                    <td class="px-4 py-3">{{ session.totals_hits }}</td>
+                    <td class="px-4 py-3">{{ session.totals_pageviews }}</td>
+                    <td class="px-4 py-3">{{ session.totals_bounces ? 'Oui' : 'Non' }}</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+    </aside>
+  </div>
+
+  <div v-if="selectedNotification" class="fixed inset-0 z-50 bg-black/30" @click.self="selectedNotification = null">
+    <div class="mx-auto mt-24 w-[calc(100%-2rem)] max-w-xl rounded-md bg-white shadow-xl">
+      <div class="flex items-center justify-between border-b border-border p-5">
+        <div>
+          <p class="text-xs uppercase tracking-wide text-muted-foreground">Notification</p>
+          <h2 class="text-sm font-semibold text-tacir-darkblue">
+            {{ notificationTypeLabel(selectedNotification.notification_type) }}
+          </h2>
+        </div>
+        <button class="rounded-md border border-input p-2 hover:bg-accent" @click="selectedNotification = null">
+          <X class="h-4 w-4" />
+        </button>
+      </div>
+      <div class="space-y-4 p-5">
+        <p class="rounded-md border border-amber-200 bg-amber-50 p-3 text-sm leading-6 text-amber-900">
+          {{ selectedNotification.message }}
+        </p>
+        <div class="grid gap-3 sm:grid-cols-2">
+          <InfoRow label="Lead" :value="selectedNotification.full_visitor_id" />
+          <InfoRow label="Date derniere visite" :value="formatDate(selectedNotification.last_visit_date)" />
+          <InfoRow label="Score trend" :value="scoreTrendLabel(selectedNotification)" />
+          <InfoRow label="Ancien score" :value="formatScore(selectedNotification.old_score)" />
+          <InfoRow label="Nouveau score" :value="formatScore(selectedNotification.new_score)" />
+          <InfoRow label="Ancien segment" :value="selectedNotification.old_segment || '-'" />
+          <InfoRow label="Nouveau segment" :value="selectedNotification.new_segment || '-'" />
+        </div>
+      </div>
+    </div>
   </div>
 </template>
 
@@ -371,333 +568,414 @@ const search = ref('')
 const activeSearch = ref('')
 const isRecalculating = ref(false)
 let searchTimer = null
+const visitPeriods = [
+  { value: 'month', label: 'Mois' },
+  { value: 'year', label: 'Annee' },
+]
 
-const leadCounts = computed(() => summary.value?.lead_counts || createEmptySummary().lead_counts)
-const averageScoreLabel = computed(() => {
-  const value = summary.value?.average_score
-  if (value === null || value === undefined) return '-'
-  return `${Number(value).toFixed(1)}/100`
-})
-const hasActiveFilters = computed(() => {
-  return Boolean(
-    activeSearch.value
-      || filters.value.temperature !== 'ALL'
-      || filters.value.scoreOrder !== 'default'
-      || filters.value.country !== 'ALL'
-      || filters.value.jobTitle !== 'ALL'
-      || filters.value.companySize !== 'ALL'
-      || filters.value.industry !== 'ALL',
-  )
-})
-const activeFiltersLabel = computed(() => {
-  const labels = []
-
-  if (activeSearch.value) labels.push(`Recherche: ${activeSearch.value}`)
-  if (filters.value.temperature !== 'ALL') labels.push(`Type: ${temperatureLabel(filters.value.temperature)}`)
-  if (filters.value.scoreOrder === 'desc') labels.push('Score: decroissant')
-  if (filters.value.scoreOrder === 'asc') labels.push('Score: croissant')
-  if (filters.value.country !== 'ALL') labels.push(`Pays: ${filters.value.country}`)
-  if (filters.value.jobTitle !== 'ALL') labels.push(`Job Title: ${filters.value.jobTitle}`)
-  if (filters.value.companySize !== 'ALL') labels.push(`Taille: ${filters.value.companySize}`)
-  if (filters.value.industry !== 'ALL') labels.push(`Industry: ${filters.value.industry}`)
-
-  return labels.length ? labels.join(' | ') : 'Aucun, toutes les opportunites sont affichees'
-})
-
-function normalizePerformance(payload) {
-  if (!payload) return null
-  if (payload.performance) return normalizePerformance(payload.performance)
-
-  const normalized = { ...payload }
-  delete normalized.status
-  delete normalized.rescored_rows
-
-  return Object.keys(normalized).length ? normalized : null
-}
-
-function normalizeSummary(payload) {
-  const base = createEmptySummary()
-  if (!payload || typeof payload !== 'object') return base
+const segmentDistribution = computed(() => kpis.value.segment_distribution || [])
+const visitsEvolution = computed(() => kpis.value.visits_evolution || [])
+const deviceDistribution = computed(() => kpis.value.device_distribution || [])
+const deviceFilterOptions = computed(() => deviceDistribution.value.map((row) => row.device_category).filter(Boolean))
+const scoreDistribution = computed(() => kpis.value.score_distribution || [])
+const segmentMax = computed(() => maxValue(segmentDistribution.value, 'count'))
+const segmentTotal = computed(() => Math.max(1, segmentDistribution.value.reduce((sum, row) => sum + Number(row.count || 0), 0)))
+const visitsMax = computed(() => maxValue(visitsEvolution.value, 'visits'))
+const scoreMax = computed(() => maxValue(scoreDistribution.value, 'count'))
+const deviceTotal = computed(() => Math.max(1, deviceDistribution.value.reduce((sum, row) => sum + Number(row.count || 0), 0)))
+const devicePalette = ['#2563eb', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#14b8a6', '#64748b', '#ec4899']
+const devicePieStyle = computed(() => {
+  let cursor = 0
+  const segments = deviceDistribution.value.map((row, index) => {
+    const start = cursor
+    const size = (Number(row.count || 0) / deviceTotal.value) * 100
+    cursor += size
+return `${deviceColor(index)} ${start}% ${cursor}%`  })
 
   return {
-    lead_counts: {
-      total: Number(payload?.lead_counts?.total || 0),
-      hot: Number(payload?.lead_counts?.hot || 0),
-      warm: Number(payload?.lead_counts?.warm || 0),
-      cold: Number(payload?.lead_counts?.cold || 0),
-    },
-    average_score: payload.average_score === null || payload.average_score === undefined
-      ? null
-      : Number(payload.average_score),
-    top_hot_limit: Number(payload.top_hot_limit || 5),
-    top_hot_leads: Array.isArray(payload.top_hot_leads) ? payload.top_hot_leads : [],
+    background: `conic-gradient(${segments.join(', ') || '#e5e7eb 0% 100%'})`,
+    boxShadow: 'inset 0 0 0 34px #fff',
+  }
+})
+
+async function fetchKpis() {
+  const { data } = await behavioralApi.get('/analyse-comportementale/kpis', {
+    params: { visits_period: visitPeriod.value },
+  })
+  kpis.value = { ...emptyKpis, ...data }
+}
+
+async function fetchTopLeads() {
+  const { data } = await behavioralApi.get('/analyse-comportementale/top-leads', {
+    params: { limit: topLimit.value },
+  })
+  topLeads.value = data || []
+}
+
+async function fetchNotifications() {
+  const { data } = await behavioralApi.get('/analyse-comportementale/notifications')
+  notifications.value = data || []
+}
+
+async function fetchLeads() {
+  const params = {
+    page: page.value,
+    page_size: 20,
+  }
+  if (segmentFilter.value) params.segment = segmentFilter.value
+  if (deviceFilter.value) params.device_category = deviceFilter.value
+  if (activeSearch.value) params.search = activeSearch.value
+
+  const { data } = await behavioralApi.get('/analyse-comportementale/leads', { params })
+  leads.value = data
+}
+
+async function loadDashboard() {
+  try {
+    await Promise.all([fetchKpis(), fetchTopLeads(), fetchNotifications(), fetchLeads()])
+  } catch (error) {
+    console.error('[AnalyseComportementale] load error:', error)
+    toast.error("Impossible de charger l'analyse comportementale.")
   }
 }
 
-async function fetchOpportunityLeads() {
-  isLoading.value = true
-
+async function recalculate() {
+  isRecalculating.value = true
   try {
-    const params = {
-      page: page.value,
-      page_size: pageSize.value,
-    }
-
-    if (activeSearch.value) params.search = activeSearch.value
-    if (filters.value.temperature !== 'ALL') params.temperature = filters.value.temperature
-    if (filters.value.scoreOrder !== 'default') params.score_order = filters.value.scoreOrder
-    if (filters.value.country !== 'ALL') params.country = filters.value.country
-    if (filters.value.jobTitle !== 'ALL') params.job_title = filters.value.jobTitle
-    if (filters.value.companySize !== 'ALL') params.company_size = filters.value.companySize
-    if (filters.value.industry !== 'ALL') params.industry = filters.value.industry
-
-    const { data } = await api.get('/leads/opportunities/', { params })
-    opportunityLeads.value = data.results || []
-    totalItems.value = data.count || 0
-    totalPages.value = data.total_pages || 1
-    page.value = data.page || 1
-    summary.value = normalizeSummary(data.summary)
+    const { data } = await behavioralApi.post('/analyse-comportementale/recalculate')
+    toast.success('Analyse comportementale recalculee.', {
+      description: `${data.scores || 0} leads scores, ${data.notifications || 0} notifications.`,
+    })
+    await loadDashboard()
   } catch (error) {
-    console.error('[OpportunityLeads] fetch error:', error)
-    opportunityLeads.value = []
-    totalItems.value = 0
-    totalPages.value = 1
-    summary.value = createEmptySummary()
-    toast.error("Impossible de charger les leads d'opportunite.")
+    console.error('[AnalyseComportementale] recalculate error:', error)
+    toast.error('Impossible de recalculer les scores comportementaux.')
   } finally {
-    isLoading.value = false
+    isRecalculating.value = false
   }
 }
 
-async function fetchPerformance() {
-  isPerformanceLoading.value = true
-
+async function openLead(fullVisitorId) {
   try {
-    const { data } = await api.get('/leads/opportunities/performance/latest/')
-    performance.value = normalizePerformance(data.performance)
+    const { data } = await behavioralApi.get(`/analyse-comportementale/leads/${fullVisitorId}`)
+    selectedLead.value = data
   } catch (error) {
-    if (error?.response?.status === 404) {
-      performance.value = null
-      return
-    }
-    console.error('[OpportunityLeads] performance error:', error)
-    performance.value = null
-  } finally {
-    isPerformanceLoading.value = false
+    console.error('[AnalyseComportementale] detail error:', error)
+    toast.error('Impossible de charger le detail du lead.')
   }
 }
 
-async function fetchFormOptions(force = false) {
-  if (isFormOptionsLoading.value) return
-  if (!force && (formOptions.value.job_titles.length || formOptions.value.countries.length)) return
-
-  isFormOptionsLoading.value = true
-
-  try {
-    const { data } = await api.get('/leads/opportunities/form-options/')
-    formOptions.value = {
-      countries: data?.options?.countries || [],
-      industries: data?.options?.industries || [],
-      company_sizes: data?.options?.company_sizes || [],
-      job_titles: data?.options?.job_titles || [],
-      lead_sources: data?.options?.lead_sources || [],
-      last_activities: data?.options?.last_activities || [],
-      last_notable_activities: data?.options?.last_notable_activities || [],
-    }
-  } catch (error) {
-    console.error('[OpportunityLeads] form options error:', error)
-    formOptions.value = {
-      countries: [],
-      industries: [],
-      company_sizes: [],
-      job_titles: [],
-      lead_sources: [],
-      last_activities: [],
-      last_notable_activities: [],
-    }
-  } finally {
-    isFormOptionsLoading.value = false
-  }
+function setTopLimit(limit) {
+  topLimit.value = limit
+  fetchTopLeads()
 }
 
-async function handleCreateLead(payload) {
-  isSavingLead.value = true
-
-  try {
-    const { data } = await api.post('/leads/opportunities/', payload)
-    toast.success('Opportunite creee et scoree.', {
-      description: data?.lead?.company_name || 'Le lead est maintenant disponible dans la liste.',
-    })
-    showCreateDialog.value = false
-    await Promise.all([fetchOpportunityLeads(), fetchPerformance(), fetchFormOptions(true)])
-  } catch (error) {
-    console.error('[OpportunityLeads] create error:', error)
-    toast.error("Impossible de creer l'opportunite.", {
-      description: error?.response?.data?.detail || error?.response?.data?.message || 'Verifie que le service ia-ml est demarre.',
-    })
-  } finally {
-    isSavingLead.value = false
-  }
+function setVisitPeriod(period) {
+  if (visitPeriod.value === period) return
+  visitPeriod.value = period
+  fetchKpis()
 }
 
-async function handleUpdateLead(payload) {
-  if (!editingLead.value?.lead_id) return
-
-  isUpdatingLead.value = true
-
-  try {
-    const { data } = await api.patch(`/leads/opportunities/${editingLead.value.lead_id}/`, payload)
-    toast.success('Opportunite mise a jour et rescoree.', {
-      description: data?.lead?.company_name || 'Le lead a ete mis a jour.',
-    })
-    showEditDialog.value = false
-    editingLead.value = null
-    await Promise.all([fetchOpportunityLeads(), fetchPerformance(), fetchFormOptions(true)])
-  } catch (error) {
-    console.error('[OpportunityLeads] update error:', error)
-    toast.error("Impossible de modifier l'opportunite.", {
-      description: error?.response?.data?.detail || error?.response?.data?.message || 'Le rescoring automatique a echoue.',
-    })
-  } finally {
-    isUpdatingLead.value = false
-  }
+function openNotification(notification) {
+  selectedNotification.value = notification
+  showNotifications.value = false
 }
 
-async function handleDeleteLead() {
-  if (!deletingLead.value?.lead_id) return
-
-  isDeletingLead.value = true
-
-  try {
-    await api.delete(`/leads/opportunities/${deletingLead.value.lead_id}/`)
-    toast.success('Opportunite supprimee.', {
-      description: deletingLead.value?.company_name || 'Le lead a ete retire de la base.',
-    })
-    showDeleteDialog.value = false
-    deletingLead.value = null
-    await Promise.all([fetchOpportunityLeads(), fetchFormOptions(true)])
-  } catch (error) {
-    console.error('[OpportunityLeads] delete error:', error)
-    toast.error("Impossible de supprimer l'opportunite.", {
-      description: error?.response?.data?.detail || 'Une erreur inattendue est survenue.',
-    })
-  } finally {
-    isDeletingLead.value = false
-  }
-}
-
-async function handleTrainModel() {
-  isTraining.value = true
-
-  try {
-    const { data } = await api.post('/leads/opportunities/train/')
-    performance.value = normalizePerformance(data.performance)
-    toast.success("Le modele de scoring a ete entraine.", {
-      description: data?.performance?.model_version || 'Les opportunites existantes ont ete rescourees.',
-    })
-    await fetchOpportunityLeads()
-  } catch (error) {
-    console.error('[OpportunityLeads] train error:', error)
-    toast.error("Impossible de lancer l'entrainement.", {
-      description: error?.response?.data?.detail || error?.response?.data?.message || 'Verifie le service ia-ml et les dependances ML.',
-    })
-  } finally {
-    isTraining.value = false
-  }
+function reloadLeads() {
+  page.value = 1
+  fetchLeads()
 }
 
 function handleSearchInput() {
   if (searchTimer) clearTimeout(searchTimer)
-
   searchTimer = setTimeout(() => {
     activeSearch.value = search.value.trim()
-    page.value = 1
-    fetchOpportunityLeads()
+    reloadLeads()
   }, 250)
 }
 
-function handleFilterChange() {
-  page.value = 1
-  fetchOpportunityLeads()
-}
-
-function handlePageChange(nextPage) {
-  if (nextPage === page.value) return
+function changePage(nextPage) {
   page.value = nextPage
-  fetchOpportunityLeads()
+  fetchLeads()
 }
 
-function handlePageSizeChange(nextSize) {
-  if (nextSize === pageSize.value) return
-  pageSize.value = nextSize
-  page.value = 1
-  fetchOpportunityLeads()
+function maxValue(rows, key) {
+  return Math.max(1, ...rows.map((row) => Number(row[key] || 0)))
 }
 
-function resetFilters() {
-  if (searchTimer) clearTimeout(searchTimer)
+function barHeight(value, max) {
+  return Math.max(4, Math.round((Number(value || 0) / max) * 100))
+}
 
-  search.value = ''
-  activeSearch.value = ''
-  filters.value = {
-    temperature: 'ALL',
-    scoreOrder: 'default',
-    country: 'ALL',
-    jobTitle: 'ALL',
-    companySize: 'ALL',
-    industry: 'ALL',
+function segmentPercent(value) {
+  return (Number(value || 0) / segmentTotal.value) * 100
+}
+
+function formatScore(value) {
+  if (value === null || value === undefined || Number.isNaN(Number(value))) return '-'
+  return Number(value).toFixed(1)
+}
+
+function formatPercent(value) {
+  if (value === null || value === undefined || Number.isNaN(Number(value))) return '-'
+  return `${(Number(value) * 100).toFixed(1)}%`
+}
+
+function formatNumber(value) {
+  if (value === null || value === undefined || Number.isNaN(Number(value))) return '-'
+  return Number(value).toFixed(2)
+}
+
+function compactNumber(value) {
+  const numericValue = Number(value || 0)
+  if (numericValue >= 1000000) return `${(numericValue / 1000000).toFixed(1)}M`
+  if (numericValue >= 1000) return `${(numericValue / 1000).toFixed(1)}k`
+  return String(numericValue)
+}
+
+function deviceColor(index) {
+  return devicePalette[index % devicePalette.length]
+}
+
+function notificationTypeLabel(type) {
+  const labels = {
+    NEW_VISIT: 'Nouvelle visite',
+    SCORE_CHANGED: 'Score modifie',
+    SEGMENT_CHANGED: 'Segment modifie',
+    BECAME_HOT: 'Devient HOT',
+    SUSPICIOUS_ACTIVITY: 'Activite suspecte',
   }
-  page.value = 1
-  fetchOpportunityLeads()
+  return labels[type] || type
 }
 
-function openEditDialog(lead) {
-  editingLead.value = lead
-  showEditDialog.value = true
-  fetchFormOptions()
+function scoreTrendValue(notification) {
+  const oldScore = Number(notification?.old_score)
+  const newScore = Number(notification?.new_score)
+  if (Number.isNaN(oldScore) || Number.isNaN(newScore)) return null
+  return Number((newScore - oldScore).toFixed(1))
 }
 
-function openDeleteDialog(lead) {
-  deletingLead.value = lead
-  showDeleteDialog.value = true
+function scoreTrendLabel(notification) {
+  const trend = scoreTrendValue(notification)
+  if (trend === null) return '-'
+  if (trend > 0) return `+${trend.toFixed(1)} pts`
+  if (trend < 0) return `${trend.toFixed(1)} pts`
+  return 'Stable'
 }
 
-function temperatureLabel(value) {
-  if (value === 'HOT') return 'Chaud'
-  if (value === 'WARM') return 'Tiede'
-  if (value === 'COLD') return 'Froid'
-  return 'Tous'
+function scoreTrendClass(notification) {
+  const trend = scoreTrendValue(notification)
+  const baseClass = 'rounded-full px-2 py-0.5 text-[11px] font-bold'
+  if (trend === null || trend === 0) return `${baseClass} bg-slate-100 text-slate-700`
+  if (trend > 0) return `${baseClass} bg-emerald-50 text-emerald-700`
+  return `${baseClass} bg-rose-50 text-rose-700`
 }
 
-onMounted(() => {
-  fetchOpportunityLeads()
-  fetchPerformance()
-  fetchFormOptions()
-})
+function leadReasons(lead) {
+  if (!lead) return []
 
-onBeforeUnmount(() => {
-  if (searchTimer) clearTimeout(searchTimer)
-})
+  const score = Number(lead.lead_score_100 || 0)
+  const recency = Number(lead.recency_score || 0)
+  const sessions = Number(lead.nombre_sessions || 0)
+  const hits = Number(lead.avg_hits_per_session || 0)
+  const pageviews = Number(lead.avg_pageviews_per_session || 0)
+  const bounce = Number(lead.bounce_rate || 0)
+  const suspicious = Number(lead.suspicious_activity || 0)
 
-watch(showCreateDialog, (isOpen) => {
-  if (isOpen) {
-    fetchFormOptions()
+  const reasons = [
+    {
+      label: 'Score final',
+      value: `${formatScore(score)}/100`,
+      tone: lead.segment === 'HOT' ? 'positive' : lead.segment === 'WARM' ? 'warning' : 'negative',
+      description: segmentReasonText(lead.segment, score),
+    },
+    {
+      label: 'Recence',
+      value: `${formatScore(recency)}/100`,
+      tone: recency >= 70 ? 'positive' : recency >= 35 ? 'warning' : 'negative',
+      description: recency >= 70
+        ? 'Le lead a une visite recente, ce qui augmente fortement son potentiel.'
+        : recency >= 35
+          ? 'La derniere visite est moyennement recente.'
+          : 'La derniere visite est ancienne, ce qui tire le score vers le bas.',
+    },
+    {
+      label: 'Engagement',
+      value: `${sessions} sessions`,
+      tone: sessions > 1 ? 'positive' : 'warning',
+      description: sessions > 1
+        ? `Le lead a plusieurs sessions, avec ${formatNumber(hits)} hits et ${formatNumber(pageviews)} pageviews en moyenne.`
+        : 'Le lead a une seule session, donc une penalite de prudence est appliquee.',
+    },
+    {
+      label: 'Bounce rate',
+      value: formatPercent(bounce),
+      tone: bounce <= 0.35 ? 'positive' : bounce <= 0.7 ? 'warning' : 'negative',
+      description: bounce <= 0.35
+        ? 'Faible taux de rebond : les sessions semblent qualifiees.'
+        : bounce <= 0.7
+          ? 'Taux de rebond moyen : le comportement reste a surveiller.'
+          : 'Taux de rebond eleve : le lead montre peu de profondeur de navigation.',
+    },
+  ]
+
+  if (suspicious === 1) {
+    reasons.push({
+      label: 'Activite suspecte',
+      value: 'Penalite -20%',
+      tone: 'negative',
+      description: 'Le lead presente une activite anormale. Il n’est pas supprime, mais son score est reduit.',
+    })
   }
+
+  return reasons
+}
+
+function segmentReasonText(segment, score) {
+  if (segment === 'HOT') {
+    return score >= 60
+      ? "Ce lead est prioritaire pour une action commerciale."
+      : ""
+  }
+
+  if (segment === 'WARM') {
+    return score >= 35 && score < 60
+      ? "Ce lead est intéressant mais pas encore prioritaire."
+      : ""
+  }
+
+  return score < 35
+    ? "Ce lead est froid et demande une surveillance plutôt qu'une action immédiate."
+    : ""
+}
+function reasonToneClass(tone) {
+  const baseClass = 'shrink-0 rounded-full px-2 py-1 text-[11px] font-bold'
+  if (tone === 'positive') return `${baseClass} bg-emerald-50 text-emerald-700`
+  if (tone === 'warning') return `${baseClass} bg-amber-50 text-amber-700`
+  return `${baseClass} bg-rose-50 text-rose-700`
+}
+
+function formatDate(value) {
+  if (!value) return '-'
+  return new Date(value).toLocaleDateString('fr-FR')
+}
+
+function formatSeconds(value) {
+  const seconds = Number(value || 0)
+  if (!seconds) return '0s'
+  if (seconds < 60) return `${Math.round(seconds)}s`
+  return `${Math.floor(seconds / 60)}m ${Math.round(seconds % 60)}s`
+}
+
+const MetricCard = defineComponent({
+  props: {
+    label: { type: String, required: true },
+    value: { type: [String, Number], default: '-' },
+    tone: { type: String, default: '' },
+  },
+  setup(props) {
+    return () => h(Card, { class: 'border-border/80' }, {
+      default: () => h(CardContent, { class: 'p-5' }, [
+        h('p', { class: 'text-[11px] font-semibold uppercase tracking-widest text-muted-foreground' }, props.label),
+        h('p', {
+          class: [
+            'mt-2 text-2xl font-bold',
+            props.tone === 'hot' ? 'text-emerald-700' : '',
+            props.tone === 'warm' ? 'text-amber-700' : '',
+            props.tone === 'cold' ? 'text-rose-700' : '',
+            !props.tone ? 'text-tacir-darkblue' : '',
+          ],
+        }, String(props.value ?? '-')),
+      ]),
+    })
+  },
 })
 
-watch(showEditDialog, (isOpen) => {
-  if (isOpen) {
-    fetchFormOptions()
-  } else {
-    editingLead.value = null
-  }
+const ChartTitle = defineComponent({
+  props: { title: { type: String, required: true } },
+  setup(props) {
+    return () => h('h2', { class: 'text-sm font-semibold text-tacir-darkblue' }, props.title)
+  },
 })
 
-watch(showDeleteDialog, (isOpen) => {
-  if (!isOpen) {
-    deletingLead.value = null
-  }
+const SegmentBadge = defineComponent({
+  props: { segment: { type: String, required: true } },
+  setup(props) {
+    return () => h('span', {
+      class: [
+        'inline-flex rounded-full px-2.5 py-1 text-xs font-semibold',
+        props.segment === 'HOT' ? 'bg-emerald-50 text-emerald-700' : '',
+        props.segment === 'WARM' ? 'bg-amber-50 text-amber-700' : '',
+        props.segment === 'COLD' ? 'bg-rose-50 text-rose-700' : '',
+      ],
+    }, props.segment)
+  },
 })
+
+const SegmentBar = defineComponent({
+  props: {
+    label: { type: String, required: true },
+    value: { type: Number, required: true },
+    percent: { type: Number, required: true },
+    max: { type: Number, required: true },
+  },
+  setup(props) {
+    return () => h('div', [
+      h('div', { class: 'mb-1 flex items-center justify-between text-xs' }, [
+        h('span', { class: 'font-semibold text-tacir-darkblue' }, props.label),
+        h('span', { class: 'text-muted-foreground' }, `${props.percent.toFixed(1)}% (${props.value})`),
+      ]),
+      h('div', { class: 'h-2 rounded-full bg-muted' }, [
+        h('div', {
+          class: [
+            'h-2 rounded-full',
+            props.label === 'HOT' ? 'bg-emerald-500' : '',
+            props.label === 'WARM' ? 'bg-amber-500' : '',
+            props.label === 'COLD' ? 'bg-rose-500' : '',
+          ],
+          style: { width: `${Math.max(4, props.percent)}%` },
+        }),
+      ]),
+    ])
+  },
+})
+
+const PlainBar = defineComponent({
+  props: {
+    label: { type: String, required: true },
+    value: { type: Number, required: true },
+    max: { type: Number, required: true },
+  },
+  setup(props) {
+    return () => h('div', [
+      h('div', { class: 'mb-1 flex items-center justify-between gap-3 text-xs' }, [
+        h('span', { class: 'truncate font-semibold text-tacir-darkblue' }, props.label),
+        h('span', { class: 'text-muted-foreground' }, props.value),
+      ]),
+      h('div', { class: 'h-2 rounded-full bg-muted' }, [
+        h('div', {
+          class: 'h-2 rounded-full bg-tacir-blue',
+          style: { width: `${barHeight(props.value, props.max)}%` },
+        }),
+      ]),
+    ])
+  },
+})
+
+const InfoRow = defineComponent({
+  props: {
+    label: { type: String, required: true },
+    value: { type: [String, Number], default: '-' },
+  },
+  setup(props) {
+    return () => h('div', { class: 'rounded-md border border-border bg-muted/20 p-3' }, [
+      h('p', { class: 'text-[11px] font-semibold uppercase tracking-wide text-muted-foreground' }, props.label),
+      h('p', { class: 'mt-1 text-sm font-semibold text-tacir-darkblue' }, String(props.value || '-')),
+    ])
+  },
+})
+
+onMounted(loadDashboard)
 </script>
 
 <style scoped>

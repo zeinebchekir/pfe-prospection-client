@@ -1,6 +1,6 @@
 import { ref, onMounted, onUnmounted } from 'vue'
 
-const API = import.meta.env.VITE_ETL_API_URL || 'http://localhost:8001'
+// const API = import.meta.env.VITE_ETL_API_URL || 'http://localhost:8001'
 
 export function useSSENotifications() {
   const alerts    = ref([])
@@ -12,7 +12,7 @@ export function useSSENotifications() {
   // ── 1. Historique depuis la BDD ─────────────────────────────────
   async function fetchHistory() {
     try {
-      const res = await fetch(`${API}/notifications/`, {
+      const res = await fetch(`/notifications/`, {
         credentials: 'include'
       })
       if (!res.ok) return
@@ -39,7 +39,7 @@ export function useSSENotifications() {
 
   // ── 2. SSE temps réel ────────────────────────────────────────────
   function connect() {
-    eventSource = new EventSource(`${API}/notifications/stream`, {
+    eventSource = new EventSource(`/notifications/stream`, {
       withCredentials: true
     })
 
@@ -82,7 +82,7 @@ export function useSSENotifications() {
     if (!alert || alert.read) return
 
     try {
-      await fetch(`${API}/notifications/${id}/read`, {
+      await fetch(`/notifications/${id}/read`, {
         method: 'PATCH',
         credentials: 'include'
       })
@@ -96,7 +96,7 @@ export function useSSENotifications() {
   // ── 4. Tout marquer lu ───────────────────────────────────────────
   async function markAllAsRead() {
     try {
-      await fetch(`${API}/notifications/read-all`, {
+      await fetch(`/notifications/read-all`, {
         method: 'PATCH',
         credentials: 'include'
       })

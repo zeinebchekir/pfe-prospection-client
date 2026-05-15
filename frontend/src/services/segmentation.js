@@ -5,10 +5,10 @@
  */
 import axios from "axios";
 
-const ETL_BASE = import.meta.env.VITE_ETL_API_URL || "http://localhost:8001";
+const ETL_BASE = import.meta.env.VITE_ETL_API_URL || "http://etl-fastapi:8000";
 
 const etlApi = axios.create({
-  baseURL: ETL_BASE,
+  baseURL: '',  // ← chemin relatif, proxy Vite gère le reste
   headers: { "Content-Type": "application/json" },
 });
 
