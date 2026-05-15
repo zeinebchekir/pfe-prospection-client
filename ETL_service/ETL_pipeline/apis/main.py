@@ -6,9 +6,8 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from prometheus_fastapi_instrumentator import Instrumentator
-from prometheus_client import Gauge, Counter
-
+from apis.routers.segmentation import router as segmentation_router
+from apis.routers.etl_status import router as etl_status_router
 from apis.routers import sync, entreprise, logs, notifications
 from apis.routers.monitoring import router as monitoring_router
 from apis.routers.rapport import router as rapport_router
@@ -59,17 +58,16 @@ app.include_router(monitoring_router)
 app.include_router(rapport_router)
 app.include_router(logs.router)
 app.include_router(notifications.router)
+app.include_router(segmentation_router,   prefix="/segmentation", tags=["Segmentation"])
+app.include_router(etl_status_router)
 
-# ── Prometheus ────────────────────────────────────────────────────────────────
-etl_task_cpu   = Gauge('etl_task_cpu_percent',    'CPU usage per task',  ['dag_id', 'task_id'])
-etl_task_ram   = Gauge('etl_task_ram_percent',    'RAM usage per task',  ['dag_id', 'task_id'])
-etl_task_disk  = Gauge('etl_task_disk_io_percent','Disk IO per task',    ['dag_id', 'task_id'])
-etl_rows_raw   = Counter('etl_rows_raw_total',   'Raw rows inserted',    ['source'])
-etl_rows_clean = Counter('etl_rows_clean_total', 'Clean rows upserted',  ['source'])
-etl_run_ok     = Counter('etl_run_success_total','Successful runs',      ['dag_id'])
-etl_run_ko     = Counter('etl_run_failed_total', 'Failed runs',          ['dag_id'])
 
-Instrumentator().instrument(app).expose(app)
+@app.on_event("startup")
+def startup():
+    """Crée les tables au démarrage de FastAPI."""
+    print("[STARTUP] Création des tables dans la base de données...")
+    create_tables()
+    print("[STARTUP] Tables prêtes.")
 
 
 @app.get("/")

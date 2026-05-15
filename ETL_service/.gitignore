@@ -6,6 +6,14 @@ plugins/          # seulement si vide et généré par compose
 /tmp/*.json
 *.xlsx
 
+# ── Exports générés à l'exécution (segmentation, rapports…) ──
+exports/segmentation/
+exports/reports/
+
+# ── Scripts de correction temporaires ──
+fix_columns.py
+ETL_pipeline/fix_columns.py
+
 # ── Python ──
 __pycache__/
 *.pyc

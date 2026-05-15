@@ -16,7 +16,7 @@ export default defineConfig({
       // Proxy all /api requests to Django backend
       // This avoids CORS issues in development
       '/api': {
-        target: process.env.VITE_PROXY_TARGET || 'http://localhost:8000',
+        target: process.env.VITE_PROXY_TARGET || 'http://web:8000',
         changeOrigin: true,
         secure: false,
       },

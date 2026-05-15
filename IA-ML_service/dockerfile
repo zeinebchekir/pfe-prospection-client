@@ -5,7 +5,9 @@ WORKDIR /app
 ENV PIP_DEFAULT_TIMEOUT=1000 \
     PIP_DISABLE_PIP_VERSION_CHECK=1
 
-RUN apt-get update && apt-get install -y gcc && rm -rf /var/lib/apt/lists/*
+# Install system deps (gcc for C extensions, curl for healthchecks)
+RUN apt-get update && apt-get install -y --no-install-recommends gcc curl \
+    && rm -rf /var/lib/apt/lists/*
 
 COPY requirements.txt .
 RUN pip install --upgrade pip \

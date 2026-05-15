@@ -5,7 +5,7 @@ from sqlalchemy.ext.declarative import declarative_base # Ou sqlalchemy.orm pour
 # URL de la base — lit depuis la variable d'environnement
 DATABASE_URL = os.environ.get(
     "DATABASE_URL",
-    "postgresql://airflow:airflow@postgres/airflow"  # même base que Airflow
+    "postgresql://airflow:airflow@postgres-airflow/airflow"  # Airflow metadata DB
 )
 Base = declarative_base()
 engine = create_engine(DATABASE_URL)

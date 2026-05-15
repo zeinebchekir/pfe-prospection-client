@@ -11,3 +11,6 @@ httpx
 psutil
 reportlab
 pywebpush
+scikit-learn
+numpy
+google-genai
