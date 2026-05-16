@@ -152,7 +152,7 @@
                     </span>
                     <div
                       class="mx-auto w-full rounded-t bg-tacir-blue/70"
-                      :style="`{ height: ${barHeight(row.visits, visitsMax)}% }`"
+                      :style="{ height: `${barHeight(row.visits, visitsMax)}%` }"
                     />
                     <span class="truncate text-center text-[11px] text-muted-foreground">
                       {{ row.period_label }}
@@ -208,7 +208,7 @@
                     </span>
                     <div
                       class="mx-auto w-full rounded-t bg-emerald-500/75"
-                      :style="`{ height: ${barHeight(row.count, scoreMax)}% }`"
+                      :style="{ height: `${barHeight(row.count, scoreMax)}%` }"
                     />
                     <span class="truncate text-center text-[11px] text-muted-foreground">
                       {{ Number(row.bucket) }}-{{ Number(row.bucket) + 9 }}

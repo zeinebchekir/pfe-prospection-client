@@ -543,6 +543,7 @@ services:
     volumes:
       - ./IA-ML_service:/app
       - ./IA-ML_service/models:/app/models
+      - ./data:/app/data:ro
     env_file: .env
     environment:
       DATABASE_URL: postgresql://${IAML_DB_USER:-iaml_user}:${IAML_DB_PASSWORD:-iaml_pass}@db_iaml:5432/${IAML_DB_NAME:-iaml_db}
