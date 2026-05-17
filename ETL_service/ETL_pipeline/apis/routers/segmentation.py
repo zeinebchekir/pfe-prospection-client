@@ -1,8 +1,10 @@
 """
-Segmentation endpoints.
+FastAPI routes for Segmentation & Market Analysis.
 
-The public routes remain unchanged even though the backend engine now uses a
-decision tree instead of KMeans.
+This router exposes the batch segmentation workflow to the frontend. It does
+not run ETL ingestion itself; instead, it reads the already-populated ETL
+database, triggers the decision-tree segmentation pipeline on demand, and
+serves the latest JSON exports back to the Vue dashboard.
 """
 
 import json
@@ -29,8 +31,17 @@ INSIGHTS_PATH = Path(EXPORT_DIR) / "cluster_insights.json"
 @router.post("/run", summary="Run segmentation pipeline")
 def run_segmentation(db: Session = Depends(get_db)):
     """
-    Full pipeline: fetch DB -> segment -> validate -> explain -> insights -> save.
-    Returns the same payload written to cluster_summary.json.
+    Trigger a full segmentation run on the current ETL dataset.
+
+    Args:
+        db: Injected SQLAlchemy session connected to the ETL database.
+
+    Returns:
+        dict: Summary payload identical to the generated `cluster_summary.json`.
+
+    Error cases:
+        400: No usable data or not enough labeled rows to train the tree.
+        500: Unexpected runtime error during segmentation or export.
     """
     try:
         from market_analysis.clustering import run_clustering
@@ -53,11 +64,17 @@ def run_segmentation(db: Session = Depends(get_db)):
 )
 def get_summary():
     """
-    Returns cluster_summary.json including:
-    - total_rows, total_leads, run_at, k_used, model_type
-    - segments[] with label, color, stats, explainability
-    - validation{} model metrics
-    - insights[] from Gemini or fallback
+    Return the latest segmentation summary for the dashboard landing page.
+
+    Response structure:
+        - run metadata (`run_at`, `model_type`, `k_used`)
+        - portfolio counts (`total_rows`, `total_leads`)
+        - `segments[]` cards with maturity, explainability, and drilldown data
+        - `validation` metrics
+        - `insights[]` plus `insights_source`
+
+    Error cases:
+        404: No segmentation export has been generated yet.
     """
     if not SUMMARY_PATH.exists():
         raise HTTPException(
@@ -92,6 +109,21 @@ def get_leads(
     skip: int = 0,
     limit: int = 20,
 ):
+    """
+    Return a paginated, optionally filtered slice of `clustered_leads.json`.
+
+    Args:
+        segment: Optional numeric segment id used to filter one segment.
+        search: Optional case-insensitive substring filter on company name.
+        skip: Zero-based offset into the filtered lead list.
+        limit: Maximum number of leads to return.
+
+    Returns:
+        dict: `total`, `skip`, `limit`, optional `segment_label`, and `leads[]`.
+
+    Error cases:
+        404: No lead export exists yet because segmentation has not been run.
+    """
     if not LEADS_PATH.exists():
         raise HTTPException(
             status_code=404,
@@ -137,7 +169,16 @@ def get_leads(
 
 @router.get("/validation", summary="Model validation metrics")
 def get_validation():
-    """Returns the validation block from the latest segmentation run."""
+    """
+    Return only the validation portion of the latest segmentation summary.
+
+    Returns:
+        dict: Run metadata plus the `validation` block used by badges, QA, and
+        developer troubleshooting.
+
+    Error cases:
+        404: No summary export exists, or the summary has no validation block.
+    """
     if not SUMMARY_PATH.exists():
         raise HTTPException(status_code=404, detail="No segmentation results found.")
 

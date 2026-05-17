@@ -62,7 +62,10 @@ def compute_maturity(segment: dict) -> dict:
         segment: cluster summary dict (output of assign_labels in labeling.py)
 
     Returns:
-        segment dict with maturity fields added in-place (also returned).
+        dict: The same segment dict, enriched in place with maturity fields.
+
+    Side effects:
+        Mutates `segment`.
     """
     sector = segment.get("secteur_dominant") or ""
 
@@ -74,7 +77,7 @@ def compute_maturity(segment: dict) -> dict:
     adjustments  = adj_result["adjustments"]
     reasons      = adj_result["reasons"]
 
-    # 3. Combine & clamp per dimension
+    # Clamp each dimension to the public 0-10 range expected by the API and UI.
     dim_scores: dict[str, float] = {}
     for dim in DIMENSIONS:
         raw = baseline.get(dim, 5.0) + adjustments.get(dim, 0.0)
@@ -126,7 +129,10 @@ def compute_lead_maturity(lead: dict, segment_maturity_score: float, segment_mat
         segment_maturity_level: the parent cluster's level string
 
     Returns:
-        lead dict with maturity fields added in-place (also returned).
+        dict: The same lead dict enriched in place.
+
+    Side effects:
+        Mutates `lead`.
     """
     import random
     # Small deterministic jitter based on siren hash (reproducible across runs)
@@ -134,6 +140,8 @@ def compute_lead_maturity(lead: dict, segment_maturity_score: float, segment_mat
     seed  = int(siren[-6:]) if siren.isdigit() else sum(ord(c) for c in siren)
     rng   = random.Random(seed)
 
+    # Keep lead-level scores visually distinct without recomputing maturity from
+    # raw lead data, which is not available at the same level as segment stats.
     jitter = rng.gauss(0, 0.4)          # std dev = 0.4
     raw    = segment_maturity_score + jitter
     score  = round(max(0.0, min(10.0, raw)), 1)
@@ -149,6 +157,9 @@ def compute_lead_maturity(lead: dict, segment_maturity_score: float, segment_mat
 def build_maturity_overview(segments: list[dict]) -> dict:
     """
     Compute portfolio-level maturity summary for the top-level JSON.
+
+    Args:
+        segments: Segment summary objects already enriched with maturity data.
 
     Returns:
         {
@@ -207,6 +218,9 @@ def _infer_distribution(
       with std dev derived from the spread of dimension scores.
     - P(Faible) = P(score < 5.0), P(Élevé) = P(score >= 8.0), P(Moyen) = remainder.
     - Expressed as integer percentages summing to 100.
+
+    Returns:
+        dict[str, int]: Percentage split for faible, moyen, and eleve.
     """
     import math
 

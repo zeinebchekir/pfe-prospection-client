@@ -213,6 +213,15 @@ COMPANY_EXPORT_FIELDS = [
 # This is one of the core features used by the segmentation rules and tree.
 # Missing CA is kept as "Unknown" instead of crashing the pipeline.
 def ca_band(ca: Any) -> str:
+    """
+    Bucket raw revenue into the coarse bands used by business rules and the tree.
+
+    Args:
+        ca: Raw revenue value from the ETL dataset.
+
+    Returns:
+        str: `Small`, `Mid`, `Large`, or `Unknown` when revenue is missing.
+    """
     if pd.isna(ca):
         return "Unknown"
     if ca < 10_000_000:
@@ -227,6 +236,15 @@ def ca_band(ca: Any) -> str:
 # Example: "Conseil informatique" becomes "IT".
 # Anything not present in SECTOR_MAP becomes "Other".
 def macro_sector(sector_label: Any) -> str:
+    """
+    Normalize a detailed sector label into a smaller macro-sector vocabulary.
+
+    Args:
+        sector_label: Raw sector string from the ETL dataset.
+
+    Returns:
+        str: Macro sector name such as `IT`, `Commerce`, or `Other`.
+    """
     return SECTOR_MAP.get(fix_mojibake(sector_label), "Other")
 
 
@@ -235,6 +253,15 @@ def macro_sector(sector_label: Any) -> str:
 # The database can contain slightly different labels such as PME, ETI,
 # Grande Entreprise, micro, etc. This function normalizes them.
 def normalize_company_category(value: Any) -> str:
+    """
+    Normalize heterogeneous company category labels before rule assignment.
+
+    Args:
+        value: Raw category text from the ETL table.
+
+    Returns:
+        str: Canonical category label used by rule logic and tree encoding.
+    """
     text = fix_mojibake(str(value or "").strip())
     if not text:
         return "Petite et Moyenne Entreprise"
@@ -259,6 +286,16 @@ def normalize_company_category(value: Any) -> str:
 # This creates the target label that the Decision Tree will learn.
 # In simple terms: category + CA band + macro sector -> segment code.
 def segment_label(row: pd.Series) -> str | None:
+    """
+    Apply deterministic business rules to create the supervised segment target.
+
+    Args:
+        row: Company row containing category, sector, and revenue information.
+
+    Returns:
+        str | None: Business segment code such as `PME_Small_IT`, or `None`
+        when the row cannot be classified by the rule layer.
+    """
     category = normalize_company_category(row.get("categorie_entreprise"))
     band = ca_band(row.get("ca"))
     sector = macro_sector(row.get("secteur_activite"))
@@ -286,6 +323,7 @@ def segment_label(row: pd.Series) -> str | None:
 # This is not used directly by the Decision Tree, but it is useful for
 # segment summaries, dominant dimensions, and frontend filters.
 def _get_region(cp: Any) -> str:
+    """Map a postal code to a coarse region label used in dashboard summaries."""
     try:
         dept = int(str(cp)) // 1000
         if 75 <= dept <= 95:
@@ -306,6 +344,7 @@ def _get_region(cp: Any) -> str:
 # Used to find the dominant category/sector/region of a segment.
 # If the series is empty, return a safe default.
 def _safe_mode(series: pd.Series, default: str = "Inconnu") -> str:
+    """Return the dominant non-null label in a series, or a safe fallback."""
     mode_vals = series.mode(dropna=True)
     if len(mode_vals) > 0:
         return fix_mojibake(str(mode_vals.iloc[0]))
@@ -317,6 +356,7 @@ def _safe_mode(series: pd.Series, default: str = "Inconnu") -> str:
 # This prevents json.dump from failing on np.int64, np.float64, timestamps,
 # or NaN-like values.
 def _json_safe(value: Any) -> Any:
+    """Convert pandas/numpy values into JSON-safe Python primitives."""
     if isinstance(value, (np.floating,)):
         return None if pd.isna(value) else float(value)
     if isinstance(value, (np.integer,)):
@@ -336,6 +376,18 @@ def _to_row(
     mat_score_map: dict[int, float],
     mat_level_map: dict[int, str],
 ) -> dict[str, Any]:
+    """
+    Convert one dataframe row into the JSON shape reused across drilldowns.
+
+    Args:
+        row: Source row from the clustered dataframe.
+        label_map: Mapping of cluster id to human-readable label.
+        mat_score_map: Mapping of cluster id to segment maturity score.
+        mat_level_map: Mapping of cluster id to segment maturity level.
+
+    Returns:
+        dict[str, Any]: JSON-ready company record.
+    """
     cluster_id = int(row.get("cluster", -1))
     payload: dict[str, Any] = {}
     for field in COMPANY_EXPORT_FIELDS:
@@ -356,6 +408,7 @@ def _to_row(
 # The frontend uses these values in the segment detail modal: mean, median,
 # min, max, and standard deviation.
 def _stat_block(series: pd.Series) -> dict[str, float | None]:
+    """Build a small descriptive-statistics block for drilldown KPI cards."""
     clean = series.dropna()
     if clean.empty:
         return {"mean": None, "median": None, "min": None, "max": None, "std": None}
@@ -373,6 +426,7 @@ def _stat_block(series: pd.Series) -> dict[str, float | None]:
 # It measures dispersion inside a segment. A high value means the segment is
 # heterogeneous, so averages may be misleading.
 def _safe_cv(series: pd.Series) -> float | None:
+    """Return a coefficient of variation, or `None` when it is not meaningful."""
     clean = series.dropna()
     if clean.empty:
         return None
@@ -386,6 +440,7 @@ def _safe_cv(series: pd.Series) -> float | None:
 # Compare a segment average against the global portfolio average.
 # Example: -41.2 means the segment mean is 41.2% below the global mean.
 def _pct_delta(cluster_mean: float | None, global_mean: float | None) -> float | None:
+    """Compute the percentage delta between a segment mean and global mean."""
     if cluster_mean is None or global_mean is None:
         return None
     if abs(global_mean) < 1e-9:
@@ -405,6 +460,7 @@ def _top_rows(
     mat_score_map: dict[int, float],
     mat_level_map: dict[int, str],
 ) -> list[dict[str, Any]]:
+    """Return ranked company rows for drilldown leaderboards."""
     sorted_rows = frame.dropna(subset=[column]).sort_values(column, ascending=ascending)
     return [
         _to_row(row, label_map, mat_score_map, mat_level_map)
@@ -423,6 +479,7 @@ def _extreme_row(
     mat_score_map: dict[int, float],
     mat_level_map: dict[int, str],
 ) -> dict[str, Any] | None:
+    """Return one extreme company row such as highest CA or youngest company."""
     sorted_rows = frame.dropna(subset=[column]).sort_values(column, ascending=ascending)
     if sorted_rows.empty:
         return None
@@ -440,6 +497,12 @@ def _representative_companies(
     mat_score_map: dict[int, float],
     mat_level_map: dict[int, str],
 ) -> list[dict[str, Any]]:
+    """
+    Pick companies that best represent the center of a segment.
+
+    The ranking favors high decision-tree confidence, closeness to the segment
+    medians, and then revenue as a stable tie-breaker.
+    """
     if frame.empty:
         return []
 
@@ -476,6 +539,20 @@ def _build_drilldown(
     mat_score_map: dict[int, float],
     mat_level_map: dict[int, str],
 ) -> dict[str, Any]:
+    """
+    Build the rich segment detail payload consumed by the drilldown drawer.
+
+    Args:
+        cluster_id: Numeric frontend-compatible segment id.
+        clustered_frame: Company-level dataframe already assigned to segments.
+        label_map: Mapping of cluster id to human-readable label.
+        mat_score_map: Mapping of cluster id to maturity score.
+        mat_level_map: Mapping of cluster id to maturity level.
+
+    Returns:
+        dict[str, Any]: Summary stats, rankings, extremes, homogeneity, and
+        representative companies for one segment.
+    """
     subset = clustered_frame[clustered_frame["cluster"] == cluster_id].copy()
 
     ca_stats = _stat_block(subset["chiffre_affaires"])
@@ -587,6 +664,7 @@ def _build_drilldown(
 # DecisionTreeClassifier cannot train on strings directly, so categories like
 # "PME", "IT", or "Small" must become numbers.
 def _encode_column(series: pd.Series, fallback: str) -> tuple[pd.Series, dict[str, int]]:
+    """Encode one categorical column into integer ids for scikit-learn."""
     values = {str(value) for value in series.fillna(fallback).astype(str).tolist()}
     values.add(fallback)
     mapping = {value: index for index, value in enumerate(sorted(values))}
@@ -620,6 +698,16 @@ def _encode_column(series: pd.Series, fallback: str) -> tuple[pd.Series, dict[st
 # - Build fallback revenue values for model prediction
 # - Encode text columns into numbers for scikit-learn
 def _load_companies_frame(rows: list[Any]) -> tuple[pd.DataFrame, int]:
+    """
+    Convert ETL ORM rows into the cleaned dataframe used by the whole pipeline.
+
+    Args:
+        rows: Raw `Entreprise` ORM instances fetched from the ETL database.
+
+    Returns:
+        tuple[pd.DataFrame, int]: Cleaned/enriched dataframe plus original row
+        count before deduplication and filtering.
+    """
     # Keep the original number of rows loaded from the database.
     # This is useful for reporting:
     # - total_rows = rows fetched from DB
@@ -914,6 +1002,16 @@ def _load_companies_frame(rows: list[Any]) -> tuple[pd.DataFrame, int]:
 # These summary dictionaries become the `segments` array inside
 # cluster_summary.json and are consumed directly by the Vue dashboard.
 def _build_segment_summaries(frame: pd.DataFrame) -> list[dict[str, Any]]:
+    """
+    Aggregate company-level predictions into frontend-ready segment cards.
+
+    Args:
+        frame: Company-level dataframe containing final `cluster` assignments.
+
+    Returns:
+        list[dict[str, Any]]: Segment summary objects written to
+        `cluster_summary.json`.
+    """
     grouped = (
         frame.groupby(["cluster", "segment_code"], dropna=False)
         .agg(
@@ -929,6 +1027,7 @@ def _build_segment_summaries(frame: pd.DataFrame) -> list[dict[str, Any]]:
             confidence_moyenne=("decision_tree_confidence", "mean"),
         )
         .reset_index()
+        
         .sort_values("cluster")
     )
 
@@ -978,6 +1077,7 @@ def _build_segment_summaries(frame: pd.DataFrame) -> list[dict[str, Any]]:
 # Read the source of generated insights from cluster_insights.json if present.
 # This lets the frontend show whether insights came from Gemini or fallback rules.
 def _load_insights_source(export_dir: str) -> str:
+    """Read the latest insight source label so the UI can show Gemini/fallback."""
     path = Path(export_dir) / "cluster_insights.json"
     if not path.exists():
         return ""
@@ -999,6 +1099,15 @@ def _save_versioned(
     export_dir: str,
     timestamp: str,
 ) -> None:
+    """
+    Persist latest and versioned export files for one segmentation run.
+
+    Args:
+        summary: Top-level summary payload.
+        leads_records: Company-level JSON records for the leads explorer.
+        export_dir: Root export directory.
+        timestamp: Run timestamp used in versioned filenames.
+    """
     path = Path(export_dir)
     path.mkdir(parents=True, exist_ok=True)
     summary = repair_text_payload(summary)
@@ -1021,6 +1130,20 @@ def run_decision_tree_segmentation(
     db: Session,
     export_dir: str = DEFAULT_EXPORT_DIR,
 ) -> dict[str, Any]:
+    """
+    Execute the full decision-tree segmentation workflow.
+
+    Args:
+        db: Active SQLAlchemy session connected to the ETL database.
+        export_dir: Directory where latest and versioned JSON exports are saved.
+
+    Returns:
+        dict[str, Any]: Summary payload returned by FastAPI and written to disk.
+
+    Side effects:
+        Reads the ETL `entreprise` table, writes JSON exports, and optionally
+        triggers Gemini-backed insight generation and maturity explanation caches.
+    """
     from db.models import Entreprise
 
     # Timestamp used for versioned JSON filenames, e.g. cluster_summary_20260428_1651.json.
@@ -1074,6 +1197,8 @@ def run_decision_tree_segmentation(
     predicted_segments = model.predict(X_all)
     predicted_proba = model.predict_proba(X_all)
     frame["segment_code"] = predicted_segments
+    # `cluster` is the historical API/frontend field name. The value is now a
+    # stable numeric id derived from `segment_code`, not a raw unsupervised index.
     frame["cluster"] = frame["segment_code"].map(
         lambda code: SEGMENT_META.get(str(code), {}).get("cluster", -1)
     )

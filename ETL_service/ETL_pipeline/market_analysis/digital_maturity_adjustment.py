@@ -51,10 +51,7 @@ def compute_adjustment(segment: dict) -> dict:
             - n                  (int) — lead count
 
     Returns:
-        {
-            "adjustments": {dim: float},   # per-dimension deltas
-            "reasons": [str]               # CEO-readable explanations
-        }
+        dict: Per-dimension additive deltas plus human-readable reason strings.
     """
     adj: dict[str, float] = {d: 0.0 for d in DIMENSIONS}
     reasons: list[str] = []
@@ -199,13 +196,13 @@ def compute_adjustment(segment: dict) -> dict:
 # ── Private helpers ────────────────────────────────────────────────────────────
 
 def _add(adj: dict, dim: str, delta: float) -> None:
-    """Safely accumulate a bounded adjustment on a single dimension."""
+    """Accumulate one bounded rule contribution onto a maturity dimension."""
     delta = max(-_MAX_RULE_DELTA, min(_MAX_RULE_DELTA, delta))
     adj[dim] = adj.get(dim, 0.0) + delta
 
 
 def _safe_float(v) -> float | None:
-    """Convert value to float or return None."""
+    """Convert loosely-typed aggregates into float while swallowing bad inputs."""
     try:
         f = float(v)
         return f if f == f else None   # NaN check
@@ -217,6 +214,9 @@ def _data_completeness_bonus(segment: dict) -> float:
     """
     Return a +data bonus based on how many key fields are non-null.
     Max bonus: +0.6 (when all 4 key fields are populated).
+
+    This remains intentionally small because completeness is only an indirect
+    proxy for maturity, not a direct observation of digital tooling.
     """
     fields = ["employes_moyen", "ca_moyen", "nb_locaux_moyen", "age_moyen"]
     present = sum(1 for f in fields if segment.get(f) not in (None, float("nan"), ""))
