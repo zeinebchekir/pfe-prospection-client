@@ -26,6 +26,7 @@ INSTALLED_APPS = [
     "rest_framework_simplejwt",
     "rest_framework_simplejwt.token_blacklist",
     "corsheaders",
+    "drf_spectacular",          # OpenAPI 3.0 schema generation (Swagger / Redoc)
     # Local
     "apps.users",
     "apps.audit",
@@ -138,6 +139,65 @@ REST_FRAMEWORK = {
         "rest_framework.renderers.JSONRenderer",
     ],
     "EXCEPTION_HANDLER": "apps.users.exceptions.custom_exception_handler",
+    # Register drf-spectacular as the schema generator
+    "DEFAULT_SCHEMA_CLASS": "drf_spectacular.openapi.AutoSchema",
+}
+
+# ---------------------------------------------------------------------------
+# drf-spectacular — OpenAPI 3.0 schema configuration
+# ---------------------------------------------------------------------------
+SPECTACULAR_SETTINGS = {
+    "TITLE": "crmPfe Auth API",
+    "DESCRIPTION": (
+        "Authentication and user management API for the crmPfe / Qualifix platform.\n\n"
+        "## Authentication\n"
+        "This API uses **HTTP-only cookie-based JWT** authentication.\n\n"
+        "- After a successful `POST /api/auth/login/` or `POST /api/auth/register/`, "
+        "the server sets two HTTP-only cookies: `access_token` (10 min) and `refresh_token` (7 days).\n"
+        "- Tokens are **never** returned in the JSON body.\n"
+        "- All mutating requests must include the `X-CSRFToken` header (read from the "
+        "readable `csrftoken` cookie).\n"
+        "- When the access token expires, `POST /api/auth/refresh/` issues a new pair "
+        "using the refresh cookie — the original request is retried transparently by Axios.\n\n"
+        "## Cookie Security\n"
+        "| Cookie | HttpOnly | Secure (prod) | SameSite | Purpose |\n"
+        "|--------|----------|---------------|----------|---------|\n"
+        "| `access_token` | ✅ Yes | ✅ Yes | Lax | Authenticates API requests |\n"
+        "| `refresh_token` | ✅ Yes | ✅ Yes | Lax | Rotates session silently |\n"
+        "| `csrftoken` | ❌ No | ❌ No | Lax | Read by JS for CSRF header |\n"
+    ),
+    "VERSION": "1.0.0",
+    "SERVE_INCLUDE_SCHEMA": False,  # Don't expose the raw /schema/ endpoint in production
+    "COMPONENT_SPLIT_REQUEST": True,  # Separate request/response schemas for the same endpoint
+    "SCHEMA_PATH_PREFIX": "/api/",
+    # Define the cookie-based security scheme
+    "SECURITY": [
+        {"cookieAuth": []},
+    ],
+    "COMPONENTS": {
+        "securitySchemes": {
+            "cookieAuth": {
+                "type": "apiKey",
+                "in": "cookie",
+                "name": "access_token",
+                "description": (
+                    "HTTP-only JWT access token stored in the `access_token` cookie. "
+                    "Set automatically by login/register/refresh endpoints. "
+                    "Cannot be read by JavaScript."
+                ),
+            },
+            "csrfToken": {
+                "type": "apiKey",
+                "in": "header",
+                "name": "X-CSRFToken",
+                "description": (
+                    "CSRF token for mutating requests (POST/PUT/PATCH/DELETE). "
+                    "Read from the non-HttpOnly `csrftoken` cookie by the Axios interceptor."
+                ),
+            },
+        }
+    },
+    "POSTPROCESSING_HOOKS": ["drf_spectacular.hooks.postprocess_schema_enums"],
 }
 
 # ---------------------------------------------------------------------------

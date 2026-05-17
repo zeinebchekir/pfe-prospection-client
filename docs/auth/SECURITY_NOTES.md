@@ -1,5 +1,18 @@
 # Security Notes
 
+> **Quick reference — things that MUST be fixed before production:**
+>
+> | # | Issue | Risk | Action |
+> |---|-------|------|--------|
+> | 1 | No backend role enforcement on leads/CEO endpoints | Medium-High | Add `IsCommercial`, `IsCEO` permission classes |
+> | 2 | No rate limiting on login | Medium | Add `django-ratelimit` or Nginx rate limit |
+> | 3 | SMTP password hardcoded in `base.py` | **High** | Move to env var, rotate the password immediately |
+> | 4 | Google SSO button not implemented | Low | Remove the button or implement OAuth |
+> | 5 | Self-registration is open (`AllowAny`) | Low | Add domain validation or disable if invite-only |
+> | 6 | Password change does not revoke sessions | Low | Blacklist all user refresh tokens on password change |
+
+---
+
 ## Current Security Model
 
 The system uses **HTTP-only cookie JWT authentication** — a solid foundation that avoids the most common JWT pitfalls (XSS token theft via localStorage). This section documents both the strengths and the gaps that exist in the current implementation.

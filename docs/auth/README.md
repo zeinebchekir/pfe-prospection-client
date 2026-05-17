@@ -72,11 +72,34 @@ curl -b cookies.txt http://localhost:8000/api/auth/me/
 
 ---
 
+## API Documentation (Swagger / OpenAPI)
+
+The auth API is fully documented in **Swagger UI** and **Redoc** using `drf-spectacular`.
+
+> ⚠️ Install the package first: `pip install drf-spectacular==0.27.2` (or `pip install -r requirements.txt`)
+
+| Interface | URL | Description |
+|-----------|-----|-------------|
+| **Swagger UI** (interactive) | `http://localhost:8000/api/docs/` | Try requests, view schemas, read descriptions |
+| **Redoc** (read-only) | `http://localhost:8000/api/redoc/` | Clean documentation view |
+| **OpenAPI JSON/YAML** | `http://localhost:8000/api/schema/` | Raw schema for tooling |
+
+### Cookie Auth in Swagger UI
+
+> Swagger UI cannot automatically send HTTP-only cookies (they are managed by the browser, not by Swagger). To test cookie-based auth:
+>
+> 1. Open a browser DevTools Console and run `fetch('/api/auth/login/', {method:'POST', credentials:'include', headers:{'Content-Type':'application/json'}, body:JSON.stringify({email:'...', password:'...'})})` — this sets the cookies.
+> 2. All subsequent Swagger requests in the **same browser tab** will automatically include the auth cookies.
+>
+> Alternatively, use curl with `-c/-b cookies.txt` as shown in [TESTING.md](./TESTING.md).
+
+---
+
 ## Documentation Index
 
 | File | Description |
 |------|-------------|
-| [ARCHITECTURE.md](./ARCHITECTURE.md) | End-to-end auth flow, ASCII diagram, session lifecycle |
+| [ARCHITECTURE.md](./ARCHITECTURE.md) | System overview diagram, token lifecycle, auth vs authorization, refresh flow |
 | [API.md](./API.md) | All auth API endpoints with request/response examples |
 | [BACKEND.md](./BACKEND.md) | Django implementation: models, views, serializers, permissions |
 | [FRONTEND.md](./FRONTEND.md) | Vue/Vite implementation: composable, store, router guards |

@@ -5,20 +5,67 @@
 ```
 backend/
   apps/users/
-    models.py          # User model, UserSession, PasswordResetToken
-    views.py           # All auth views
-    serializers.py     # Request/response validation
-    authentication.py  # CookieJWTAuthentication backend
-    permissions.py     # IsAdmin permission class
-    utils.py           # Cookie helpers
-    exceptions.py      # Custom DRF error handler
-    urls.py            # URL routing
-    tests.py           # Test suite
+    models.py          # User, UserSession, PasswordResetToken
+    views.py           # All auth views + @extend_schema decorators
+    serializers.py     # Request/response validation + help_text fields
+    authentication.py  # CookieJWTAuthentication (reads JWT from cookie)
+    permissions.py     # IsAdmin custom permission
+    utils.py           # set_auth_cookies / unset_auth_cookies helpers
+    exceptions.py      # Custom DRF exception handler
+    urls.py            # /api/auth/* URL patterns
+    tests.py           # pytest-compatible test suite
   config/settings/
-    base.py            # JWT, CORS, CSRF, cookie config
-    dev.py             # Development overrides
+    base.py            # JWT, CORS, CSRF, cookie settings, SPECTACULAR_SETTINGS
+    dev.py             # Development overrides (insecure cookies OK)
     prod.py            # Production security hardening
+  config/
+    urls.py            # Root URL config including /api/docs/ /api/redoc/ /api/schema/
 ```
+
+---
+
+## Swagger / OpenAPI Setup
+
+The project uses [`drf-spectacular`](https://github.com/tfranzel/drf-spectacular) (v0.27.2) for OpenAPI 3.0 schema generation.
+
+### Access Points
+
+| URL | Interface |
+|-----|-----------|
+| `GET /api/docs/` | Swagger UI (interactive, try requests) |
+| `GET /api/redoc/` | Redoc (clean read-only documentation) |
+| `GET /api/schema/` | Raw OpenAPI JSON/YAML |
+
+### How Decorators Work
+
+Each view has a `@extend_schema` or `@extend_schema_view` decorator added **above** the class definition. These decorators add only metadata — they do not change view behavior, routing, or authentication logic.
+
+```python
+@extend_schema(
+    tags=["Authentication"],
+    summary="Authenticate user (login)",
+    description="...",
+    request=LoginSerializer,
+    responses={200: ..., 401: ..., 403: ...}
+)
+class LoginView(APIView):
+    ...
+```
+
+The decorator is processed by `drf-spectacular` at schema generation time (when `/api/schema/` is accessed). At runtime, the decorator has zero overhead.
+
+### Serializer Field Descriptions
+
+All serializer fields have `help_text` set. These appear as field descriptions in Swagger UI's request body schemas, making it clear what each field expects without reading the source code.
+
+### Cookie Auth in Swagger
+
+> **Important:** Swagger UI cannot automatically send HTTP-only cookies. The `cookieAuth` security scheme is defined in `SPECTACULAR_SETTINGS` but browsers prevent Swagger from attaching cookies set by a different origin.
+>
+> **Workaround to test authenticated endpoints in Swagger:**
+> 1. Open `http://localhost:8000/api/docs/` in Chrome/Firefox.
+> 2. In DevTools Console: `fetch('/api/auth/login/', {method:'POST', credentials:'include', headers:{'Content-Type':'application/json'}, body:'{"email":"...","password":"..."}'})`
+> 3. Cookies are now set. Click "Try it out" in Swagger — cookies will be sent automatically by the browser.
 
 ---
 
