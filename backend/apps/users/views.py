@@ -42,23 +42,40 @@ logger = logging.getLogger(__name__)
 
 
 def get_client_ip(request):
+    """
+    Extract the real client IP address from the request.
+
+    Checks X-Forwarded-For first (set by reverse proxies / load balancers)
+    and falls back to REMOTE_ADDR for direct connections.
+    Used to populate the ip_address field in audit log entries.
+    """
     x_forwarded_for = request.META.get('HTTP_X_FORWARDED_FOR')
     if x_forwarded_for:
-        ip = x_forwarded_for.split(',')[0]
+        ip = x_forwarded_for.split(',')[0]  # Take the leftmost (original client) IP
     else:
         ip = request.META.get('REMOTE_ADDR')
     return ip
 
 
 class RegisterView(APIView):
+    """
+    POST /api/auth/register/
+
+    Open endpoint: creates a new user account with role=COMMERCIAL (fixed),
+    issues JWT tokens, and sets them as HTTP-only cookies on the response.
+
+    After successful registration the user is immediately authenticated
+    (no email confirmation step).
+    """
     permission_classes = [AllowAny]
-    authentication_classes = []
+    authentication_classes = []  # Disable auth check — registration is always open
 
     def post(self, request):
         serializer = RegisterSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
-        user = serializer.save()
+        user = serializer.save()  # Calls User.objects.create_user() — hashes password
 
+        # Issue a JWT pair immediately so the user is logged in after registration
         refresh = RefreshToken.for_user(user)
         access = str(refresh.access_token)
 
@@ -67,14 +84,24 @@ class RegisterView(APIView):
             {"status": "success", "user": user_data},
             status=status.HTTP_201_CREATED,
         )
+        # Store tokens as HTTP-only cookies — JavaScript cannot read these
         set_auth_cookies(response, access_token=access, refresh_token=str(refresh))
         logger.info("New user registered: %s", user.email)
         return response
 
 
 class LoginView(APIView):
+    """
+    POST /api/auth/login/
+
+    Validates credentials, issues JWT tokens, and sets HTTP-only cookies.
+    Distinguishes between wrong credentials (401) and inactive accounts (403)
+    to give actionable feedback without revealing which emails are registered.
+
+    Writes a LOGIN entry to the audit log on success.
+    """
     permission_classes = [AllowAny]
-    authentication_classes = []
+    authentication_classes = []  # No auth needed to log in
 
     def post(self, request):
         serializer = LoginSerializer(data=request.data)
@@ -131,31 +158,60 @@ class LoginView(APIView):
 
 
 class LogoutView(APIView):
+    """
+    POST /api/auth/logout/
+
+    Blacklists the refresh token so it cannot be reused, then clears
+    both auth cookies from the browser.
+
+    The access token (10-minute lifetime) is not explicitly revoked — it
+    will expire naturally. The cookie deletion prevents the browser from
+    sending it further, which is sufficient for normal usage.
+
+    Writes a LOGOUT entry to the audit log.
+    """
     permission_classes = [IsAuthenticated]
 
     def post(self, request):
+        # Read the refresh token before clearing cookies
         refresh_token = request.COOKIES.get(settings.AUTH_COOKIE_REFRESH)
 
         if refresh_token:
             try:
                 token = RefreshToken(refresh_token)
+                # Blacklisting adds the token's JTI to the OutstandingToken/BlacklistedToken tables.
+                # After this, presenting this refresh token will return 401.
                 token.blacklist()
             except Exception:
+                # If the token is already invalid/expired, silently continue.
+                # The important part is clearing the cookies.
                 pass
 
         response = Response(
             {"status": "success", "message": "Déconnexion réussie."},
             status=status.HTTP_200_OK,
         )
-        unset_auth_cookies(response)
+        unset_auth_cookies(response)  # Delete both access_token and refresh_token cookies
         log_action(request.user, AuditLog.Action.LOGOUT, request.user.email, get_client_ip(request))
         logger.info("User logged out: %s", request.user.email)
         return response
 
 
 class RefreshView(APIView):
+    """
+    POST /api/auth/refresh/
+
+    Reads the refresh token from its HTTP-only cookie, validates it,
+    and issues a new access + refresh token pair (token rotation).
+
+    The old refresh token is immediately blacklisted (BLACKLIST_AFTER_ROTATION=True).
+    New tokens are set as HTTP-only cookies — the response body contains no token values.
+
+    This endpoint is called automatically by the Axios interceptor on 401 responses,
+    making token refresh transparent to the user.
+    """
     permission_classes = [AllowAny]
-    authentication_classes = []
+    authentication_classes = []  # No access token needed — only the refresh cookie
 
     def post(self, request):
         refresh_token = request.COOKIES.get(settings.AUTH_COOKIE_REFRESH)
@@ -187,6 +243,16 @@ class RefreshView(APIView):
 
 
 class MeView(APIView):
+    """
+    GET /api/auth/me/    — Return authenticated user profile
+    PATCH /api/auth/me/  — Update own profile (name and fonction only)
+
+    This endpoint is called on every page load by the router guard (fetchUser())
+    to restore session state from the HTTP-only cookie without storing
+    any auth data in localStorage or sessionStorage.
+
+    Note: Users cannot change their own role or email via this endpoint.
+    """
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
@@ -216,6 +282,15 @@ class MeView(APIView):
 
 
 class ChangePasswordView(APIView):
+    """
+    POST /api/auth/change-password/
+
+    Allows an authenticated user to change their own password.
+    Requires verification of the current password before accepting a new one.
+
+    Note: This does NOT invalidate existing sessions or JWT tokens.
+    A compromised account should also have the admin deactivate it via toggle-active.
+    """
     permission_classes = [IsAuthenticated]
 
     def post(self, request):

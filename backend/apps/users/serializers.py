@@ -1,3 +1,20 @@
+"""
+Request/response serializers for the auth system.
+
+Serializer hierarchy for user data:
+  LoginSerializer            — validates login credentials (not a ModelSerializer)
+  RegisterSerializer         — self-registration; forces role=COMMERCIAL on create
+  UserProfileSerializer      — read-only profile returned on login/register/me
+  ProfileUpdateSerializer    — allows user to edit own name/fonction (no role/email change)
+  UserSerializer             — admin read view of user records
+  UserCreateSerializer       — admin-only creation; allows any role
+  UserUpdateSerializer       — admin-only edit; includes role and is_active
+  ChangePasswordSerializer   — validates old+new+confirm password change
+  PasswordResetRequest/ConfirmSerializer — password reset token flow
+
+All password fields use Django's validate_password to enforce strength rules.
+Password fields are always write_only=True and never appear in responses.
+"""
 from django.contrib.auth import get_user_model
 from django.contrib.auth.password_validation import validate_password
 from rest_framework import serializers
@@ -93,11 +110,17 @@ class RegisterSerializer(serializers.ModelSerializer):
 
 
 class LoginSerializer(serializers.Serializer):
+    """
+    Validates the login request payload. This is not a ModelSerializer—
+    it only checks that both fields are present. Credential verification
+    (password hash check) is done by Django's authenticate() in LoginView.
+    """
     email = serializers.EmailField(required=True)
     password = serializers.CharField(required=True, write_only=True)
 
 
 class PasswordResetRequestSerializer(serializers.Serializer):
+    """Validates the email field for a password reset request."""
     email = serializers.EmailField(required=True)
 
 

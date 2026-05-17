@@ -12,11 +12,13 @@
 import { ref, computed } from 'vue'
 import api from '@/api/axios'
 
-// Module-level reactive state — shared across all component usages
-const user = ref(null)
-const isLoading = ref(false)
-const error = ref(null)
-let fetchPromise = null
+// Module-level reactive state — shared as a singleton across all component usages.
+// Using module scope (not inside the function) ensures all components share the same
+// user object and react to the same mutations, equivalent to a global Pinia store.
+const user = ref(null)       // null means not authenticated
+const isLoading = ref(false)  // true only during async auth operations
+const error = ref(null)       // last auth error message or null
+let fetchPromise = null        // deduplicates concurrent fetchUser() calls
 
 // ── Session expiry handler ────────────────────────────────────────────────
 // Fired by axios.js when the refresh token is also expired/invalid.
@@ -34,11 +36,16 @@ export function useAuth() {
 
   /**
    * Fetch the current user from /api/auth/me/.
-   * Called on app load to restore session from existing cookies.
-   * Silently fails if no valid session exists (sets user to null).
+   *
+   * Called by the router guard on first load and periodically on protected routes
+   * to restore and verify session state from the HTTP-only cookie.
+   * Silently sets user to null if the request fails (no valid session).
+   *
+   * Deduplication: if called concurrently, only one HTTP request is made.
+   * All callers await the same promise and receive the same result.
    */
   async function fetchUser() {
-    if (fetchPromise) return fetchPromise
+    if (fetchPromise) return fetchPromise  // Return in-flight request instead of making a new one
 
     fetchPromise = (async () => {
       isLoading.value = true
@@ -48,11 +55,12 @@ export function useAuth() {
         user.value = data.user
         return data.user
       } catch (err) {
+        // Any error (401, network issue) means no valid session
         user.value = null
         return null
       } finally {
         isLoading.value = false
-        fetchPromise = null
+        fetchPromise = null  // Reset so future calls can make a new request
       }
     })()
 
@@ -61,21 +69,26 @@ export function useAuth() {
 
   /**
    * Login with email + password.
-   * Backend sets HTTP-only JWT cookies on success.
+   * Backend sets HTTP-only JWT cookies on success; we only store the user profile object.
+   *
+   * Returns { success: true } on success or { success: false, message } on failure.
+   * The ACCOUNT_INACTIVE code (403) gets a distinct user-visible message.
    */
   async function login(credentials) {
     isLoading.value = true
     error.value = null
     try {
       const { data } = await api.post('/auth/login/', credentials)
-      user.value = data.user
+      user.value = data.user  // Store user profile (never the token itself)
       return { success: true }
     } catch (err) {
       const responseData = err.response?.data
+      // Handle disabled account separately: show admin contact message, not generic error
       if (responseData?.code === 'ACCOUNT_INACTIVE') {
         error.value = responseData.message
         return { success: false, message: responseData.message }
       }
+      // Flatten nested error structures from DRF's custom exception handler
       const message =
         responseData?.errors?.message ||
         responseData?.message ||
@@ -114,18 +127,24 @@ export function useAuth() {
   }
 
   /**
-   * Logout — blacklists refresh token on backend, clears cookies,
-   * and resets local user state.
+   * Logout — blacklists refresh token on backend, clears both cookies,
+   * then resets local user state.
+   *
+   * Even if the server request fails (e.g., network error), user state is
+   * cleared locally. This ensures the UI reflects a logged-out state.
+   * The backend cookie deletion won't happen in that case, but the user's
+   * next request will fail authentication and trigger the forceLogout path.
    */
   async function logout() {
     isLoading.value = true
     error.value = null
     try {
-      await api.post('/auth/logout/')
+      await api.post('/auth/logout/')  // Blacklists refresh token on backend
     } catch {
       // Even if the server request fails, clear local state
+      // so the UI correctly reflects the logged-out state
     } finally {
-      user.value = null
+      user.value = null  // Clear auth state regardless of server response
       isLoading.value = false
     }
   }
