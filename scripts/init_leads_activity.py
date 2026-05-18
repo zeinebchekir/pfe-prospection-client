@@ -9,6 +9,14 @@ from pathlib import Path
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 IA_ML_ROOT = PROJECT_ROOT / "IA-ML_service"
 DEFAULT_CSV = PROJECT_ROOT / "data" / "train.csv"
+LEGACY_DJANGO_TABLES = (
+    "lead_opportunity",
+    "leads_activity",
+    "lead_sessions_raw",
+    "lead_behavior_features",
+    "lead_scores",
+    "lead_notifications",
+)
 
 
 def load_env_file() -> None:
@@ -31,6 +39,78 @@ def configure_host_database_defaults() -> None:
 
 def running_inside_container() -> bool:
     return Path("/.dockerenv").exists() or os.environ.get("RUNNING_IN_DOCKER") == "1"
+
+
+def cleanup_legacy_django_tables() -> None:
+    if running_inside_container() or os.environ.get("LEADS_ACTIVITY_SKIP_DJANGO_CLEANUP") == "1":
+        return
+
+    db_user = os.environ.get("DB_USER", "crmpfe_user")
+    db_name = os.environ.get("DB_NAME", "crmpfe_db")
+    quoted_tables = ", ".join(f"'{table}'" for table in LEGACY_DJANGO_TABLES)
+    qualified_tables = ", ".join(f"public.{table}" for table in LEGACY_DJANGO_TABLES)
+
+    list_command = [
+        "docker",
+        "compose",
+        "exec",
+        "-T",
+        "db",
+        "psql",
+        "-U",
+        db_user,
+        "-d",
+        db_name,
+        "-v",
+        "ON_ERROR_STOP=1",
+        "-At",
+        "-c",
+        (
+            "SELECT tablename FROM pg_tables "
+            f"WHERE schemaname = 'public' AND tablename IN ({quoted_tables}) "
+            "ORDER BY tablename;"
+        ),
+    ]
+    listed = subprocess.run(
+        list_command,
+        cwd=PROJECT_ROOT,
+        text=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+    )
+    if listed.returncode != 0:
+        print("Impossible de verifier les anciennes tables Django DB:")
+        print(listed.stdout.strip())
+        raise SystemExit(listed.returncode)
+
+    existing_tables = [line.strip() for line in listed.stdout.splitlines() if line.strip()]
+    if not existing_tables:
+        print("Django DB: aucune ancienne table Analyse Comportementale a supprimer.")
+        return
+
+    print("Django DB: suppression des anciennes tables Analyse Comportementale:")
+    for table in existing_tables:
+        print(f"- {table}")
+
+    drop_command = [
+        "docker",
+        "compose",
+        "exec",
+        "-T",
+        "db",
+        "psql",
+        "-U",
+        db_user,
+        "-d",
+        db_name,
+        "-v",
+        "ON_ERROR_STOP=1",
+        "-c",
+        f"DROP TABLE IF EXISTS {qualified_tables} CASCADE;",
+    ]
+    completed = subprocess.run(drop_command, cwd=PROJECT_ROOT)
+    if completed.returncode != 0:
+        raise SystemExit(completed.returncode)
 
 
 def run_inside_ia_ml_container() -> bool:
@@ -60,6 +140,7 @@ def run_inside_ia_ml_container() -> bool:
 
 def main() -> None:
     load_env_file()
+    cleanup_legacy_django_tables()
     if run_inside_ia_ml_container():
         return
 

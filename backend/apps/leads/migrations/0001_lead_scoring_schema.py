@@ -64,7 +64,6 @@ class Migration(migrations.Migration):
     operations = [
         migrations.SeparateDatabaseAndState(
             database_operations=[
-                migrations.RunSQL(SQL, reverse_sql=migrations.RunSQL.noop),
             ],
             state_operations=[
                 migrations.CreateModel(

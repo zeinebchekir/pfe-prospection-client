@@ -325,6 +325,11 @@ python scripts/init_leads_activity.py
 ```
 
 Cette commande est idempotente : elle ne duplique pas les sessions deja importees.
+Elle verifie aussi Django DB et supprime les anciennes tables Analyse Comportementale
+si elles existent encore (`lead_opportunity`, `leads_activity`, `lead_sessions_raw`,
+`lead_behavior_features`, `lead_scores`, `lead_notifications`). Les donnees de la
+page Opportunites commerciales sont chargees uniquement dans IAML DB.
+
 ---
 
 ## 🗄️ First-Time ETL Setup: `initial_load` DAG
