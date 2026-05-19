@@ -33,6 +33,8 @@ class Potential_linkedin(Base):
     recommandation = Column(String, nullable=True)
     emailsgenerated = Column(JSONB, nullable=True)
     identifiantEntreprise = Column(String, nullable=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
 
 
 

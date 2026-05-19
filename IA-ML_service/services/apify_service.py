@@ -3,6 +3,7 @@ import os
 from dotenv import load_dotenv
 
 load_dotenv()
+print("apify token",os.getenv("APIFY_TOKEN"))
 def get_linkedin_posts(company_url: str, max_posts: int = 10):
     posts=[]
     endpoint = "https://api.apify.com/v2/acts/harvestapi~linkedin-company-posts/run-sync-get-dataset-items"

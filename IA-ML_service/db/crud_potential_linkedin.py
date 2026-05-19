@@ -68,3 +68,11 @@ def delete(db: Session, identifiant: int) -> bool:
     db.delete(record)
     db.commit()
     return True
+
+def get_all_by_entreprise(db: Session, identifiantEntreprise: str) -> list[Potential_linkedin]:
+    return (
+        db.query(Potential_linkedin)
+        .filter(Potential_linkedin.identifiantEntreprise == identifiantEntreprise)
+        .order_by(Potential_linkedin.identifiant.desc())
+        .all()
+    )

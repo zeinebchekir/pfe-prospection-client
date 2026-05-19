@@ -590,15 +590,17 @@ const generateAnalysis = async () => {
     posts: finalPosts.value.slice(0, 10),
     specialities: companyInfo.value?.specialities || [],
     description: companyInfo.value?.description || '',
-    
-  
   }
 
   try {
-    const response = await axios.post('http://localhost:8002/ia/analyze', payload)
-    sessionStorage.setItem('analysisResult', JSON.stringify(response.data))
+    const response = await axios.post('/ia/analyze', payload)
+    const analysisData = {
+        ...response.data,
+        posts: finalPosts.value.slice(0, 10)  // ✅ on injecte les posts dans le result
+    }
+    sessionStorage.setItem('analysisResult', JSON.stringify(analysisData))  // ← remplace response.data
+
     sessionStorage.setItem('analysisLead', JSON.stringify(props.lead || { nom: props.companyName }))
-    
     const dirigeantsAvecEmail = (props.lead?.dirigeants || []).filter((d: any) => d.email)
     sessionStorage.setItem('analysisDirigeants', JSON.stringify(dirigeantsAvecEmail))
     emit('update:isOpen', false)
@@ -614,7 +616,7 @@ const generateAnalysis = async () => {
 // --- API Calls ---
 const fetchLinkedInUrl = async (name: string) => {
   try {
-    const response = await axios.post('http://localhost:8002/linkedin/url', {
+    const response = await axios.post('/linkedin/url', {
       nom_entreprise: name, pays: "france"
     })
     return response.data.linkedin_url
@@ -624,14 +626,14 @@ const fetchLinkedInUrl = async (name: string) => {
 }
 
 const fetchLinkedInPosts = async (url: string) => {
-  const response = await axios.post('http://localhost:8002/linkedin/posts', {
+  const response = await axios.post('/linkedin/posts', {
     linkedin_url: url, max_posts: 10
   })
   return response.data.posts || []
 }
 
 const fetchLinkedInInfo = async (url: string) => {
-  const response = await axios.post('http://localhost:8002/linkedin/informations', {
+  const response = await axios.post('/linkedin/informations', {
     linkedin_url: url
   })
   return response.data?.infos || null

@@ -363,7 +363,7 @@ onMounted(() => {
   try {
     const storedResult = sessionStorage.getItem('analysisResult')
     const storedLead = sessionStorage.getItem('analysisLead')
-    const storedDirigeants = sessionStorage.getItem('analysisDirigeants') // ✅
+    const storedDirigeants = sessionStorage.getItem('analysisDirigeants')
     
     if (storedResult) {
       result.value = JSON.parse(storedResult)
@@ -375,9 +375,14 @@ onMounted(() => {
     if (storedDirigeants) {
       const dirs = JSON.parse(storedDirigeants)
       dirigeantsEmailList.value = dirs
-      // ✅ email entreprise en premier si existe, sinon premier dirigeant
       selectedEmailTo.value = lead.value?.email || dirs[0]?.email || ''
     }
+
+    // ✅ Sauvegarde automatique dès chargement du rapport
+    if (result.value && lead.value) {
+      saveAnalysisResult()
+    }
+
   } catch (e) {
     console.error("Erreur de parsing des données d'analyse", e)
   } finally {
@@ -417,8 +422,7 @@ const generateEmail = async () => {
       remarques: ''
     }
     
-    const baseUrl = import.meta.env.VITE_IA_SERVICE_URL || 'http://localhost:8002'
-    const response = await axios.post(`${baseUrl}/ia/generate-email`, payload)
+    const response = await axios.post(`/ia/generate-email`, payload)
     
     const subject = response.data.objet || 'Proposition de collaboration Numeryx'
     const body = response.data.corps || ''
@@ -436,6 +440,20 @@ const generateEmail = async () => {
     chatInput.value = ''
     
     showEmailModal.value = true
+    try {
+        const emails = result.value?.emailsgenerated || []
+        const updatedEmails = [
+          ...emails,
+          { objet: subject, corps: body, generatedAt: new Date().toISOString() }
+        ]
+        await axios.put(
+          `/potential-linkedin/entreprise/${lead.value.id}`,
+          { emailsgenerated: updatedEmails }
+        )
+      } catch (e) {
+        console.error('Erreur sauvegarde email généré:', e)
+      }
+
   } catch (err) {
     console.error('Error generating email:', err)
     emailError.value = err.response?.data?.detail || "Erreur lors de la génération de l'email."
@@ -486,7 +504,26 @@ const sendAdjustment = async () => {
     isAdjusting.value = false
   }
 }
-
+const saveAnalysisResult = async () => {
+  if (!result.value || !lead.value?.id) return
+  try {
+    const baseUrl = import.meta.env.VITE_DJANGO_SERVICE_URL || 'http://localhost:8000'
+    const payload = {
+      identifiantEntreprise: String(lead.value.id),
+      posts: result.value.posts || null,
+      potential_score: result.value.score || null,
+      positive_signals: result.value.signaux_positifs || null,
+      negative_signals: result.value.signaux_negatifs || null,
+      needs_it: result.value.besoins_potentiels || result.value.mapping_besoins || null,
+      recommandation: result.value.recommandation || null,
+      emailsgenerated: null,
+    }
+    await axios.post(`${baseUrl}/potential-linkedin/`, payload)
+    console.log('✅ Rapport sauvegardé')
+  } catch (err) {
+    console.error('Erreur sauvegarde rapport:', err)
+  }
+}
 const resetChat = () => {
   chatHistory.value = originalEmail.value.body
     ? [{ role: 'assistant', content: `Objet : ${originalEmail.value.subject}\n\n${originalEmail.value.body}` }]

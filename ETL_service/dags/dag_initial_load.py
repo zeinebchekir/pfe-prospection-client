@@ -223,49 +223,49 @@ def extract_datagouv(**context):
     # ── STEP 1 : NAF prefix filter (on raw API records) ──────────────────────
     # Runs before extraction so we drop records early using the raw NAF code
     # (activite_principale), before it gets translated to a human label.
-    naf_kept, naf_dropped = filter_by_naf_prefix(raw)
-    print(
-        f"[FILTER NAF] "
-        f"Entrée={total_raw} | "
-        f"Conservés={len(naf_kept)} | "
-        f"Supprimés={naf_dropped} "
-        f"(code NAF hors périmètre IT/digital)"
-    )
-    context["ti"].xcom_push(key="naf_kept",    value=len(naf_kept))
-    context["ti"].xcom_push(key="naf_dropped", value=naf_dropped)
+    # naf_kept, naf_dropped = filter_by_naf_prefix(raw)
+    # print(
+    #     f"[FILTER NAF] "
+    #     f"Entrée={total_raw} | "
+    #     f"Conservés={len(naf_kept)} | "
+    #     f"Supprimés={naf_dropped} "
+    #     f"(code NAF hors périmètre IT/digital)"
+    # )
+    # context["ti"].xcom_push(key="naf_kept",    value=len(naf_kept))
+    # context["ti"].xcom_push(key="naf_dropped", value=naf_dropped)
 
     # ── STEP 2 : Extraction (NAF-filtered records only) ──────────────────────
-    extracted = extract_data_from_datagouv(naf_kept)
+    extracted = extract_data_from_datagouv(raw)
     print(f"[EXTRACT DATAGOUV] {len(extracted)} enregistrements extraits après filtre NAF")
 
     # ── STEP 3 : Completeness filter (on extracted dicts) ────────────────────
     # Keeps only companies where ca, categorie_entreprise, taille_entrep and
     # region (via code_postal) are all present and usable.
-    complete_kept, complete_dropped, drop_log = filter_by_completeness(extracted)
-    print(
-        f"[FILTER COMPLETUDE] "
-        f"Entrée={len(extracted)} | "
-        f"Conservés={len(complete_kept)} | "
-        f"Supprimés={complete_dropped} "
-        f"(champs obligatoires manquants)"
-    )
-    context["ti"].xcom_push(key="completeness_kept",    value=len(complete_kept))
-    context["ti"].xcom_push(key="completeness_dropped", value=complete_dropped)
+    # complete_kept, complete_dropped, drop_log = filter_by_completeness(extracted)
+    # print(
+    #     f"[FILTER COMPLETUDE] "
+    #     f"Entrée={len(extracted)} | "
+    #     f"Conservés={len(complete_kept)} | "
+    #     f"Supprimés={complete_dropped} "
+    #     f"(champs obligatoires manquants)"
+    # )
+    # context["ti"].xcom_push(key="completeness_kept",    value=len(complete_kept))
+    # context["ti"].xcom_push(key="completeness_dropped", value=complete_dropped)
 
-    # Log the first 20 dropped records for debuggability (avoid flooding logs)
-    if drop_log:
-        print(f"[FILTER COMPLETUDE] Détail des {min(20, len(drop_log))} premiers rejetés :")
-        for entry in drop_log[:20]:
-            print(
-                f"  siren={entry['siren']} | nom={entry['nom']!r} "
-                f"| manquants={entry['missing_fields']}"
-            )
+    # # Log the first 20 dropped records for debuggability (avoid flooding logs)
+    # if drop_log:
+    #     print(f"[FILTER COMPLETUDE] Détail des {min(20, len(drop_log))} premiers rejetés :")
+    #     for entry in drop_log[:20]:
+    #         print(
+    #             f"  siren={entry['siren']} | nom={entry['nom']!r} "
+    #             f"| manquants={entry['missing_fields']}"
+    #         )
 
-    _write(RAW_DATAGOUV_PATH, complete_kept)
-    context["ti"].xcom_push(key="total_extracted", value=len(complete_kept))
+    _write(RAW_DATAGOUV_PATH, extracted)
+    context["ti"].xcom_push(key="total_extracted", value=len(extracted))
     print(
         f"[EXTRACT DATAGOUV] Pipeline filtre complet : "
-        f"{total_raw} bruts → {len(naf_kept)} NAF OK → {len(complete_kept)} complets (chargés)"
+        f"{total_raw} bruts → {len(extracted)} complets (chargés)"
     )
 
 
@@ -504,12 +504,20 @@ def rapport_final(sources: list, **context):
 #                                           → clean_datagouv → load_clean_datagouv ──┘
 # ══════════════════════════════════════════════
 
+from datetime import timedelta
+default_args = {
+    "retries": 3,
+    "retry_delay": timedelta(minutes=5),
+    "retry_exponential_backoff": True,   # délai exponentiel : 5min, 10min, 20min
+    "max_retry_delay": timedelta(minutes=30),  # plafond du délai
+}
 with DAG(
     dag_id="initial_load",
     start_date=datetime(2026, 1, 1),
     schedule=None,
     catchup=False,
     tags=["initial", "etl"],
+    default_args=default_args,
 ) as dag1:
 
     t_init = PythonOperator(task_id="init_db", python_callable=init_db)
@@ -563,6 +571,7 @@ with DAG(
     start_date=datetime(2026, 3, 27),
     schedule="0 */6 * * *",
     catchup=False,
+    default_args=default_args,
     tags=["delta", "etl"],
 ) as dag2:
 
@@ -595,7 +604,9 @@ with DAG(
     start_date=datetime(2026, 3, 27),
     schedule="0 6 * * *",
     catchup=False,
+    default_args=default_args,
     tags=["delta", "etl"],
+    
 ) as dag3:
 
     t_scrape  = PythonOperator(task_id="scrape_boamp",        python_callable=scrape_boamp, op_kwargs={"is_incremental": True})
@@ -628,6 +639,7 @@ with DAG(
     start_date=datetime(2026, 3, 27),
     schedule=None,
     catchup=False,
+    default_args=default_args,
     tags=["delta", "etl"],
 ) as dag4:
 

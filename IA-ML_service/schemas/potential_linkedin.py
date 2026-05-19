@@ -24,6 +24,7 @@ class PotentialLinkedinUpdate(PotentialLinkedinBase):
 
 class PotentialLinkedinResponse(PotentialLinkedinBase):
     identifiant: int
+    created_at: Optional[datetime] = None
 
     class Config:
         from_attributes = True

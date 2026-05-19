@@ -41,6 +41,16 @@ export default defineConfig({
         changeOrigin: true,
         secure: false,
       },
+      '/linkedin': {                 // ← ajouter
+        target: 'http://ia-ml:8002',
+        changeOrigin: true,
+        secure: false,
+      },
+      '/potential-linkedin': {                 // ← ajouter
+        target: 'http://ia-ml:8002',
+        changeOrigin: true,
+        secure: false,
+      },
     },
   },
 })

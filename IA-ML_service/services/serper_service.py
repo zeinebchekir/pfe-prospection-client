@@ -10,7 +10,7 @@ load_dotenv()
 logger = logging.getLogger(__name__)
 
 SERPER_API_KEYS = [k.strip() for k in os.getenv("SERPER_API_KEY").split(",") if k.strip()]
-
+print("serper keys",SERPER_API_KEYS)
 CURRENT_KEY_IDX = 0
 SERPER_API_EXHAUSTED = False
 

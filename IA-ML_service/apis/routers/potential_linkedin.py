@@ -15,7 +15,9 @@ router = APIRouter(
     tags=["Potential LinkedIn"],
 )
 
-
+@router.get("/entreprise/{identifiantEntreprise}/all", response_model=List[PotentialLinkedinResponse])
+def get_all_by_entreprise(identifiantEntreprise: str, db: Session = Depends(get_db)):
+    return crud.get_all_by_entreprise(db, identifiantEntreprise)
 @router.get("/", response_model=List[PotentialLinkedinResponse])
 def get_all(skip: int = 0, limit: int = 100, db: Session = Depends(get_db)):
     return crud.get_all(db, skip=skip, limit=limit)

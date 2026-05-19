@@ -90,8 +90,7 @@ async def analyze_lead(request: CompanyRequest):
             for b in result.get("mapping_besoins", [])
         ],
         score=result.get("score", 0),
-        recommandation=result.get("recommandation", "")
-        
+        recommandation=result.get("recommandation", "")    
     )
 
 # routers/analysis.py

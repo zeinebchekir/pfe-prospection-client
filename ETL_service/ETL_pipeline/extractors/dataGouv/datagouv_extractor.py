@@ -60,11 +60,11 @@ def extract_data_from_datagouv(results):
         ]
         
         # Enrichissement LinkedIn
-        for d in dirigeants_filtres:
-            nom_dir = d.get("nom")
-            prenom_dir = d.get("prenoms")
-            link = get_linkedin_url(nom_dir, prenom_dir, nom)
-            d["linkedin_url"] = link
+        # for d in dirigeants_filtres:
+        #     nom_dir = d.get("nom")
+        #     prenom_dir = d.get("prenoms")
+        #     link = get_linkedin_url(nom_dir, prenom_dir, nom)
+        #     d["linkedin_url"] = link
         # === CRÉATION DE L'INSTANCE DJANGO ===
         nouvelle_entreprise ={ 
             "siren":siren,

@@ -8,6 +8,7 @@ DATABASE_URL = os.environ.get(
     "postgresql://airflow:airflow@postgres-airflow/airflow"  # Airflow metadata DB
 )
 Base = declarative_base()
+print(f"DATABASE_URL = '{DATABASE_URL}'")
 engine = create_engine(DATABASE_URL)
 SessionLocal = sessionmaker(bind=engine)
 
