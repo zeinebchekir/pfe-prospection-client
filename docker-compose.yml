@@ -501,15 +501,22 @@ services:
     env_file:
       - .env
     volumes:
+      - ${AIRFLOW_PROJ_DIR:-.}/dags:/opt/airflow/dags
+      - ${AIRFLOW_PROJ_DIR:-.}/config:/opt/airflow/config
+      - ${AIRFLOW_PROJ_DIR:-.}/plugins:/opt/airflow/plugins
       - ./ETL_service/ETL_pipeline:/app
+      - ./ETL_service/ETL_pipeline:/opt/airflow/ETL_pipeline
       - shared_exports:/opt/airflow/exports
       - ./ETL_service/logs:/opt/airflow/logs
+      - airflow_shared_tmp:/opt/airflow/shared_tmp
     environment:
       DATABASE_URL: ${ETL_DATABASE_URL}
       AIRFLOW_URL: http://airflow-apiserver:8080
       AIRFLOW_USER: ${AIRFLOW_ADMIN_USER:-airflow}
       AIRFLOW_PASSWORD: ${AIRFLOW_ADMIN_PASSWORD:-airflow}
       AIRFLOW__CORE__FERNET_KEY: ${AIRFLOW__CORE__FERNET_KEY}
+      AIRFLOW_CONFIG: /opt/airflow/config/airflow.cfg
+      PYTHONPATH: /opt/airflow/ETL_pipeline
       GEMINI_API_KEY: ${GEMINI_API_KEY:-}
       INSEE_TOKEN: ${INSEE_TOKEN:-}
     healthcheck:

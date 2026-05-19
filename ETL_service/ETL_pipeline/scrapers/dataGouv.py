@@ -129,18 +129,47 @@ class DataGouvService(BaseScraper):
         # La precision sectorielle fine est assuree en aval par filters.py.
         self.default_filtre = _NAF_SECTION_FILTER
 
-    def _paginer(self, params: dict, max_pages: int = 80) -> list[dict]:
+    def _paginer(
+        self,
+        params: dict,
+        start_page: int = 1,
+        pages_to_fetch: int | None = None,
+        max_pages: int = 80,
+    ) -> list[dict]:
+        """
+        Paginates the DataGouv API for a given set of query params.
+
+        Args:
+            params          : API query params (WITHOUT page / per_page).
+            start_page      : First page to fetch (1-based).  Used by
+                              incremental flow to skip already-fetched pages.
+            pages_to_fetch  : Max number of pages to fetch in this call.
+                              None = fetch up to max_pages from start_page.
+            max_pages       : Hard ceiling on the total page index to visit.
+                              Ignored when pages_to_fetch is set.
+
+        Returns:
+            List of raw API result dicts from this batch only.
+        """
         resultats = []
-        page = 1
+        page = start_page
         max_retries = 3
         total = 0
         total_pages = 0
 
-        while page <= 10:
+        # Determine the exclusive upper bound for this batch
+        if pages_to_fetch is not None:
+            end_page = start_page + pages_to_fetch - 1
+        else:
+            # Backward-compat: old behaviour was `while page <= 10`
+            # We replicate that by defaulting to max_pages=10 when not overridden
+            end_page = start_page + max_pages - 1
+
+        while True:
             params_page = {**params, "page": page, "per_page": self.per_page}
             data = None
 
-            # Retry par page — gere le rate limit sur chaque page
+            # Retry per page — handles API rate limit
             for tentative in range(max_retries):
                 data = self.fetch_data(self.base_url, params=params_page)
                 if data is not None:
@@ -152,14 +181,17 @@ class DataGouvService(BaseScraper):
                 print(f"[{self.nom_source}] Echec page {page} - arret pagination")
                 break
 
-            # Premier appel — on recupere le total
-            if page == 1:
+            # First page in this batch — capture total so we respect API limits
+            if page == start_page:
                 total = data.get("total_results", 0)
                 if total == 0:
                     print(f"[{self.nom_source}] Aucun resultat trouve")
                     break
                 total_pages = math.ceil(total / self.per_page)
-                print(f"[{self.nom_source}] {total} resultats - {total_pages} pages (plafond={max_pages})")
+                print(
+                    f"[{self.nom_source}] {total} resultats — {total_pages} pages totales "
+                    f"(start={start_page}, end={end_page}, plafond={max_pages})"
+                )
 
             items = data.get("results", [])
 
@@ -167,36 +199,51 @@ class DataGouvService(BaseScraper):
                 print(f"[{self.nom_source}] Aucune donnee sur la page {page}")
                 break
 
-            print(items[0].get("siren"))
-            print(items[-1].get("siren"))
-
             resultats += items
 
-            print(resultats[0].get("siren"))
-            print(resultats[-1].get("siren"))
-            print(f"[{self.nom_source}] page {page}/{min(total_pages, max_pages)} - {len(resultats)}/{total}")
+            print(
+                f"[{self.nom_source}] page {page}/{total_pages} "
+                f"(batch: {len(resultats)} records so far)"
+            )
 
-            if len(resultats) >= total:
+            # Stop when we have fetched all existing records
+            if page >= total_pages:
                 break
 
-            if total_pages and page >= min(total_pages, max_pages):
+            # Stop when we have reached the batch end page
+            if page >= end_page:
                 break
 
             page += 1
             time.sleep(self.delai)
 
         if resultats:
-            print("final", resultats[0].get("siren"), resultats[-1].get("siren"))
+            print(f"[{self.nom_source}] batch done — {len(resultats)} records from pages {start_page}–{page}")
         else:
-            print("final", "aucun resultat")
+            print(f"[{self.nom_source}] batch done — aucun resultat")
 
         return resultats
 
-    def source_scraping(self, filtre: list[dict] | None = None) -> list[dict]:
+    def source_scraping(
+        self,
+        filtre: list[dict] | None = None,
+        start_page: int = 1,
+        pages_to_fetch: int | None = None,
+    ) -> list[dict]:
         """
-        Iterates over filter groups. Each group may carry a private '_max_pages'
-        key to cap pagination independently. That key is stripped before the
-        params dict is sent to the API.
+        Iterates over filter groups and paginates each one.
+
+        Each group may carry a private '_max_pages' key to cap pagination
+        independently.  That key (and any key starting with '_') is stripped
+        before the params dict is sent to the API.  The original filter dicts
+        are NEVER mutated (no pop() calls on the originals).
+
+        Args:
+            filtre          : list of NAF group dicts (defaults to _NAF_SECTION_FILTER)
+            start_page      : start page for ALL groups (used by incremental flow;
+                              caller should pass per-group checkpoints instead when
+                              using the incremental DAG which calls _paginer directly).
+            pages_to_fetch  : max pages to fetch per group.  None = use max_pages.
         """
         tous_les_resultats = []
 
@@ -204,15 +251,24 @@ class DataGouvService(BaseScraper):
             filtre = self.default_filtre
 
         for entry in filtre:
-            # Extract the per-group page cap (default 80 if not specified)
-            max_pages = entry.pop("_max_pages", 80) if isinstance(entry, dict) else 80
-            # Work on a copy so the original filter dict is not mutated
-            params = {k: v for k, v in entry.items() if not k.startswith("_")}
+            # Work on a copy — NEVER mutate the original dict (no pop())
+            entry_copy = dict(entry) if isinstance(entry, dict) else {}
+
+            # Extract the per-group page cap WITHOUT mutating the original
+            max_pages = entry_copy.get("_max_pages", 80)
+
+            # Build clean params dict — strip all private keys (prefix "_")
+            params = {k: v for k, v in entry_copy.items() if not k.startswith("_")}
 
             label = params.get("activite_principale", "?")[:30]
-            print(f"[{self.nom_source}] Groupe NAF '{label}...' — plafond {max_pages} pages")
+            print(f"[{self.nom_source}] Groupe NAF '{label}...' — plafond {max_pages} pages | start={start_page}")
 
-            resultats = self._paginer(params, max_pages=max_pages)
+            resultats = self._paginer(
+                params,
+                start_page=start_page,
+                pages_to_fetch=pages_to_fetch,
+                max_pages=max_pages,
+            )
             tous_les_resultats += resultats
             time.sleep(self.delai)
 

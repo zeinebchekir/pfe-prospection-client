@@ -28,6 +28,19 @@
             <span class="w-1.5 h-1.5 rounded-full bg-tacir-lightblue animate-pulse" />
             COMMERCIAL
           </span>
+
+          <!-- Générer nouveaux leads button -->
+          <button
+            id="leads-generate-btn"
+            @click="generateLeads"
+            :disabled="isGenerating"
+            class="inline-flex items-center gap-2 h-9 px-4 text-sm font-medium rounded-md bg-emerald-600 text-white hover:bg-emerald-700 transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
+          >
+            <Loader2 v-if="isGenerating" class="w-4 h-4 animate-spin" />
+            <Zap v-else class="w-4 h-4" />
+            {{ isGenerating ? 'Génération…' : 'Générer nouveaux leads' }}
+          </button>
+
           <button
             id="leads-new-btn"
             @click="createOpen = true"
@@ -36,6 +49,7 @@
             <Plus class="w-4 h-4" /> Nouveau lead
           </button>
         </div>
+
       </header>
 
       <!-- Page body -->
@@ -400,7 +414,7 @@ import axios from 'axios'
 import {
   Building2, Plus, Loader2, SearchX, Search, Globe, MapPin, Users,
   CheckCircle2, Eye, EyeOff, ChevronDown, ChevronUp, Database,
-  Phone, Mail, Landmark, CalendarDays, BadgeCheck,
+  Phone, Mail, Landmark, CalendarDays, BadgeCheck, Zap,
 } from 'lucide-vue-next'
 import { toast } from 'vue-sonner'
 
@@ -464,6 +478,9 @@ const editLead         = ref(null)
 const createOpen       = ref(false)
 const deleteLeadTarget = ref(null)
 
+// Generate leads state
+const isGenerating = ref(false)
+
 // Search-preview modal state
 const isSearching      = ref(false)
 const showPreviewModal = ref(false)
@@ -521,6 +538,45 @@ function handleLeadDeleted(id) {
 // Called when CreateLeadModal succeeds — prepend new lead to list
 function handleLeadCreated(adaptedLead) {
   allLeads.value.unshift(adaptedLead)
+}
+
+// ── Generate leads ─────────────────────────────────────────────
+async function generateLeads() {
+  if (isGenerating.value) return
+  isGenerating.value = true
+
+  try {
+    const res = await axios.post(`${BASE_URL}/etl/generate-new-leads`, {
+      pages_per_batch: 5,
+    })
+
+    const data = res.data
+    toast.success('Génération lancée !', {
+      description:
+        `DAG ${data.dag_id} déclenché (run: ${data.run_id}). ` +
+        'Les nouveaux leads apparaîtront dans quelques minutes.',
+      duration: 6000,
+    })
+
+    // Reload leads after a short delay to pick up newly inserted records
+    setTimeout(async () => {
+      try {
+        await useLeads().refresh?.()
+      } catch (_) {
+        // refresh is optional — page reload as fallback
+        window.location.reload()
+      }
+    }, 8000)
+
+  } catch (err) {
+    console.error('[Leads] generate-new-leads error:', err)
+    const detail = err?.response?.data?.detail
+    toast.error('Erreur lors de la génération', {
+      description: detail || 'Impossible de déclencher la génération de leads.',
+    })
+  } finally {
+    isGenerating.value = false
+  }
 }
 
 function closePreviewModal() {

@@ -1,11 +1,13 @@
-from extractors.dataGouv.linkedin_enricher import get_linkedin_url
-
-def extract_data_from_datagouv(results):
+def extract_data_from_datagouv(results, enrich_linkedin: bool = True):
     clean_data = []
     """
     Prend le JSON brut de l'API et recrache un dictionnaire propre
     prêt à être injecté dans votre base de données CRM.
     """
+    get_linkedin_url = None
+    if enrich_linkedin:
+        from extractors.dataGouv.linkedin_enricher import get_linkedin_url
+
     for r in results:
     # --- 1. DATES (Création et Modification) ---
         date_creation = r.get("date_creation",None)
@@ -59,12 +61,14 @@ def extract_data_from_datagouv(results):
             if d.get("type_dirigeant") == "personne physique"
         ]
         
-        # Enrichissement LinkedIn
+        # Enrichissement LinkedIn optionnel.
         for d in dirigeants_filtres:
-            nom_dir = d.get("nom")
-            prenom_dir = d.get("prenoms")
-            link = get_linkedin_url(nom_dir, prenom_dir, nom)
-            d["linkedin_url"] = link
+            if enrich_linkedin and get_linkedin_url:
+                nom_dir = d.get("nom")
+                prenom_dir = d.get("prenoms")
+                d["linkedin_url"] = get_linkedin_url(nom_dir, prenom_dir, nom)
+            else:
+                d["linkedin_url"] = None
         # === CRÉATION DE L'INSTANCE DJANGO ===
         nouvelle_entreprise ={ 
             "siren":siren,
