@@ -233,3 +233,117 @@ def filter_by_completeness(extracted_records: list[dict]) -> tuple[list[dict], i
             })
 
     return kept, dropped, drop_log
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+#  PME/SMALL COMPANY EXCLUSION FILTER
+#  Used ONLY by generate_new_leads (incremental commercial flow).
+#  initial_load does NOT use this filter.
+# ─────────────────────────────────────────────────────────────────────────────
+
+import unicodedata
+
+# Tokens that mark a company as too small for B2B prospecting.
+# Match is done on the normalised (lowercase, no accents) categorie_entreprise.
+_PME_TOKENS: frozenset[str] = frozenset({
+    "pme",
+    "petite et moyenne entreprise",
+    "petite et moyenne",
+    "micro",
+    "micro-entreprise",
+    "micro entreprise",
+    "microentreprise",
+    "tpe",
+    "tres petite entreprise",
+    "very small",
+    "small company",
+    "small enterprise",
+})
+
+# Tokens that confirm the company is large enough to keep.
+_LARGE_TOKENS: frozenset[str] = frozenset({
+    "eti",
+    "entreprise de taille intermediaire",
+    "ge",
+    "grande entreprise",
+    "large enterprise",
+    "large company",
+})
+
+
+def _normalize_category(raw: str | None) -> str:
+    """
+    Lower-case + remove accents + collapse whitespace.
+    '  Petite et Moyenne Entreprise ' → 'petite et moyenne entreprise'
+    'ETI'                             → 'eti'
+    """
+    if not raw:
+        return ""
+    # Remove accents
+    nfkd = unicodedata.normalize("NFKD", raw)
+    ascii_str = nfkd.encode("ascii", errors="ignore").decode("ascii")
+    return " ".join(ascii_str.lower().split())
+
+
+def is_large_company(extracted: dict) -> tuple[bool, str]:
+    """
+    Returns (True, reason) when the company is an ETI or GE.
+    Returns (False, reason) when it is a PME, TPE, micro or similar.
+    Returns (True, 'unknown') when the category cannot be determined
+    (we prefer keeping ambiguous records rather than discarding them).
+
+    Decision logic:
+      1. If normalised category contains a LARGE token  → KEEP
+      2. If normalised category contains a PME token    → REJECT
+      3. Otherwise                                      → KEEP (unknown / ambiguous)
+    """
+    raw = extracted.get("categorie_entreprise") or extracted.get("taille_entrep")
+    normalised = _normalize_category(raw)
+
+    if not normalised:
+        return True, "unknown category — keeping by default"
+
+    for token in _LARGE_TOKENS:
+        if token in normalised:
+            return True, f"large company token found: '{token}'"
+
+    for token in _PME_TOKENS:
+        if token in normalised:
+            return False, f"PME token found: '{token}'"
+
+    return True, f"no PME/GE token matched '{normalised}' — keeping"
+
+
+def filter_by_company_size(
+    extracted_records: list[dict],
+) -> tuple[list[dict], int, list[dict]]:
+    """
+    Rejects PME / TPE / micro-entreprise from the extracted list.
+    Should be applied AFTER filter_by_completeness (records already have
+    categorie_entreprise populated).
+
+    Args:
+        extracted_records: list of complete extracted dicts
+
+    Returns:
+        (kept_records, dropped_count, drop_log)
+        drop_log: list of {siren, nom, reason} for observability / debugging
+    """
+    kept = []
+    dropped = 0
+    drop_log = []
+
+    for record in extracted_records:
+        large, reason = is_large_company(record)
+        if large:
+            kept.append(record)
+        else:
+            dropped += 1
+            drop_log.append({
+                "siren": record.get("siren", "unknown"),
+                "nom":   record.get("nom", ""),
+                "reason": reason,
+                "categorie_entreprise": record.get("categorie_entreprise", ""),
+            })
+
+    return kept, dropped, drop_log

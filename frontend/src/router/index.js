@@ -1,12 +1,20 @@
 /**
  * Vue Router with navigation guards.
+ *
+ * Route access is controlled via meta fields:
+ *   requiresAuth: true   — user must be authenticated
+ *   guestOnly: true      — authenticated users are redirected away (e.g. /login)
+ *   roles: ["ADMIN"]     — only users with these roles can access the route
+ *
+ * IMPORTANT: These guards are UI-only. Backend APIs enforce their own permissions.
  */
 
 import { createRouter, createWebHistory } from "vue-router"
 import {useAuth} from "@/composables/useAuth"
 
-// Timestamp of the last successful session verification
-// Re-validate with backend every SESSION_TTL ms to detect expired tokens
+// Re-validate the session with the backend every SESSION_TTL ms on protected routes.
+// This catches expired tokens without polling continuously.
+// On first load (user === null), validation always happens regardless of this interval.
 const SESSION_TTL = 15 * 60 * 1000 // 15 minutes
 let lastSessionCheck = 0
 
@@ -207,34 +215,38 @@ router.beforeEach(async (to) => {
 
   const requiresAuth = to.meta.requiresAuth === true
   const guestOnly    = to.meta.guestOnly === true
-  const allowedRoles = to.meta.roles
+  const allowedRoles = to.meta.roles  // undefined means any authenticated user is allowed
   const now          = Date.now()
 
   // ── 1. First load OR session stale → verify with backend ──────────────
-  // Always check on first navigation (user.value === null).
-  // On subsequent navigations to protected routes, silently re-validate
-  // every SESSION_TTL ms to catch expired tokens without disrupting UX.
+  // Always call fetchUser() on first navigation (user.value === null).
+  // On subsequent protected-route navigations, silently re-validate every SESSION_TTL
+  // to catch expired tokens without disrupting the user experience.
   const isFirstLoad = user.value === null
   const isStale     = requiresAuth && (now - lastSessionCheck > SESSION_TTL)
 
   if (isFirstLoad || isStale) {
-    await fetchUser()
+    await fetchUser()  // GET /api/auth/me/ — silently restores session from cookie
     if (user.value !== null) {
-      lastSessionCheck = now
+      lastSessionCheck = now  // Reset timer only on successful verification
     }
   }
 
   // ── 2. Not authenticated → redirect to login ──────────────────────────
+  // Preserve the intended destination so the login page can redirect back after auth.
   if (requiresAuth && !isAuthenticated.value) {
     return { name: "Login", query: { redirect: to.fullPath } }
   }
 
-  // ── 3. Authenticated trying to access guest-only page ─────────────────
+  // ── 3. Authenticated user on guest-only page → send to dashboard ─────
+  // Prevents logged-in users from seeing /login or /register again.
   if (guestOnly && isAuthenticated.value) {
     return getDashboardRedirect(user.value && user.value.role)
   }
 
-  // ── 4. Role-based protection ───────────────────────────────────────────
+  // ── 4. Role mismatch → redirect to own dashboard ─────────────────────
+  // No "Access Denied" page is shown — users are silently redirected.
+  // This is a UX choice; the backend independently enforces permissions.
   if (
     requiresAuth &&
     allowedRoles &&
@@ -243,7 +255,8 @@ router.beforeEach(async (to) => {
     return getDashboardRedirect(user.value && user.value.role)
   }
 
-  // ── 5. Redirect generic /dashboard to role-specific dashboard ────────
+  // ── 5. Generic /dashboard → role-specific dashboard ────────────────
+  // /dashboard is a neutral entry point; actual destination depends on role.
   if (to.name === "Dashboard" && isAuthenticated.value) {
     return getDashboardRedirect(user.value && user.value.role)
   }

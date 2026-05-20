@@ -12,6 +12,7 @@ from apis.routers import sync, entreprise, logs, notifications
 from apis.routers.monitoring import router as monitoring_router
 from apis.routers.rapport import router as rapport_router
 from apis.routers.notifications import dispatch_notifications
+from apis.routers.generate_leads import router as generate_leads_router
 from db.database import create_tables
 
 
@@ -52,14 +53,15 @@ app.add_middleware(
 )
 
 # ── Routers ───────────────────────────────────────────────────────────────────
-app.include_router(sync.router,        prefix="/sync",        tags=["Sync"])
-app.include_router(entreprise.router,  prefix="/entreprises", tags=["Entreprises"])
+app.include_router(sync.router,              prefix="/sync",        tags=["Sync"])
+app.include_router(entreprise.router,        prefix="/entreprises", tags=["Entreprises"])
 app.include_router(monitoring_router)
 app.include_router(rapport_router)
 app.include_router(logs.router)
 app.include_router(notifications.router)
-app.include_router(segmentation_router,   prefix="/segmentation", tags=["Segmentation"])
+app.include_router(segmentation_router,      prefix="/segmentation", tags=["Segmentation"])
 app.include_router(etl_status_router)
+app.include_router(generate_leads_router)
 
 
 @app.on_event("startup")

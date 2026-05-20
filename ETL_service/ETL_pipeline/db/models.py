@@ -156,6 +156,42 @@ class RapportPDF(Base):
     file_size_kb   = Column(Integer, nullable=False)
     
 
+# ──────────────────────────────────────────────────────────────
+#  TABLE 5 — lead_generation_checkpoint  (incremental pagination)
+# ──────────────────────────────────────────────────────────────
+
+class LeadGenerationCheckpoint(Base):
+    """
+    Tracks incremental pagination progress per NAF group for the
+    `generate_new_leads` DAG.  One row per unique filter_key.
+
+    Allows the commercial "Générer nouveaux leads" button to always
+    continue from the last successfully fetched page, never restarting
+    from page 1.
+    """
+    __tablename__ = "lead_generation_checkpoint"
+
+    id               = Column(Integer, primary_key=True, autoincrement=True)
+    source           = Column(String(20),  nullable=False, default="datagouv", index=True)
+    filter_key       = Column(String(200), nullable=False, unique=True, index=True)
+    naf_codes        = Column(String(500), nullable=True)    # raw activite_principale string
+    last_page_fetched= Column(Integer,     nullable=False, default=0)
+    per_page         = Column(Integer,     nullable=False, default=25)
+    total_results    = Column(Integer,     nullable=True)    # as reported by API
+    total_pages      = Column(Integer,     nullable=True)    # ceil(total_results / per_page)
+    total_fetched    = Column(Integer,     nullable=False, default=0)  # cumulative raw records fetched
+    total_inserted   = Column(Integer,     nullable=False, default=0)  # cumulative clean inserts
+    last_run_id      = Column(String,      nullable=True)
+    created_at       = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at       = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
+    def __repr__(self):
+        return (
+            f"<LeadGenerationCheckpoint(filter_key={self.filter_key!r}, "
+            f"last_page={self.last_page_fetched}, total_fetched={self.total_fetched})>"
+        )
+
+
 class Notification(Base):
     __tablename__ = "notifications"
 

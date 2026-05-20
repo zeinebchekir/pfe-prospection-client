@@ -12,9 +12,8 @@ load_dotenv()
 # Logger setup specific to Airflow standard
 logger = logging.getLogger(__name__)
 
-SERPER_API_KEYS = [
-    "7b761ad4d27b50d3e4084a90b316173d5eb8e2a8"
-]
+_serper_keys_env = os.environ.get("SERPER_API_KEYS", os.environ.get("SERPER_API_KEY", ""))
+SERPER_API_KEYS = [k.strip() for k in _serper_keys_env.split(",") if k.strip()]
 
 # Global index to shuffle requests using round-robin
 CURRENT_KEY_IDX = 0

@@ -159,5 +159,5 @@ def get_sector_baseline(sector: str) -> dict[str, float]:
 
 
 def list_covered_sectors() -> list[str]:
-    """Return all keyword strings currently covered (for documentation / tests)."""
+    """Return the baseline keyword catalog used by substring matching."""
     return [kw for kw, _ in _SECTOR_TABLE]

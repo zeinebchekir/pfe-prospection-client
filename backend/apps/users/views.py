@@ -9,6 +9,10 @@ Endpoints:
   POST /api/auth/logout/     → Blacklist refresh token, clear cookies
   POST /api/auth/refresh/    → Issue new access + rotated refresh token in cookies
   GET  /api/auth/me/         → Return authenticated user profile
+  PATCH /api/auth/me/        → Update own profile (nom, prenom, fonction)
+
+Swagger/OpenAPI metadata is added via @extend_schema decorators from drf-spectacular.
+No behavior is affected by these decorators.
 """
 import logging
 from datetime import timedelta
@@ -24,6 +28,12 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework_simplejwt.exceptions import TokenError
 from rest_framework_simplejwt.tokens import RefreshToken
+from drf_spectacular.utils import (
+    extend_schema, extend_schema_view,
+    OpenApiResponse, OpenApiExample, OpenApiParameter,
+    inline_serializer,
+)
+from drf_spectacular.types import OpenApiTypes
 
 from .models import PasswordResetToken
 from .serializers import (
@@ -42,23 +52,90 @@ logger = logging.getLogger(__name__)
 
 
 def get_client_ip(request):
+    """
+    Extract the real client IP address from the request.
+
+    Checks X-Forwarded-For first (set by reverse proxies / load balancers)
+    and falls back to REMOTE_ADDR for direct connections.
+    Used to populate the ip_address field in audit log entries.
+    """
     x_forwarded_for = request.META.get('HTTP_X_FORWARDED_FOR')
     if x_forwarded_for:
-        ip = x_forwarded_for.split(',')[0]
+        ip = x_forwarded_for.split(',')[0]  # Take the leftmost (original client) IP
     else:
         ip = request.META.get('REMOTE_ADDR')
     return ip
 
 
+@extend_schema(
+    tags=["Authentication"],
+    summary="Register a new user account",
+    description=(
+        "Creates a new user account with role **COMMERCIAL** (fixed — cannot be overridden at registration). "
+        "On success the user is immediately authenticated: two HTTP-only cookies are set on the response.\n\n"
+        "**Cookie behavior (not visible in Swagger):**\n"
+        "- `access_token` — HttpOnly, 10 min, used for API authentication\n"
+        "- `refresh_token` — HttpOnly, 7 days, used to silently rotate the access token\n\n"
+        "No email confirmation step is required."
+    ),
+    request=RegisterSerializer,
+    responses={
+        201: OpenApiResponse(
+            response=UserProfileSerializer,
+            description="Account created. Auth cookies set. User profile returned.",
+            examples=[
+                OpenApiExample(
+                    "Successful registration",
+                    value={"status": "success", "user": {
+                        "id": "550e8400-e29b-41d4-a716-446655440000",
+                        "email": "jean@example.com",
+                        "nom": "Dupont",
+                        "prenom": "Jean",
+                        "role": "COMMERCIAL",
+                        "full_name": "Jean Dupont",
+                        "fonction": ""
+                    }},
+                    response_only=True,
+                )
+            ]
+        ),
+        400: OpenApiResponse(
+            description="Validation error: duplicate email, password mismatch, or weak password.",
+            examples=[
+                OpenApiExample(
+                    "Duplicate email",
+                    value={"status": "error", "code": 400, "errors": {"email": ["user with this email already exists."]}},
+                    response_only=True,
+                ),
+                OpenApiExample(
+                    "Password mismatch",
+                    value={"status": "error", "code": 400, "errors": {"password": ["Les mots de passe ne correspondent pas."]}},
+                    response_only=True,
+                ),
+            ]
+        ),
+    },
+    auth=[],  # Public endpoint — no auth cookie needed
+)
 class RegisterView(APIView):
+    """
+    POST /api/auth/register/
+
+    Open endpoint: creates a new user account with role=COMMERCIAL (fixed),
+    issues JWT tokens, and sets them as HTTP-only cookies on the response.
+
+    After successful registration the user is immediately authenticated
+    (no email confirmation step).
+    """
     permission_classes = [AllowAny]
-    authentication_classes = []
+    authentication_classes = []  # Disable auth check — registration is always open
 
     def post(self, request):
         serializer = RegisterSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
-        user = serializer.save()
+        user = serializer.save()  # Calls User.objects.create_user() — hashes password
 
+        # Issue a JWT pair immediately so the user is logged in after registration
         refresh = RefreshToken.for_user(user)
         access = str(refresh.access_token)
 
@@ -67,14 +144,82 @@ class RegisterView(APIView):
             {"status": "success", "user": user_data},
             status=status.HTTP_201_CREATED,
         )
+        # Store tokens as HTTP-only cookies — JavaScript cannot read these
         set_auth_cookies(response, access_token=access, refresh_token=str(refresh))
         logger.info("New user registered: %s", user.email)
         return response
 
 
+@extend_schema(
+    tags=["Authentication"],
+    summary="Authenticate user (login)",
+    description=(
+        "Validates email and password against the database. On success, sets two HTTP-only JWT cookies.\n\n"
+        "**Tokens are never returned in the JSON body** — they are stored exclusively in browser cookies.\n\n"
+        "**Cookie behavior:**\n"
+        "- `access_token` — HttpOnly, 10 min\n"
+        "- `refresh_token` — HttpOnly, 7 days\n\n"
+        "**Error distinctions:**\n"
+        "- `401` — wrong email or password\n"
+        "- `403` with `code: ACCOUNT_INACTIVE` — account disabled by admin\n\n"
+        "A `LOGIN` event is written to the audit log on success."
+    ),
+    request=LoginSerializer,
+    responses={
+        200: OpenApiResponse(
+            response=UserProfileSerializer,
+            description="Login successful. Auth cookies set.",
+            examples=[
+                OpenApiExample(
+                    "Successful login",
+                    value={"status": "success", "user": {
+                        "id": "550e8400-e29b-41d4-a716-446655440000",
+                        "email": "jean@example.com",
+                        "nom": "Dupont",
+                        "prenom": "Jean",
+                        "role": "COMMERCIAL",
+                        "full_name": "Jean Dupont",
+                        "fonction": ""
+                    }},
+                    response_only=True,
+                )
+            ]
+        ),
+        401: OpenApiResponse(
+            description="Invalid email or password.",
+            examples=[
+                OpenApiExample(
+                    "Wrong credentials",
+                    value={"status": "error", "message": "Email ou mot de passe invalide."},
+                    response_only=True,
+                )
+            ]
+        ),
+        403: OpenApiResponse(
+            description="Account is inactive. Contact the administrator.",
+            examples=[
+                OpenApiExample(
+                    "Inactive account",
+                    value={"status": "error", "message": "Votre accès est bloqué. Veuillez contacter l'administrateur.", "code": "ACCOUNT_INACTIVE"},
+                    response_only=True,
+                )
+            ]
+        ),
+    },
+    auth=[],  # Public endpoint
+)
 class LoginView(APIView):
+    """
+    POST /api/auth/login/
+
+    Validates credentials, issues JWT tokens, and sets HTTP-only cookies.
+    Distinguishes between wrong credentials (401) and inactive accounts (403)
+    to give actionable feedback without revealing which emails are registered.
+
+    Writes a LOGIN entry to the audit log on success.
+    """
     permission_classes = [AllowAny]
-    authentication_classes = []
+    authentication_classes = []  # No auth needed to log in
 
     def post(self, request):
         serializer = LoginSerializer(data=request.data)
@@ -130,32 +275,131 @@ class LoginView(APIView):
         return response
 
 
+@extend_schema(
+    tags=["Authentication"],
+    summary="Logout (invalidate session)",
+    description=(
+        "Blacklists the current `refresh_token` cookie so it cannot be reused, "
+        "then deletes both auth cookies from the browser.\n\n"
+        "**Important:** The `access_token` (10-minute lifetime) is not explicitly revoked — "
+        "it expires naturally. Cookie deletion prevents it from being sent on further requests.\n\n"
+        "**Requires:** Valid `access_token` cookie.\n\n"
+        "A `LOGOUT` event is written to the audit log."
+    ),
+    request=None,
+    responses={
+        200: OpenApiResponse(
+            description="Logout successful. Auth cookies cleared.",
+            examples=[
+                OpenApiExample(
+                    "Logged out",
+                    value={"status": "success", "message": "Déconnexion réussie."},
+                    response_only=True,
+                )
+            ]
+        ),
+        401: OpenApiResponse(description="Missing or expired access_token cookie."),
+    },
+)
 class LogoutView(APIView):
+    """
+    POST /api/auth/logout/
+
+    Blacklists the refresh token so it cannot be reused, then clears
+    both auth cookies from the browser.
+
+    The access token (10-minute lifetime) is not explicitly revoked — it
+    will expire naturally. The cookie deletion prevents the browser from
+    sending it further, which is sufficient for normal usage.
+
+    Writes a LOGOUT entry to the audit log.
+    """
     permission_classes = [IsAuthenticated]
 
     def post(self, request):
+        # Read the refresh token before clearing cookies
         refresh_token = request.COOKIES.get(settings.AUTH_COOKIE_REFRESH)
 
         if refresh_token:
             try:
                 token = RefreshToken(refresh_token)
+                # Blacklisting adds the token's JTI to the OutstandingToken/BlacklistedToken tables.
+                # After this, presenting this refresh token will return 401.
                 token.blacklist()
             except Exception:
+                # If the token is already invalid/expired, silently continue.
+                # The important part is clearing the cookies.
                 pass
 
         response = Response(
             {"status": "success", "message": "Déconnexion réussie."},
             status=status.HTTP_200_OK,
         )
-        unset_auth_cookies(response)
+        unset_auth_cookies(response)  # Delete both access_token and refresh_token cookies
         log_action(request.user, AuditLog.Action.LOGOUT, request.user.email, get_client_ip(request))
         logger.info("User logged out: %s", request.user.email)
         return response
 
 
+@extend_schema(
+    tags=["Authentication"],
+    summary="Refresh access token",
+    description=(
+        "Reads the `refresh_token` from its HTTP-only cookie, validates it, and issues a "
+        "new access + refresh token pair (token rotation).\n\n"
+        "**The old refresh token is immediately blacklisted** — it cannot be reused.\n\n"
+        "**No request body is needed.** The browser sends the `refresh_token` cookie automatically.\n\n"
+        "**Note:** This endpoint is called automatically by the Axios interceptor when any API "
+        "call returns 401 (access token expired). The user sees no interruption.\n\n"
+        "**Concurrent requests during refresh** are queued in `pendingRequests[]` and replayed "
+        "after the new tokens are set — only one refresh call is made regardless of how many "
+        "requests were pending."
+    ),
+    request=None,
+    responses={
+        200: OpenApiResponse(
+            description="Tokens rotated. New auth cookies set.",
+            examples=[
+                OpenApiExample(
+                    "Refresh successful",
+                    value={"status": "success", "message": "Token refreshed."},
+                    response_only=True,
+                )
+            ]
+        ),
+        401: OpenApiResponse(
+            description="No refresh token cookie, or token is expired / blacklisted.",
+            examples=[
+                OpenApiExample(
+                    "No cookie",
+                    value={"status": "error", "message": "No refresh token provided."},
+                    response_only=True,
+                ),
+                OpenApiExample(
+                    "Invalid token",
+                    value={"status": "error", "message": "Token is invalid or expired."},
+                    response_only=True,
+                ),
+            ]
+        ),
+    },
+    auth=[],  # Uses refresh_token cookie, not access_token
+)
 class RefreshView(APIView):
+    """
+    POST /api/auth/refresh/
+
+    Reads the refresh token from its HTTP-only cookie, validates it,
+    and issues a new access + refresh token pair (token rotation).
+
+    The old refresh token is immediately blacklisted (BLACKLIST_AFTER_ROTATION=True).
+    New tokens are set as HTTP-only cookies — the response body contains no token values.
+
+    This endpoint is called automatically by the Axios interceptor on 401 responses,
+    making token refresh transparent to the user.
+    """
     permission_classes = [AllowAny]
-    authentication_classes = []
+    authentication_classes = []  # No access token needed — only the refresh cookie
 
     def post(self, request):
         refresh_token = request.COOKIES.get(settings.AUTH_COOKIE_REFRESH)
@@ -186,7 +430,71 @@ class RefreshView(APIView):
             )
 
 
+@extend_schema_view(
+    get=extend_schema(
+        tags=["Current User"],
+        summary="Get authenticated user profile",
+        description=(
+            "Returns the profile of the currently authenticated user.\n\n"
+            "This endpoint is called on every page load by the Vue Router guard (`fetchUser()`) "
+            "to restore session state from the HTTP-only cookie. No token value is ever stored "
+            "in localStorage or sessionStorage.\n\n"
+            "**Password is never included in the response.**"
+        ),
+        responses={
+            200: OpenApiResponse(
+                response=UserProfileSerializer,
+                description="Authenticated user profile.",
+                examples=[
+                    OpenApiExample(
+                        "User profile",
+                        value={"status": "success", "user": {
+                            "id": "550e8400-e29b-41d4-a716-446655440000",
+                            "email": "jean@example.com",
+                            "nom": "Dupont",
+                            "prenom": "Jean",
+                            "role": "COMMERCIAL",
+                            "full_name": "Jean Dupont",
+                            "fonction": "Account Manager"
+                        }},
+                        response_only=True,
+                    )
+                ]
+            ),
+            401: OpenApiResponse(description="Missing or expired access_token cookie."),
+        },
+    ),
+    patch=extend_schema(
+        tags=["Current User"],
+        summary="Update own profile",
+        description=(
+            "Updates the authenticated user's own profile fields.\n\n"
+            "**Editable fields:** `nom`, `prenom`, `fonction`\n\n"
+            "**Not editable via this endpoint:** `email`, `role`, `is_active`\n\n"
+            "Requires `X-CSRFToken` header (provided automatically by the Axios interceptor)."
+        ),
+        request=ProfileUpdateSerializer,
+        responses={
+            200: OpenApiResponse(
+                response=UserProfileSerializer,
+                description="Profile updated successfully.",
+            ),
+            400: OpenApiResponse(description="Validation error."),
+            401: OpenApiResponse(description="Not authenticated."),
+        },
+    ),
+)
 class MeView(APIView):
+    """
+    GET /api/auth/me/    — Return authenticated user profile
+    PATCH /api/auth/me/  — Update own profile (name and fonction only)
+
+    This endpoint is called on every page load by the router guard (fetchUser())
+    to restore session state from the HTTP-only cookie without storing
+    any auth data in localStorage or sessionStorage.
+
+    Note: Users cannot change their own role or email via this endpoint.
+    """
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
@@ -215,7 +523,51 @@ class MeView(APIView):
         })
 
 
+@extend_schema(
+    tags=["Current User"],
+    summary="Change own password",
+    description=(
+        "Allows the authenticated user to change their own password. "
+        "The current password must be provided for verification.\n\n"
+        "**Note:** Changing the password does **not** invalidate existing JWT sessions. "
+        "If the account is believed to be compromised, an admin should also deactivate "
+        "the account via `toggle-active/`."
+    ),
+    request=ChangePasswordSerializer,
+    responses={
+        200: OpenApiResponse(
+            description="Password updated successfully.",
+            examples=[
+                OpenApiExample(
+                    "Success",
+                    value={"status": "success", "message": "Mot de passe mis à jour avec succès."},
+                    response_only=True,
+                )
+            ]
+        ),
+        400: OpenApiResponse(
+            description="Old password incorrect, passwords don't match, or new password too weak.",
+            examples=[
+                OpenApiExample(
+                    "Wrong old password",
+                    value={"error": "Le mot de passe actuel est incorrect."},
+                    response_only=True,
+                )
+            ]
+        ),
+        401: OpenApiResponse(description="Not authenticated."),
+    },
+)
 class ChangePasswordView(APIView):
+    """
+    POST /api/auth/change-password/
+
+    Allows an authenticated user to change their own password.
+    Requires verification of the current password before accepting a new one.
+
+    Note: This does NOT invalidate existing sessions or JWT tokens.
+    A compromised account should also have the admin deactivate it via toggle-active.
+    """
     permission_classes = [IsAuthenticated]
 
     def post(self, request):
@@ -245,6 +597,41 @@ class ChangePasswordView(APIView):
 
 # ── Vues d'administration des utilisateurs ────────────────────────────────
 
+@extend_schema_view(
+    list=extend_schema(
+        tags=["Admin Users"],
+        summary="List all non-admin users",
+        description=(
+            "Returns a paginated list of all users with role `CEO` or `COMMERCIAL`.\n\n"
+            "**ADMIN role required.**\n\n"
+            "**Filters available:**\n"
+            "- `role` — filter by role value (`CEO`, `COMMERCIAL`)\n"
+            "- `is_active` — filter by active status (`true` / `false`)\n"
+            "- `search` — search by nom, prenom, or email (case-insensitive)"
+        ),
+        parameters=[
+            OpenApiParameter("role", OpenApiTypes.STR, description="Filter by role: CEO or COMMERCIAL"),
+            OpenApiParameter("is_active", OpenApiTypes.STR, description="Filter by active status: true or false"),
+            OpenApiParameter("search", OpenApiTypes.STR, description="Search by nom, prenom, or email"),
+        ],
+        responses={200: UserSerializer(many=True)},
+    ),
+    create=extend_schema(
+        tags=["Admin Users"],
+        summary="Create a user (admin-only)",
+        description=(
+            "Creates a new user with any role (ADMIN can assign CEO, COMMERCIAL, or ADMIN).\n\n"
+            "**ADMIN role required.**\n\n"
+            "Unlike self-registration (`/register/`), this endpoint allows setting an arbitrary role."
+        ),
+        request=UserCreateSerializer,
+        responses={
+            201: OpenApiResponse(response=UserSerializer, description="User created."),
+            400: OpenApiResponse(description="Validation error."),
+            403: OpenApiResponse(description="Caller is not ADMIN."),
+        },
+    ),
+)
 class UserListCreateView(generics.ListCreateAPIView):
     """Liste et création des utilisateurs (ADMIN seulement)."""
     permission_classes = [IsAdmin]
@@ -283,6 +670,61 @@ class UserListCreateView(generics.ListCreateAPIView):
         )
 
 
+@extend_schema_view(
+    retrieve=extend_schema(
+        tags=["Admin Users"],
+        summary="Get user detail",
+        description="Retrieves full details for a specific user by UUID. **ADMIN role required.**",
+        responses={
+            200: UserSerializer,
+            403: OpenApiResponse(description="Caller is not ADMIN."),
+            404: OpenApiResponse(description="User not found."),
+        },
+    ),
+    update=extend_schema(
+        tags=["Admin Users"],
+        summary="Update user (full replace)",
+        description="Full update of a user record. **ADMIN role required.**",
+        request=UserUpdateSerializer,
+        responses={
+            200: UserSerializer,
+            400: OpenApiResponse(description="Validation error."),
+            403: OpenApiResponse(description="Caller is not ADMIN."),
+            404: OpenApiResponse(description="User not found."),
+        },
+    ),
+    partial_update=extend_schema(
+        tags=["Admin Users"],
+        summary="Partially update user",
+        description=(
+            "Partial update of a user record (PATCH). **ADMIN role required.**\n\n"
+            "Editable fields: `nom`, `prenom`, `email`, `role`, `is_active`, `fonction`."
+        ),
+        request=UserUpdateSerializer,
+        responses={
+            200: UserSerializer,
+            400: OpenApiResponse(description="Validation error."),
+            403: OpenApiResponse(description="Caller is not ADMIN."),
+            404: OpenApiResponse(description="User not found."),
+        },
+    ),
+    destroy=extend_schema(
+        tags=["Admin Users"],
+        summary="Delete user",
+        description=(
+            "Permanently deletes a user by UUID. **ADMIN role required.**\n\n"
+            "**Cannot delete ADMIN accounts** — returns `403` if the target user has role `ADMIN`."
+        ),
+        responses={
+            200: OpenApiResponse(
+                description="User deleted.",
+                examples=[OpenApiExample("Deleted", value={"message": "Utilisateur supprimé."}, response_only=True)]
+            ),
+            403: OpenApiResponse(description="Caller is not ADMIN, or target is an ADMIN account."),
+            404: OpenApiResponse(description="User not found."),
+        },
+    ),
+)
 class UserDetailView(generics.RetrieveUpdateDestroyAPIView):
     """Détail, modification et suppression d'un utilisateur (ADMIN seulement)."""
     permission_classes = [IsAdmin]
@@ -336,6 +778,37 @@ class UserDetailView(generics.RetrieveUpdateDestroyAPIView):
         return Response({'message': 'Utilisateur supprimé.'}, status=status.HTTP_200_OK)
 
 
+@extend_schema(
+    tags=["Admin Users"],
+    summary="Toggle user active status",
+    description=(
+        "Toggles the `is_active` field of a user (enable ↔ disable). **ADMIN role required.**\n\n"
+        "**Cannot deactivate ADMIN accounts** — returns `403` if the target user has role `ADMIN`.\n\n"
+        "Deactivating an account blocks future logins (`authenticate()` returns `None` for inactive users). "
+        "Existing JWT sessions will still work until the access token expires (10 min), "
+        "after which refresh will fail silently and the user will be logged out."
+    ),
+    request=None,
+    responses={
+        200: OpenApiResponse(
+            description="Status toggled successfully.",
+            examples=[
+                OpenApiExample(
+                    "Activated",
+                    value={"message": "Utilisateur activé.", "is_active": True},
+                    response_only=True,
+                ),
+                OpenApiExample(
+                    "Deactivated",
+                    value={"message": "Utilisateur désactivé.", "is_active": False},
+                    response_only=True,
+                ),
+            ]
+        ),
+        403: OpenApiResponse(description="Caller is not ADMIN, or target is an ADMIN account."),
+        404: OpenApiResponse(description="User not found."),
+    },
+)
 class ToggleUserActiveView(generics.UpdateAPIView):
     """Activer/désactiver un utilisateur."""
     permission_classes = [IsAdmin]
@@ -366,6 +839,35 @@ class ToggleUserActiveView(generics.UpdateAPIView):
 
 # ── Password Reset Views ──────────────────────────────────────────────────
 
+@extend_schema(
+    tags=["Password Reset"],
+    summary="Request password reset email",
+    description=(
+        "Sends a password reset link to the provided email address.\n\n"
+        "**Security:** Always returns the same success response regardless of whether "
+        "the email exists in the database — this prevents user enumeration attacks.\n\n"
+        "The reset link contains a UUID token valid for **24 hours**:\n"
+        "`<FRONTEND_URL>/reset-password?token=<uuid>`\n\n"
+        "**Development note:** If email sending fails and `DEBUG=True`, the response "
+        "includes `token_debug` with the raw UUID for testing purposes. "
+        "This field is `null` in production."
+    ),
+    request=PasswordResetRequestSerializer,
+    auth=[],  # Public endpoint
+    responses={
+        200: OpenApiResponse(
+            description="Request processed (same response whether email exists or not).",
+            examples=[
+                OpenApiExample(
+                    "Success (email sent or not — same response)",
+                    value={"status": "success", "message": "Si l'email existe, un lien de réinitialisation a été envoyé."},
+                    response_only=True,
+                )
+            ]
+        ),
+        400: OpenApiResponse(description="Invalid email format."),
+    },
+)
 class PasswordResetRequestView(APIView):
     permission_classes = [AllowAny]
     authentication_classes = []
@@ -418,6 +920,47 @@ class PasswordResetRequestView(APIView):
             })
 
 
+@extend_schema(
+    tags=["Password Reset"],
+    summary="Confirm password reset with token",
+    description=(
+        "Sets a new password using the UUID token received in the password reset email.\n\n"
+        "**Token validation:**\n"
+        "- Must match a valid `PasswordResetToken` record\n"
+        "- Must not be expired (24-hour window)\n"
+        "- Must not have been used already (`est_utilise = False`)\n\n"
+        "After use, the token is marked as consumed and cannot be reused."
+    ),
+    request=PasswordResetConfirmSerializer,
+    auth=[],  # Public endpoint — token in body is the credential
+    responses={
+        200: OpenApiResponse(
+            description="Password reset successfully.",
+            examples=[
+                OpenApiExample(
+                    "Success",
+                    value={"status": "success", "message": "Mot de passe réinitialisé avec succès."},
+                    response_only=True,
+                )
+            ]
+        ),
+        400: OpenApiResponse(
+            description="Token expired, already used, passwords don't match, or weak password.",
+            examples=[
+                OpenApiExample(
+                    "Expired token",
+                    value={"error": "Le jeton a expiré."},
+                    response_only=True,
+                ),
+                OpenApiExample(
+                    "Invalid or used token",
+                    value={"error": "Jeton invalide ou déjà utilisé."},
+                    response_only=True,
+                ),
+            ]
+        ),
+    },
+)
 class PasswordResetConfirmView(APIView):
     permission_classes = [AllowAny]
     authentication_classes = []
